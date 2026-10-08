@@ -3,6 +3,8 @@
  * 对应方案：《前端骨架-开发方案》Step 2
  * ⚠️ 安全：本配置只决定"菜单显隐"这一展示层行为，接口与数据权限全部由后端判定，
  *    禁止把本配置当作任何安全依据（规范 §5.3）
+ * ⚠️ 边界（2026-10-08 组长拍板）：团队论坛拆分为独立网站（微服务论坛服务配套前端），
+ *    主站不再含论坛入口；技术交流与知识库仍属管理系统
  * TODO(后续步骤)：badge 改由 P08 未读数接口驱动，当前为静态演示值
  */
 import type { MenuEntry, Role } from '@/types'
@@ -36,7 +38,6 @@ export const ADMIN_MENU: MenuEntry[] = [
   { path: '/schedule', title: '排班管理', group: G.COOP, roles: ADMIN },
   { path: '/performance', title: '绩效统计', group: G.COOP, roles: ADMIN },
   { path: '/tech', title: '技术交流', group: G.COMMUNITY, roles: ALL },
-  { path: '/forum', title: '团队论坛', group: G.COMMUNITY, roles: ALL },
   { path: '/kb', title: '知识库', group: G.COMMUNITY, roles: ALL },
   { path: '/audit', title: '审计日志', group: G.SYSTEM, roles: ADMIN },
   { path: '/system', title: '系统配置', group: G.SYSTEM, roles: SUPER }
@@ -52,7 +53,6 @@ export const STUDENT_MENU: MenuEntry[] = [
   { path: '/my/performance', title: '我的绩效', group: '我的', roles: ['STUDENT'] },
   { path: '/approval', title: '审批中心', group: '协同', roles: ALL, badge: 2 },
   { path: '/tech', title: '技术交流', group: '社区', roles: ALL },
-  { path: '/forum', title: '团队论坛', group: '社区', roles: ALL },
   { path: '/kb', title: '知识库', group: '社区', roles: ALL }
 ]
 
