@@ -230,6 +230,65 @@ class AuthFlowTest {
         assertNotNull(reloaded.getPwdUpdatedAt());
     }
 
+    /** G1 防爆破：连续失败 5 次后锁 15 分钟，锁定期正确密码也回 2001 */
+    @Test
+    void fiveFailuresLockLogin() throws Exception {
+        //1.连续输错 5 次
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"loginName\":\"probe_normal\",\"password\":\"wrong-pass\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value(2001));
+        }
+        //2.第 6 次用正确密码 → 仍然 2001（锁定中，不暴露锁定状态）
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"loginName\":\"probe_normal\",\"password\":\"pass123456\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(2001));
+    }
+
+    /** G1 防爆破：15 分钟窗口外的旧失败不构成锁定 */
+    @Test
+    void oldFailuresDoNotLock() throws Exception {
+        //1.手动插入 5 条 16 分钟前的失败日志（createdAt 显式赋值，填充器只补空值不会覆盖）
+        for (int i = 0; i < 5; i++) {
+            SysLoginLog oldFail = new SysLoginLog();
+            oldFail.setUserId(normalUser.getId());
+            oldFail.setLoginName("probe_normal");
+            oldFail.setLoginType("PASSWORD");
+            oldFail.setSuccess(0);
+            oldFail.setFailReason("登录名或密码错误");
+            oldFail.setCreatedAt(java.time.LocalDateTime.now().minusMinutes(16));
+            sysLoginLogMapper.insert(oldFail);
+        }
+        //2.正确密码能正常登录（没锁）
+        loginOk("probe_normal", "pass123456");
+    }
+
+    /** G1 防爆破：成功登录重置连败计数 */
+    @Test
+    void successResetsFailureStreak() throws Exception {
+        //1.失败 4 次（不足 5 次）
+        for (int i = 0; i < 4; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"loginName\":\"probe_normal\",\"password\":\"wrong-pass\"}"))
+                    .andExpect(jsonPath("$.code").value(2001));
+        }
+        //2.成功一次，连败清零
+        loginOk("probe_normal", "pass123456");
+        //3.再失败 4 次 → 累计仍是 4 连败，正确密码可登录
+        for (int i = 0; i < 4; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"loginName\":\"probe_normal\",\"password\":\"wrong-pass\"}"))
+                    .andExpect(jsonPath("$.code").value(2001));
+        }
+        loginOk("probe_normal", "pass123456");
+    }
+
     /** 登录成功并把 token 取出来给后续请求用 */
     private String loginOk(String loginName, String password) throws Exception {
         MvcResult mvcResult = mockMvc.perform(post("/api/auth/login")

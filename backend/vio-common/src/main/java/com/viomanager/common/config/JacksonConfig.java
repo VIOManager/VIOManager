@@ -1,4 +1,4 @@
-package com.viomanager.common.web;
+package com.viomanager.common.config;
 
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;

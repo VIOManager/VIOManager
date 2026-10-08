@@ -108,6 +108,15 @@ class ErrorHandlingTest {
                 .andExpect(jsonPath("$.message").value("资源不存在"));
     }
 
+    /** L1：错误 HTTP 方法（405 场景）收敛为 1001，不落 1000 兜底 */
+    @Test
+    void wrongMethodShouldReturn1001Not1000() throws Exception {
+        mockMvc.perform(get("/api/auth/login"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(1001))
+                .andExpect(jsonPath("$.message").value("请求方法不支持：GET"));
+    }
+
     @Test
     void healthShouldUseResultEnvelope() throws Exception {
         // health 在免认证名单里，不需要 token

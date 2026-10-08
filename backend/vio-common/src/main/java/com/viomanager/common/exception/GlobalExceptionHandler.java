@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -68,9 +70,25 @@ public class GlobalExceptionHandler {
             if (detail.length() > 0) {
                 detail.append("；");
             }
-            detail.append(violation.getPropertyPath()).append(" ").append(violation.getMessage());
+            // M2 脱敏：propertyPath 带完整调用路径（含 Java 方法名，如 bizError.name），
+            // 直接回显等于把服务端方法结构画给攻击者——只留最后一段字段名
+            String path = String.valueOf(violation.getPropertyPath());
+            String fieldName = path.substring(path.lastIndexOf('.') + 1);
+            detail.append(fieldName).append(" ").append(violation.getMessage());
         }
         return Result.fail(CommonErrorCode.PARAM_INVALID, "参数校验失败：" + detail);
+    }
+
+    /** 请求方法不支持（如对 POST 接口发 GET）：收敛为 1001，不再落 1000 兜底误导排查。 */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public Result<Void> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+        return Result.fail(CommonErrorCode.PARAM_INVALID, "请求方法不支持：" + e.getMethod());
+    }
+
+    /** Content-Type 不支持（如非 multipart 上传被拒时）：收敛为 1001。 */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public Result<Void> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
+        return Result.fail(CommonErrorCode.PARAM_INVALID, "请求的 Content-Type 不支持");
     }
 
     /** 缺少必填请求参数。 */
