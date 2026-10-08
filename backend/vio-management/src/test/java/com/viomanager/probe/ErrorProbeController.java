@@ -44,7 +44,18 @@ public class ErrorProbeController {
         return Result.ok();
     }
 
-    /** 测试用请求体。 */
-    public record ProbeDto(@NotBlank(message = "不能为空") String name) {
+    /** 测试用请求体，普通类 + getter/setter。 */
+    public static class ProbeDto {
+
+        @NotBlank(message = "不能为空")
+        private String name;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
     }
 }

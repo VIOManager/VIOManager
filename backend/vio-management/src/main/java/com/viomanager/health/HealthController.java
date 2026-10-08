@@ -1,6 +1,7 @@
 package com.viomanager.health;
 
 import com.viomanager.common.result.Result;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +23,9 @@ public class HealthController {
      */
     @GetMapping("/api/health")
     public Result<Map<String, Object>> health() {
-        return Result.ok(Map.of("status", "UP", "version", version));
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("status", "UP");
+        data.put("version", version);
+        return Result.ok(data);
     }
 }

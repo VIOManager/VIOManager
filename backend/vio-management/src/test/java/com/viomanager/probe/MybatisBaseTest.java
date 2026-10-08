@@ -1,6 +1,7 @@
 package com.viomanager.probe;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -69,7 +70,9 @@ class MybatisBaseTest {
     @Test
     void longShouldSerializeAsString() throws Exception {
         // 规范 §2.1：雪花 ID 超 JS 安全整数，Long 出参一律字符串
-        String json = objectMapper.writeValueAsString(java.util.Map.of("id", 123L));
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("id", 123L);
+        String json = objectMapper.writeValueAsString(data);
         assertEquals("{\"id\":\"123\"}", json);
     }
 }

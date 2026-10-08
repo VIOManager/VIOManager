@@ -19,6 +19,8 @@ public class JacksonConfig {
      */
     @Bean
     public Jackson2ObjectMapperBuilderCustomizer longToStringCustomizer() {
+        // builder -> {...} 是框架要求的功能接口写法（lambda），无法换成普通方法；
+        // 意思是"拿到框架的 builder，往里登记两条序列化规则"
         return builder -> {
             builder.serializerByType(Long.class, ToStringSerializer.instance);
             builder.serializerByType(Long.TYPE, ToStringSerializer.instance);

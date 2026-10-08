@@ -2,13 +2,14 @@ package com.viomanager.common.exception;
 
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.result.Result;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -18,6 +19,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 /**
  * 全局异常处理器：把一切异常统一收敛为 Result 响应体，全组接口自动受益。
  * 业务码透传、参数类错误归 1001、路由未命中归 1004、未捕获异常兜底 1000。
+ * 业务代码永远不写 try-catch 再拼错误响应，直接 throw BizException 即可。
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -38,7 +40,8 @@ public class GlobalExceptionHandler {
         } else if (e.getCode() == CommonErrorCode.FORBIDDEN.getCode()) {
             status = HttpStatus.FORBIDDEN;
         }
-        return ResponseEntity.status(status).body(Result.fail(e.getCode(), e.getMessage()));
+        Result<Void> body = Result.fail(e.getCode(), e.getMessage());
+        return ResponseEntity.status(status).body(body);
     }
 
     /**
@@ -47,18 +50,26 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BindException.class)
     public Result<Void> handleBind(BindException e) {
-        String detail = e.getBindingResult().getFieldErrors().stream()
-                .map(fe -> fe.getField() + " " + fe.getDefaultMessage())
-                .collect(Collectors.joining("；"));
+        StringBuilder detail = new StringBuilder();
+        for (FieldError fieldError : e.getBindingResult().getFieldErrors()) {
+            if (detail.length() > 0) {
+                detail.append("；");
+            }
+            detail.append(fieldError.getField()).append(" ").append(fieldError.getDefaultMessage());
+        }
         return Result.fail(CommonErrorCode.PARAM_INVALID, "参数校验失败：" + detail);
     }
 
     /** 单参数校验失败（@Validated + 方法参数约束）。 */
     @ExceptionHandler(ConstraintViolationException.class)
     public Result<Void> handleConstraint(ConstraintViolationException e) {
-        String detail = e.getConstraintViolations().stream()
-                .map(v -> v.getPropertyPath() + " " + v.getMessage())
-                .collect(Collectors.joining("；"));
+        StringBuilder detail = new StringBuilder();
+        for (ConstraintViolation<?> violation : e.getConstraintViolations()) {
+            if (detail.length() > 0) {
+                detail.append("；");
+            }
+            detail.append(violation.getPropertyPath()).append(" ").append(violation.getMessage());
+        }
         return Result.fail(CommonErrorCode.PARAM_INVALID, "参数校验失败：" + detail);
     }
 
