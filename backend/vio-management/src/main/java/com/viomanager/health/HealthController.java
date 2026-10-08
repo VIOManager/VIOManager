@@ -1,5 +1,6 @@
 package com.viomanager.health;
 
+import com.viomanager.common.result.Result;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,13 +19,9 @@ public class HealthController {
 
     /**
      * 报告服务存活状态与版本号。
-     * TODO(Step1)：统一响应体 Result 落地 vio-common 后，改用 Result 包装，弃用裸 Map。
      */
     @GetMapping("/api/health")
-    public Map<String, Object> health() {
-        return Map.of(
-                "code", 0,
-                "message", "success",
-                "data", Map.of("status", "UP", "version", version));
+    public Result<Map<String, Object>> health() {
+        return Result.ok(Map.of("status", "UP", "version", version));
     }
 }

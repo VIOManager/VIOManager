@@ -20,4 +20,21 @@
     <artifactId>vio-common</artifactId>
     <name>vio-common</name>
     <description>骨架公共底座：跨服务复用的非业务组件</description>
+
+    <dependencies>
+        <!--
+          web 与 validation 以 provided 引入：common 里的全局异常处理器等组件编译期需要它们，
+          但不传递给使用方——由各 Boot 服务自带 starter，避免版本被 jar 锁死。
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
 </project>
