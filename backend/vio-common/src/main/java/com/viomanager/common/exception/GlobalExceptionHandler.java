@@ -1,0 +1,104 @@
+package com.viomanager.common.exception;
+
+import com.viomanager.common.enums.CommonErrorCode;
+import com.viomanager.common.result.Result;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+/**
+ * 全局异常处理器：把一切异常统一收敛为 Result 响应体，全组接口自动受益。
+ * 业务码透传、参数类错误归 1001、路由未命中归 1004、未捕获异常兜底 1000。
+ * 业务代码永远不写 try-catch 再拼错误响应，直接 throw BizException 即可。
+ */
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * 业务异常：code 与 message 原样透传。
+     * ⚠️ 冲突：1002 必须配 HTTP 401、1003 必须配 HTTP 403——前端拦截器按
+     * HTTP 状态跳登录页/提示无权限（规范 §5.1）；去掉这对映射前端跳转会全部失效。
+     * 其余业务码一律 HTTP 200，前端只认响应体里的 code。
+     */
+    @ExceptionHandler(BizException.class)
+    public ResponseEntity<Result<Void>> handleBiz(BizException e) {
+        HttpStatus status = HttpStatus.OK;
+        if (e.getCode() == CommonErrorCode.UNAUTHORIZED.getCode()) {
+            status = HttpStatus.UNAUTHORIZED;
+        } else if (e.getCode() == CommonErrorCode.FORBIDDEN.getCode()) {
+            status = HttpStatus.FORBIDDEN;
+        }
+        Result<Void> body = Result.fail(e.getCode(), e.getMessage());
+        return ResponseEntity.status(status).body(body);
+    }
+
+    /**
+     * 参数绑定校验失败（含 @RequestBody @Valid 触发的 MethodArgumentNotValidException，其子类）。
+     * 规范要求 1001 的 message 说明哪个字段，这里逐字段拼出中文说明。
+     */
+    @ExceptionHandler(BindException.class)
+    public Result<Void> handleBind(BindException e) {
+        StringBuilder detail = new StringBuilder();
+        for (FieldError fieldError : e.getBindingResult().getFieldErrors()) {
+            if (detail.length() > 0) {
+                detail.append("；");
+            }
+            detail.append(fieldError.getField()).append(" ").append(fieldError.getDefaultMessage());
+        }
+        return Result.fail(CommonErrorCode.PARAM_INVALID, "参数校验失败：" + detail);
+    }
+
+    /** 单参数校验失败（@Validated + 方法参数约束）。 */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public Result<Void> handleConstraint(ConstraintViolationException e) {
+        StringBuilder detail = new StringBuilder();
+        for (ConstraintViolation<?> violation : e.getConstraintViolations()) {
+            if (detail.length() > 0) {
+                detail.append("；");
+            }
+            detail.append(violation.getPropertyPath()).append(" ").append(violation.getMessage());
+        }
+        return Result.fail(CommonErrorCode.PARAM_INVALID, "参数校验失败：" + detail);
+    }
+
+    /** 缺少必填请求参数。 */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public Result<Void> handleMissingParam(MissingServletRequestParameterException e) {
+        return Result.fail(CommonErrorCode.PARAM_INVALID, "参数校验失败：缺少必填参数 " + e.getParameterName());
+    }
+
+    /** 请求参数类型不匹配（如 id 传了非数字）。 */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public Result<Void> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return Result.fail(CommonErrorCode.PARAM_INVALID, "参数校验失败：参数 " + e.getName() + " 类型不正确");
+    }
+
+    /** 路由未命中：统一收敛为 1004，避免 Spring 默认错误体破坏响应契约。 */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public Result<Void> handleNoResource(NoResourceFoundException e) {
+        return Result.fail(CommonErrorCode.NOT_FOUND);
+    }
+
+    /**
+     * 兜底：一切未捕获异常。
+     * ⚠️ 难点：完整堆栈必须落日志（排查唯一线索），但绝不能进响应体——
+     * 堆栈含类名与 SQL 片段，外泄等于给攻击者画地图。
+     */
+    @ExceptionHandler(Throwable.class)
+    public Result<Void> handleUnknown(Throwable e) {
+        log.error("未捕获异常：{}", e.getMessage(), e);
+        return Result.fail(CommonErrorCode.INTERNAL_ERROR);
+    }
+}
