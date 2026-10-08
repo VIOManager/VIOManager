@@ -1,4 +1,4 @@
-package com.viomanager.auth.config;
+package com.viomanager.auth.service;
 
 import com.viomanager.auth.entity.SysUser;
 import com.viomanager.auth.mapper.SysUserMapper;
@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 /**
  * 管理系统侧的 token 附加校验：验签之后查库确认账号仍然有效。
  * 论坛阶段2 不装配这个 Bean，过滤器只验签——这是微服务库边界（架构调整方案 §4）。
+ * 注：这是校验组件不是配置类，按包职责归 service 包（组长规矩：配置类才进 config 包）。
  */
 @Component
 public class ManagementTokenChecker implements AuthTokenChecker {

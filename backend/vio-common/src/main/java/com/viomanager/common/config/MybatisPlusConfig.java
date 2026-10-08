@@ -1,15 +1,16 @@
-package com.viomanager.common.mybatis;
+package com.viomanager.common.config;
 
 import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.OptimisticLockerInnerInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+import com.viomanager.common.mybatis.AuditMetaObjectHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
  * MyBatis-Plus 插件装配：分页 + 乐观锁，审计填充见 AuditMetaObjectHandler。
- * 使用方引入 mybatis-plus-spring-boot3-starter 后由根包扫描自动生效。
+ * 组长规矩：配置类一律放 config 包。
  */
 @Configuration
 public class MybatisPlusConfig {

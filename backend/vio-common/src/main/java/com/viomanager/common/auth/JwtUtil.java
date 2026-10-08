@@ -1,22 +1,22 @@
 package com.viomanager.common.auth;
 
+import com.viomanager.common.config.JwtProperties;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.exception.BizException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.Resource;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import javax.crypto.SecretKey;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
  * JWT 生成与验签工具（HS256）。
- * 载荷五项：userId / role / orgId / realName / pwdUpdatedAt，两个服务共享同一密钥。
- * 时效 2 小时：论坛阶段2 只验签不查库，改密踢人靠短时效自然过期兜底（架构调整方案 §4）。
+ * 载荷五项：userId / role / orgId / realName / pwdUpdatedAt，两个服务共享同一密钥（JwtProperties）。
  */
 @Component
 public class JwtUtil {
@@ -28,15 +28,12 @@ public class JwtUtil {
     public static final String CLAIM_REAL_NAME = "realName";
     public static final String CLAIM_PWD_UPDATED_AT = "pwdUpdatedAt";
 
-    @Value("${vio.jwt.secret}")
-    private String secret;
-
-    @Value("${vio.jwt.expire-hours:2}")
-    private long expireHours;
+    @Resource
+    private JwtProperties jwtProperties;
 
     private SecretKey key() {
         // HS256 要求密钥至少 32 字节，短了这里直接抛错（启动期就暴露，好过运行期才发现）
-        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        return Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -44,7 +41,7 @@ public class JwtUtil {
      */
     public String createToken(Long userId, String role, Long orgId, String realName, Long pwdUpdatedAt) {
         Date now = new Date();
-        Date expire = Date.from(Instant.now().plus(expireHours, ChronoUnit.HOURS));
+        Date expire = Date.from(Instant.now().plus(jwtProperties.getExpireHours(), ChronoUnit.HOURS));
         return Jwts.builder()
                 .claim(CLAIM_USER_ID, userId)
                 .claim(CLAIM_ROLE, role)
