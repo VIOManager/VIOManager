@@ -1,0 +1,39 @@
+/**
+ * 论坛站设计令牌：图纸档案家族（与主站 front/ 同源，站长气质略松）
+ * 定调依据：Step D0 组长拍板方向一；论坛为独立站但同家族
+ */
+:root {
+  --vio-paper: #F9FAF7;
+  --vio-sheet: #FFFFFF;
+  --vio-ink: #1B2330;
+  --vio-ink-2: #4A5568;
+  --vio-ink-3: #8B95A5;
+  --vio-blue-ink: #1D3A8F;
+  --vio-blue-deep: #142B6E;
+  --vio-rule: #C9CFD8;
+  --vio-rule-soft: #E3E7ED;
+  --vio-seal: #C0392B;
+  --vio-wash: #EEF1F6;
+  --vio-ok: #1E7B4F;
+  --vio-warn: #B06A0C;
+  --vio-serif: "SimSun", "NSimSun", "宋体", serif;
+  --vio-fangsong: "FangSong", "仿宋", "STFangsong", serif;
+  --vio-body: "Microsoft YaHei", "Segoe UI Variable Text", sans-serif;
+  --vio-mono: "Cascadia Mono", Consolas, monospace;
+  --vio-disp-latin: "Bahnschrift", "Segoe UI Variable Display", sans-serif;
+  --vio-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --el-color-primary: var(--vio-blue-ink);
+  --el-color-success: var(--vio-ok);
+  --el-color-warning: var(--vio-warn);
+  --el-color-danger: var(--vio-seal);
+  --el-border-radius-base: 2px;
+  --el-border-radius-small: 0;
+  --el-font-family: var(--vio-body);
+  --el-border-color: var(--vio-rule);
+  --el-border-color-light: var(--vio-rule-soft);
+  --el-text-color-primary: var(--vio-ink);
+  --el-text-color-regular: var(--vio-ink-2);
+  --el-bg-color: var(--vio-sheet);
+  --el-bg-color-page: var(--vio-paper);
+}

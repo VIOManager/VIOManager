@@ -1,0 +1,18 @@
+/** 论坛站全局基础样式：页面样式写各组件 scoped 块 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #app { height: 100%; }
+body {
+  font-family: var(--vio-body);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--vio-ink);
+  background: #DFE3E9;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--vio-blue-ink); text-decoration: none; }
+.mono { font-family: var(--vio-mono); font-variant-numeric: tabular-nums; }
+.fs { font-family: var(--vio-fangsong); }
+:focus-visible { outline: 2px solid var(--vio-blue-ink); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
