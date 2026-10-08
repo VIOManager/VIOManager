@@ -53,6 +53,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- ORM 基座：雪花 ID / 逻辑删除 / 审计字段填充 / 分页 / 乐观锁 -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+        </dependency>
+
         <!-- 参数校验（@Valid 触发的异常由 common 全局处理器收敛为 1001） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
