@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  VIOManager 后端父工程：统一锁 Spring Boot 与依赖版本。
+  工程形态为 Maven 多模块（一父两子起步），约定见骨架方案 §2.1：
+  vio-common 底座 jar + vio-management 管理系统服务；vio-forum 阶段2 才创建。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.viomanager</groupId>
+    <artifactId>vio-backend</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>vio-backend</name>
+    <description>VIOManager 后端父工程</description>
+
+    <modules>
+        <module>vio-common</module>
+        <module>vio-management</module>
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+</project>

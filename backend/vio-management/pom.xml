@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  vio-management 管理系统服务：阶段1 唯一可运行服务。
+  Step 0 只含工程底座（web 容器 + 数据源 + Flyway 建表 + 健康检查）；
+  MyBatis-Plus Step 2、JWT Step 3、MinIO Step 8、ClamAV Step 8 按步引入，不顺手前置。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.viomanager</groupId>
+        <artifactId>vio-backend</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vio-management</artifactId>
+    <name>vio-management</name>
+    <description>VIOManager 管理系统服务（阶段1）</description>
+
+    <dependencies>
+        <!-- 底座 jar：统一响应/异常、基座字段、幂等、审计自 Step 1 起落那里 -->
+        <dependency>
+            <groupId>com.viomanager</groupId>
+            <artifactId>vio-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Flyway 迁移需要 DataSource；Step 2 引 MyBatis-Plus 时仍复用同款连接池 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
