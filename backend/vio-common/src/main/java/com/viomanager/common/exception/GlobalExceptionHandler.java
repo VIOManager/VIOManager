@@ -17,6 +17,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -130,6 +131,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public Result<Void> handleNoResource(NoResourceFoundException e) {
         return Result.fail(CommonErrorCode.NOT_FOUND);
+    }
+
+    /**
+     * 上传超过 Spring multipart 硬限制（yml 的 max-file-size，刻意高于业务限制）：
+     * 收敛为 1009，与文件服务自己的大小校验同一个错误码，前端不用区分两层限制。
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public Result<Void> handleMaxUploadSize(MaxUploadSizeExceededException e) {
+        return Result.fail(CommonErrorCode.FILE_TOO_LARGE, "文件大小超出限制");
     }
 
     /**

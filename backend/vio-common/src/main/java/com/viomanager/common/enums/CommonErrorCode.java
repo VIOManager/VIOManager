@@ -28,7 +28,22 @@ public enum CommonErrorCode implements ErrorCode {
     STATE_NOT_ALLOWED(1006, "当前状态不允许该操作"),
 
     /** 数据已被他人修改（乐观锁冲突）。 */
-    CONCURRENT_MODIFIED(1007, "数据已被他人修改，请刷新后重试");
+    CONCURRENT_MODIFIED(1007, "数据已被他人修改，请刷新后重试"),
+
+    /**
+     * 文件格式不在白名单（骨架接口清单 F01 定义的 1008–1011 段，
+     * 与 1000 同属骨架补充码，待下次规范修订登记进 §4 表）。
+     */
+    FILE_TYPE_NOT_ALLOWED(1008, "不支持的文件格式"),
+
+    /** 文件超过大小上限（业务校验与 Spring multipart 硬限制统一收敛到此码）。 */
+    FILE_TOO_LARGE(1009, "文件大小超出限制"),
+
+    /** 病毒检测命中：文件已落库标记 INFECTED 并审计，拒绝返回给前端。 */
+    FILE_INFECTED(1010, "文件未通过病毒检测"),
+
+    /** 病毒扫描服务不可用（方案 §7 待确认项，按推荐"拒绝并提示"实现，文件记 UNAVAILABLE）。 */
+    SCAN_UNAVAILABLE(1011, "病毒扫描服务不可用，请稍后重试");
 
     private final int code;
     private final String message;

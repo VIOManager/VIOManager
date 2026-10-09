@@ -8,11 +8,9 @@ import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.Result;
 import com.viomanager.common.util.ParamsJsonUtil;
+import com.viomanager.common.util.Sha256Util;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -68,7 +66,7 @@ public class IdempotentAspect {
         }
         idemKey = idemKey.trim();
         //3.请求体哈希：同 key 不同参属于前端异常使用，存档备查（拦截行为仍只看 key）
-        String requestHash = sha256Hex(ParamsJsonUtil.toJson(joinPoint.getArgs()));
+        String requestHash = Sha256Util.sha256Hex(ParamsJsonUtil.toJson(joinPoint.getArgs()));
         //4.查历史：未过期直接 1005；已过期删掉，key 可复用（方案 Step 5 验证项）
         Map<String, Object> existing = idempotentRecordDao.findByKey(idemKey);
         if (existing != null) {
@@ -123,25 +121,5 @@ public class IdempotentAspect {
             text = text.substring(0, SUMMARY_MAX_LENGTH);
         }
         return text;
-    }
-
-    /** SHA-256 十六进制（64 字符，正好对齐 request_hash 列宽） */
-    private String sha256Hex(String text) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(text.getBytes(StandardCharsets.UTF_8));
-            StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < bytes.length; i++) {
-                String hex = Integer.toHexString(bytes[i] & 0xFF);
-                if (hex.length() == 1) {
-                    builder.append('0');
-                }
-                builder.append(hex);
-            }
-            return builder.toString();
-        } catch (NoSuchAlgorithmException e) {
-            // JDK 必带 SHA-256，理论到不了这里
-            throw new IllegalStateException("SHA-256 摘要算法不可用", e);
-        }
     }
 }

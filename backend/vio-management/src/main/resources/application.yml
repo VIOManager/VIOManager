@@ -11,6 +11,12 @@ server:
 spring:
   application:
     name: vio-management
+  servlet:
+    multipart:
+      # ⚠️ 刻意高于 vio.file.max-size-mb（25 > 20）：业务校验先给出 1009 业务码，
+      # 这里是最后防线，超了由全局异常处理器同样转 1009
+      max-file-size: 25MB
+      max-request-size: 30MB
   datasource:
     # 宿主端口默认 3307：对应 compose 的 MySQL 容器映射（避开本机原生 MySQL 的 3306）
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${MYSQL_DATABASE:viomanager}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
@@ -45,3 +51,11 @@ vio:
     # 审计总开关（排查性能问题时可一键停）；异步写库不拖慢接口，测试里用同步模式断言
     enabled: true
     async: true
+  file:
+    # 文件服务：桶名 / 单文件大小上限 / 扩展名白名单 / ClamAV 连接位
+    bucket: vio-files
+    max-size-mb: 20
+    allowed-extensions: jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx,ppt,pptx,zip
+    clamav:
+      host: ${CLAMAV_HOST:localhost}
+      port: ${CLAMAV_PORT:3310}

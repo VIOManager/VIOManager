@@ -75,6 +75,12 @@
             <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
 
+        <!-- MinIO 对象存储 SDK：Step 8 文件服务 -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+        </dependency>
+
         <!-- BCrypt 密码加密：只取 crypto 模块，不引 Spring Security 全家桶（方案 §2 拍板） -->
         <dependency>
             <groupId>org.springframework.security</groupId>

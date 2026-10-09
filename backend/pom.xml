@@ -35,6 +35,7 @@
         <mybatis-plus.version>3.5.12</mybatis-plus.version>
         <jjwt.version>0.12.6</jjwt.version>
         <hutool.version>5.8.32</hutool.version>
+        <minio.version>8.5.7</minio.version>
     </properties>
 
     <dependencyManagement>
@@ -69,6 +70,12 @@
                 <groupId>cn.hutool</groupId>
                 <artifactId>hutool-core</artifactId>
                 <version>${hutool.version}</version>
+            </dependency>
+            <!-- MinIO 对象存储 SDK：Step 8 文件服务 -->
+            <dependency>
+                <groupId>io.minio</groupId>
+                <artifactId>minio</artifactId>
+                <version>${minio.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
