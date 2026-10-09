@@ -1,67 +1,78 @@
 <script setup lang="ts">
 /**
- * 论坛站布局壳：顶栏 + 内容区 + 页脚图签
- * 视觉：图纸档案家族（期刊/会审语汇）；设计稿 design-preview/forum-site/
- * TODO(联调)：发帖按钮接发帖页（暂不做富文本，纯文本+附件走主站文件服务）
+ * 论坛站布局壳：通栏白顶栏 + 内容区 + 简版页脚（V2EX 范式）
+ * 视觉基准：.agentdocs/design-preview/forum-v2ex/ 样张；《论坛V2EX风格重设计-优化方案》§3
+ * ⚠️ 冲突：图签页脚已按 2026-10-09 lzh 拍板废弃（改居中灰字简版），图纸档案语汇禁止回潮论坛站
+ * TODO(联调)：搜索框接帖子搜索接口；"创作新主题"接发帖页（本期占位，方案 §8 不做富文本编辑器）
  */
 import { useUserStore } from '@/stores/user'
+import { avatarOf } from '@/config/avatars'
 
 const user = useUserStore()
+const mainSite = import.meta.env.VITE_MAIN_SITE_URL ?? 'http://localhost:5174'
 const year = new Date().getFullYear()
 </script>
 
 <template>
   <div class="page">
+    <!-- 通栏白顶栏：全宽白底下缘 1px 灰线，内容列宽 1080 -->
     <header class="topbar">
-      <router-link to="/" class="brand">
-        <b>VIO</b><span>团队论坛</span><i>REVIEW BOARD · 独立站</i>
-      </router-link>
-      <nav class="topnav">
-        <router-link to="/" exact-active-class="active">首页</router-link>
-        <router-link to="/feed" active-class="active">技术交流</router-link>
-        <router-link to="/kb" active-class="active">知识库</router-link>
-      </nav>
-      <div class="top-right">
-        <input type="text" placeholder="搜索帖子 / 标签" />
-        <button class="btn-ink" type="button">发帖</button>
-        <span class="who"><i class="ava">{{ user.initials }}</i>{{ user.realName }}</span>
+      <div class="wrap bar-in">
+        <router-link to="/" class="logo">VIO<em>论坛</em></router-link>
+        <span class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="20.5" y1="20.5" x2="16.2" y2="16.2"/></svg>
+          <input aria-label="搜索" placeholder="">
+        </span>
+        <span class="sp"></span>
+        <nav class="topnav">
+          <router-link to="/" exact-active-class="on">首页</router-link>
+          <router-link to="/feed" active-class="on">技术交流</router-link>
+          <router-link to="/kb" active-class="on">知识库</router-link>
+        </nav>
+        <button class="btn-post" type="button">创作新主题</button>
+        <span class="who"><img :src="avatarOf(user.realName, 26)" alt="">{{ user.realName }}</span>
       </div>
     </header>
 
-    <main class="content">
+    <main class="wrap content">
       <router-view />
     </main>
 
-    <footer class="titleblock">
-      <div><i>站点</i><b>VIOManager 团队论坛（独立站）</b></div>
-      <div><i>图号</i><b class="mono">VIO-FORUM</b></div>
-      <div><i>学期</i><b class="mono">{{ year }} 秋</b></div>
-      <div><i>版次</i><b class="mono">A</b></div>
+    <!-- 简版页脚：居中灰字 -->
+    <footer class="foot">
+      <div>
+        <a href="#" @click.prevent>关于</a>
+        <a :href="mainSite">主站</a>
+        <router-link to="/kb">知识库</router-link>
+      </div>
+      VIO Manager · 团队论坛 · 内部站点 · {{ year }} 秋
     </footer>
   </div>
 </template>
 
 <style scoped>
-.page { max-width: 1240px; margin: 0 auto; background: var(--vio-paper); box-shadow: 0 10px 34px rgba(27, 35, 48, 0.14); min-height: 100vh; display: flex; flex-direction: column; }
-.topbar { display: flex; align-items: center; gap: 28px; padding: 16px 32px; background: var(--vio-sheet); border-bottom: 2px solid var(--vio-ink); }
-.brand { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
-.brand b { font-family: var(--vio-disp-latin); font-size: 15px; letter-spacing: 0.06em; border: 1.5px solid var(--vio-ink); padding: 3px 8px; color: var(--vio-ink); }
-.brand span { font-family: var(--vio-serif); font-size: 17px; font-weight: 700; letter-spacing: 0.14em; color: var(--vio-ink); }
-.brand i { font-style: normal; font-family: var(--vio-mono); font-size: 9.5px; color: var(--vio-ink-3); letter-spacing: 0.18em; }
-.topnav { display: flex; gap: 22px; flex: 1; }
-.topnav a { font-size: 13.5px; color: var(--vio-ink-2); letter-spacing: 0.1em; padding-bottom: 3px; border-bottom: 2px solid transparent; }
-.topnav a.active { color: var(--vio-blue-ink); font-weight: 700; border-bottom-color: var(--vio-blue-ink); }
-.top-right { display: flex; align-items: center; gap: 14px; }
-.top-right input { width: 180px; border: none; border-bottom: 1px solid var(--vio-ink-3); background: transparent; padding: 6px 2px; font-size: 13px; color: var(--vio-ink); border-radius: 0; }
-.top-right input:focus { outline: none; border-bottom: 2px solid var(--vio-blue-ink); }
-.btn-ink { padding: 8px 22px; background: var(--vio-ink); color: var(--vio-paper); border: none; font-size: 13px; letter-spacing: 0.18em; text-indent: 0.18em; font-family: var(--vio-serif); font-weight: 700; border-radius: 0; transition: background 0.25s var(--vio-ease); }
-.btn-ink:hover { background: var(--vio-blue-ink); }
-.who { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--vio-ink-2); }
-.ava { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--vio-wash); color: var(--vio-blue-ink); font-size: 11px; font-weight: 700; font-style: normal; font-family: var(--vio-serif); border: 1px solid var(--vio-rule); }
-.content { flex: 1; padding: 26px 32px 40px; }
-.titleblock { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; border: 2px solid var(--vio-ink); background: var(--vio-sheet); margin: 0 32px 30px; }
-.titleblock div { border-right: 1px solid var(--vio-ink); padding: 6px 12px; }
-.titleblock div:last-child { border-right: none; }
-.titleblock i { display: block; font-style: normal; font-size: 9.5px; letter-spacing: 0.16em; color: var(--vio-ink-3); font-family: var(--vio-fangsong); }
-.titleblock b { font-size: 12px; }
+.page { min-height: 100vh; display: flex; flex-direction: column; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 10px; }
+.bar-in { display: flex; align-items: center; gap: 22px; height: 58px; }
+.logo { font-size: 22px; font-weight: 800; color: #222; letter-spacing: -0.02em; }
+.logo em { font-style: normal; color: var(--fade); font-weight: 600; font-size: 15px; margin-left: 2px; }
+.search { display: flex; align-items: center; width: 230px; height: 31px; background: var(--box); border: 1px solid #D4D4D4; border-radius: 999px; padding: 0 13px; }
+.search:focus-within { border-color: #AAA; }
+.search svg { width: 14px; height: 14px; color: var(--fade); flex: none; }
+.search input { flex: 1; min-width: 0; border: none; background: transparent; font-size: 12.5px; margin-left: 7px; color: var(--body); }
+.search input:focus { outline: none; }
+.sp { flex: 1; }
+.topnav a { font-size: 13px; color: var(--body); margin-left: 18px; }
+.topnav a:hover, .topnav a.on { color: #000; }
+.btn-post { font-size: 13px; color: var(--ink); background: var(--box); border: 1px solid #CCC; border-radius: var(--radius-box); padding: 5px 14px; margin-left: 18px; cursor: pointer; }
+.btn-post:hover { border-color: #999; }
+.who { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--body); margin-left: 18px; }
+.who img { width: 26px; height: 26px; border-radius: var(--radius-ava); }
+
+.content { flex: 1; padding-top: 18px; padding-bottom: 20px; }
+
+.foot { text-align: center; font-size: 12px; color: var(--fade); padding: 22px 0 30px; }
+.foot a { color: var(--fade); margin: 0 8px; }
+.foot a:hover { color: var(--ink); }
+.foot div { margin-bottom: 4px; }
 </style>
