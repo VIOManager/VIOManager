@@ -1,22 +1,30 @@
 <script setup lang="ts">
 /**
  * 登录页（方向一「图纸档案」定调版）
- * 对应方案：《前端骨架-开发方案》Step 3；视觉样张：design-preview/direction-1-blueprint
- * TODO(Step3)：接 A01 登录接口（Apifox Mock → 后端联调）；defaultPassword=1 弹改密引导（A02）
- * ⚠️ 安全：当前为登录桩（任意输入入库 stub token），仅用于大框联调，禁止带桩上线
+ * 对应方案：《前端骨架-开发方案》Step 3 + 《前端ABC模块页面开发-优化方案》FS2
+ * FS2：登录接假数据（/api/auth/login）；defaultPassword=1 时改密引导由壳内 TopBar 自动弹出
+ * ⚠️ 联调：下方"演示账号"提示为 mock 专属，切真实后端时删除
  */
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
 const user = useUserStore()
 const form = reactive({ loginName: '', password: '' })
+const loading = ref(false)
 
-function onSubmit() {
-  // 大框阶段：不写接口调用，直接入壳
-  user.mockLogin()
-  router.push('/')
+async function onSubmit() {
+  if (!form.loginName || !form.password || loading.value) return
+  loading.value = true
+  try {
+    await user.login(form.loginName, form.password)
+    router.push('/')
+  } catch {
+    // 失败提示（2001 账号或密码错误）已由 http 拦截器统一弹出
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -51,8 +59,8 @@ function onSubmit() {
             <span>密码</span>
             <input v-model="form.password" type="password" placeholder="请输入密码" autocomplete="current-password" />
           </label>
-          <button type="submit" class="btn-stamp">登记登录</button>
-          <p class="note">默认密码 abc123，首次登记后按安全规定修改；忘记密码请联系超级管理员重置。</p>
+          <button type="submit" class="btn-stamp" :disabled="loading">{{ loading ? '登记中…' : '登记登录' }}</button>
+          <p class="note">默认密码 abc123，首次登记后按安全规定修改；忘记密码请联系超级管理员重置。<br />mock 演示账号：admin（超管·未改默认密码）/ dept01（部门管理员）/ 2023319024（学生），密码均为 abc123</p>
           <div class="seal" aria-hidden="true"><i>黑龙江科技大学<br />科创团队</i></div>
         </form>
       </div>
@@ -174,6 +182,7 @@ function onSubmit() {
   transition: background 0.3s var(--vio-ease);
 }
 .btn-stamp:hover { background: var(--vio-blue-deep); }
+.btn-stamp:disabled { opacity: 0.55; cursor: not-allowed; }
 .note { margin-top: 16px; font-family: var(--vio-fangsong); font-size: 12px; color: var(--vio-ink-3); line-height: 1.9; }
 .seal {
   position: absolute;
