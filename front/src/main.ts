@@ -12,6 +12,8 @@ import '@/styles/tokens.css'
 import '@/styles/base.css'
 import App from './App.vue'
 import router from './router'
+// axios 实例与 mock 层装配：拦截器随模块加载生效（页面只引 @/api/{模块} 的请求函数，不直接碰本模块）
+import '@/api/http'
 
 const app = createApp(App)
 app.use(createPinia())
