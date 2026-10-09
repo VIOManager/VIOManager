@@ -4,6 +4,7 @@ import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.result.Result;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import org.mybatis.spring.MyBatisSystemException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -36,14 +37,36 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BizException.class)
     public ResponseEntity<Result<Void>> handleBiz(BizException e) {
+        return toResponse(e);
+    }
+
+    /**
+     * MyBatis 包装异常解包：拦截器在 SQL 执行期抛的 BizException（如数据范围拒绝的 1003）
+     * 会被 MyBatis 包成 MyBatisSystemException，这里把业务异常解出来按原码响应，
+     * 不解包的话全落 1000 兜底，前端拿不到真实错误码。
+     */
+    @ExceptionHandler(MyBatisSystemException.class)
+    public ResponseEntity<Result<Void>> handleMybatisWrapped(MyBatisSystemException e) {
+        BizException biz = BizException.unwrap(e);
+        if (biz != null) {
+            return toResponse(biz);
+        }
+        log.error("未捕获的 MyBatis 系统异常：{}", e.getMessage(), e);
+        return ResponseEntity.ok(Result.fail(CommonErrorCode.INTERNAL_ERROR));
+    }
+
+    /**
+     * 业务异常转响应：默认 HTTP 200 + 响应体 code 表达；
+     * 1002 配 401、1003 配 403 是规范 §5.1 定的配对，前端拦截器靠它跳登录页。
+     */
+    private ResponseEntity<Result<Void>> toResponse(BizException e) {
         HttpStatus status = HttpStatus.OK;
         if (e.getCode() == CommonErrorCode.UNAUTHORIZED.getCode()) {
             status = HttpStatus.UNAUTHORIZED;
         } else if (e.getCode() == CommonErrorCode.FORBIDDEN.getCode()) {
             status = HttpStatus.FORBIDDEN;
         }
-        Result<Void> body = Result.fail(e.getCode(), e.getMessage());
-        return ResponseEntity.status(status).body(body);
+        return ResponseEntity.status(status).body(Result.fail(e.getCode(), e.getMessage()));
     }
 
     /**
