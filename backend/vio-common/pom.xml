@@ -56,6 +56,16 @@
             <artifactId>mybatis-plus-jsqlparser</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!--
+          AOP：幂等切面（Step 5）与审计切面（Step 6）编译期需要 @Aspect / ProceedingJoinPoint；
+          JdbcTemplate / DuplicateKeyException 由上面的 mybatis-plus starter 传递（其内部依赖 starter-jdbc），
+          运行期由使用方自带同款 starter，版本不被 jar 锁死
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <!-- JWT：过滤器与工具类在 common，阶段2 论坛共用同一套验签 -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

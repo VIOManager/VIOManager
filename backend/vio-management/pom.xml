@@ -69,6 +69,12 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- AOP 运行期：幂等切面（Step 5）与审计切面（Step 6）的代理织入 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
         <!-- BCrypt 密码加密：只取 crypto 模块，不引 Spring Security 全家桶（方案 §2 拍板） -->
         <dependency>
             <groupId>org.springframework.security</groupId>

@@ -38,3 +38,6 @@ vio:
   auth:
     # 免认证路径，逗号分隔；以后新增公开接口在此登记
     skip-paths: /api/health,/api/auth/login
+  idempotent:
+    # 幂等键有效期（小时）：过期后同 key 视为新请求可复用（规范 §9 待确认项的建议值 24）
+    expire-hours: 24
