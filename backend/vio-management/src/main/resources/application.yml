@@ -59,3 +59,6 @@ vio:
     clamav:
       host: ${CLAMAV_HOST:localhost}
       port: ${CLAMAV_PORT:3310}
+  approval:
+    # 审批单有效期（天）：到期未处理由定时任务转 EXPIRED（方案 §7 待确认项，建议值 7）
+    expire-days: 7
