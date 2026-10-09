@@ -64,14 +64,6 @@ async function onSubmit() {
           <div class="seal" aria-hidden="true"><i>黑龙江科技大学<br />科创团队</i></div>
         </form>
       </div>
-      <footer class="titleblock" aria-hidden="true">
-        <div class="tb-cell wide"><i>单位</i><b>黑龙江科技大学科创团队</b></div>
-        <div class="tb-cell"><i>图号</i><b class="mono">VIO-FE-01</b></div>
-        <div class="tb-cell"><i>比例</i><b class="mono">1 : 1</b></div>
-        <div class="tb-cell"><i>版次</i><b class="mono">A</b></div>
-        <div class="tb-cell"><i>日期</i><b class="mono">2026-10-08</b></div>
-        <div class="tb-cell"><i>审核</i><b>组长</b></div>
-      </footer>
     </div>
   </div>
 </template>
@@ -210,14 +202,4 @@ async function onSubmit() {
   line-height: 1.7;
   letter-spacing: 0.12em;
 }
-.titleblock {
-  display: grid;
-  grid-template-columns: 2.2fr 1.2fr 0.8fr 0.7fr 1.3fr 1fr;
-  border: 2px solid var(--vio-ink);
-  background: var(--vio-sheet);
-}
-.tb-cell { border-right: 1px solid var(--vio-ink); padding: 7px 12px; }
-.tb-cell:last-child { border-right: none; }
-.tb-cell i { display: block; font-style: normal; font-size: 10px; letter-spacing: 0.16em; color: var(--vio-ink-3); font-family: var(--vio-fangsong); }
-.tb-cell b { font-size: 12.5px; font-weight: 600; }
 </style>
