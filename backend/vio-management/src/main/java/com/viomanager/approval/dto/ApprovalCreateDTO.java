@@ -16,7 +16,7 @@ public class ApprovalCreateDTO {
     @NotBlank(message = "bizType 不能为空")
     private String bizType;
 
-    /** 关联业务 ID（申请时尚未建正式数据可空） */
+    /** 关联业务 ID：更新型审批（加人/移除）填既有对象 ID；创建型（建队）留空，批准后回填 */
     private Long bizId;
 
     /** 业务标题（列表展示，如"xxx 队参赛报名"） */

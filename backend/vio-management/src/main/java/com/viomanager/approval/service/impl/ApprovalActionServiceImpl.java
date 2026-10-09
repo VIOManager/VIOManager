@@ -138,12 +138,19 @@ public class ApprovalActionServiceImpl implements IApprovalActionService {
         record.setIp(currentIp());
         record.setCreatedAt(LocalDateTime.now());
         approvalRecordMapper.insert(record);
-        //6.回调路由：批准 / 驳回落到业务线 Handler（未注册用兜底，记日志不动作）；取消不回调
+        //6.回调路由：批准 / 驳回落到业务线 Handler（未注册用兜底，记日志不动作）；取消不回调。
+        //   创建型审批的 bizId 此刻是 null（对象还没建），onApproved 返回新建对象 ID 后回填单据
         ApprovalHandler handler = handlerRegistry.get(approval.getBizType());
         if ("APPROVED".equals(toStatus)) {
-            handler.onApproved(approval.getBizId(), approval.getBizPayload());
+            Long createdBizId = handler.onApproved(
+                    approval.getId(), approval.getBizId(), approval.getBizPayload());
+            if (createdBizId != null && approval.getBizId() == null) {
+                UpdateWrapper<Approval> backfill = new UpdateWrapper<>();
+                backfill.eq("id", approval.getId()).set("biz_id", createdBizId);
+                approvalMapper.update(null, backfill);
+            }
         } else if ("REJECTED".equals(toStatus)) {
-            handler.onRejected(approval.getBizId(), approval.getBizPayload());
+            handler.onRejected(approval.getId(), approval.getBizId(), approval.getBizPayload());
         }
     }
 

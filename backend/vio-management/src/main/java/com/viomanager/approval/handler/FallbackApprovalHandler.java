@@ -17,12 +17,14 @@ public class FallbackApprovalHandler implements ApprovalHandler {
     }
 
     @Override
-    public void onApproved(Long bizId, String payloadJson) {
-        log.warn("审批回调缺实现：bizId={} 已批准但无 Handler 接单，快照：{}", bizId, payloadJson);
+    public Long onApproved(Long approvalId, Long bizId, String payloadJson) {
+        log.warn("审批回调缺实现：approvalId={} bizId={} 已批准但无 Handler 接单，快照：{}",
+                approvalId, bizId, payloadJson);
+        return null;
     }
 
     @Override
-    public void onRejected(Long bizId, String payloadJson) {
-        log.warn("审批回调缺实现：bizId={} 被驳回，无 Handler 接单", bizId);
+    public void onRejected(Long approvalId, Long bizId, String payloadJson) {
+        log.warn("审批回调缺实现：approvalId={} bizId={} 被驳回，无 Handler 接单", approvalId, bizId);
     }
 }

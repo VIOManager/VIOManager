@@ -22,7 +22,7 @@ public class Approval extends BaseEntity {
     /** 业务类型：TEAM_CREATE / TEAM_ADD_MEMBER / TEAM_REMOVE_MEMBER / TEAM_ADD_ADVISOR / TEAM_DISSOLVE / ACHIEVEMENT_SUBMIT / PROJECT_VIEW / MILESTONE_APPROVE / SEMESTER_SWITCH */
     private String bizType;
 
-    /** 关联业务 ID，批准后据此创建/更新正式数据 */
+    /** 关联业务 ID：更新型审批（加人/移除）填既有对象 ID；创建型（建队）提交时为空，批准后由回调返回值回填 */
     private Long bizId;
 
     /** 业务标题，列表展示用（如队名 + 比赛名） */

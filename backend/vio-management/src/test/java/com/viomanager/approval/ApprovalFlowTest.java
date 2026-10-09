@@ -80,9 +80,13 @@ class ApprovalFlowTest extends ApprovalTestBase {
         assertEquals(findUserId("appr_dept_a"), row.get("approver_id"));
         assertEquals(1, ((Number) row.get("approver_read")).intValue());
         assertEquals(1, countRecords(approvalId, "APPROVE"));
-        //6.回调真的执行了（方案验证栏"批准 → 回调执行建队"）
+        //6.回调真的执行了（方案验证栏"批准 → 回调执行建队"）：
+        //   收到的 approvalId 正确；返回的新建队伍 ID 被回填到 approval.biz_id（创建型审批可追溯）
         assertEquals(1, RecordingTeamHandler.APPROVED_COUNT.get());
         assertEquals(0, RecordingTeamHandler.REJECTED_COUNT.get());
+        assertEquals(approvalId, RecordingTeamHandler.LAST_CALLBACK_APPROVAL_ID.get());
+        assertEquals(RecordingTeamHandler.FAKE_CREATED_TEAM_ID,
+                ((Number) row.get("biz_id")).longValue());
         //7.发起人红点：申请出结果未读 1 → 标记已读 → 归零（方案验证栏"红点归零"）
         mockMvc.perform(get("/api/approvals/unread-count")
                         .header("Authorization", "Bearer " + applicantToken))
