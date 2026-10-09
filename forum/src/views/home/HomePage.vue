@@ -1,174 +1,178 @@
 <script setup lang="ts">
 /**
- * 论坛首页：版块 tab + 排序 + 主题列表 + 热帖榜右栏
- * 结构参照 Discourse 主题行解剖 + V2EX 热榜侧栏；设计稿 design-preview/forum-site/index.html
- * TODO(API)：列表 GET /api/forum/topics（board/sort/page），热榜 GET /api/forum/topics/hot——
- *    论坛服务接口清单待出（骨架阶段静态演示数据）
+ * 论坛首页：频道行（版块 + 热门标签）并入主列盒 + 行式主题列表 + 右栏
+ * 视觉基准：.agentdocs/design-preview/forum-v2ex/index.html（v3 样张，lzh 已过目）
+ * 依据：《论坛V2EX风格重设计-优化方案》§3/§5.1/§5.2
+ * TODO(API)：列表 GET /api/forum/topics（board/sort/page）、热议 GET /api/forum/topics/hot——
+ *    论坛服务接口清单待出（现为静态演示数据，字段对齐 TopicItem）
  * ⚠️ 注意：热度 = 点赞加权 × 时间衰减（架构方案 §5.3，Redis ZSET），前端只展示不算分
  */
 import { ref } from 'vue'
 import { BOARDS, boardName } from '@/config/boards'
+import { avatarOf } from '@/config/avatars'
 import type { BoardCode, TopicItem } from '@/types'
 
-const activeBoard = ref<BoardCode>('GENERAL')
+const mainSite = import.meta.env.VITE_MAIN_SITE_URL ?? 'http://localhost:5174'
+
+/** 当前选中版块：'ALL' 为"全部"（boards 之外的伪选项） */
+const activeBoard = ref<BoardCode | 'ALL'>('ALL')
 const activeSort = ref<'latest' | 'hot' | 'pinned'>('latest')
+const SORTS = [
+  { code: 'latest', name: '最新' },
+  { code: 'hot', name: '最热' },
+  { code: 'pinned', name: '置顶' }
+] as const
 
-/** 骨架阶段静态演示数据（字段对齐 TopicItem，联调时替换为接口返回） */
+/** 第二行热门标签；TODO(联调)：由标签接口下发 */
+const hotTags = ['STM32', '电机控制', 'CAD', 'GLM', 'PCB', 'RoboMaster', '招新']
+
+/** 静态演示数据（字段对齐 TopicItem，联调时替换为接口返回） */
 const topics: TopicItem[] = [
-  { id: '331', board: 'EE', title: '赛季电控培训第三期：STM32 HAL 库电机闭环控制速成', author: '赵天宇', authorGroup: '电控组', tags: ['STM32', '电机控制', '培训'], replyCount: 24, viewCount: 1200, likeCount: 58, lastActiveAt: '10-07 20:15', pinned: true, hot: true },
-  { id: '330', board: 'MODELING', title: '建模组十月招新面试题与评分标准公示', author: '陈子昂', authorGroup: '建模组', tags: ['招新', '公示'], replyCount: 31, viewCount: 986, likeCount: 47, lastActiveAt: '10-07 19:44', pinned: false, hot: false },
-  { id: '329', board: 'EE', title: 'PCB 四层板电源完整性 Layout 检查清单分享', author: '陈子昂', authorGroup: '电控组', tags: ['PCB', '电源完整性'], replyCount: 12, viewCount: 643, likeCount: 31, lastActiveAt: '10-07 18:02', pinned: false, hot: false },
-  { id: '328', board: 'EE', title: '请教：CAN 总线偶发丢帧，终端电阻已经核对过', author: '李明轩', authorGroup: '建模组', tags: ['CAN', '排障'], replyCount: 9, viewCount: 402, likeCount: 14, lastActiveAt: '10-07 15:47', pinned: false, hot: false },
-  { id: '327', board: 'EE', title: 'RoboMaster 电控复盘：步兵机器人的功率限制策略', author: '孙嘉仪', authorGroup: '电控组', tags: ['RoboMaster', '功率控制'], replyCount: 18, viewCount: 866, likeCount: 42, lastActiveAt: '10-06 21:30', pinned: false, hot: false },
-  { id: '326', board: 'AI', title: 'AI 组：本地部署 Qwen 做赛题摘要的踩坑记录', author: '王雨桐', authorGroup: 'AI 组', tags: ['Qwen', '本地部署'], replyCount: 15, viewCount: 594, likeCount: 36, lastActiveAt: '10-06 17:20', pinned: false, hot: false }
+  { id: '331', board: 'EE', title: '赛季电控培训第三期：STM32 HAL 库电机闭环控制速成', author: '赵天宇', authorGroup: '电控组', tags: ['STM32', '电机控制', '培训'], replyCount: 24, viewCount: 1200, likeCount: 58, lastActiveAt: '3 小时前', lastReplyBy: '李明轩', pinned: true, hot: true },
+  { id: '330', board: 'MODELING', title: '建模组十月招新面试题与评分标准公示', author: '陈子昂', authorGroup: '建模组', tags: ['招新', '公示'], replyCount: 31, viewCount: 986, likeCount: 47, lastActiveAt: '5 小时前', lastReplyBy: '王雨桐', pinned: false, hot: false },
+  { id: '329', board: 'EE', title: 'PCB 四层板电源完整性 Layout 检查清单分享', author: '陈子昂', authorGroup: '电控组', tags: ['PCB', '电源完整性'], replyCount: 12, viewCount: 643, likeCount: 31, lastActiveAt: '7 小时前', lastReplyBy: '孙嘉仪', pinned: false, hot: false },
+  { id: '328', board: 'EE', title: '请教：CAN 总线偶发丢帧，终端电阻已经核对过', author: '李明轩', authorGroup: '建模组', tags: ['CAN', '排障'], replyCount: 9, viewCount: 402, likeCount: 14, lastActiveAt: '昨天 15:47', lastReplyBy: '赵天宇', pinned: false, hot: false },
+  { id: '327', board: 'EE', title: 'RoboMaster 电控复盘：步兵机器人的功率限制策略', author: '孙嘉仪', authorGroup: '电控组', tags: ['RoboMaster', '功率控制'], replyCount: 18, viewCount: 866, likeCount: 42, lastActiveAt: '昨天 21:30', lastReplyBy: '陈子昂', pinned: false, hot: false },
+  { id: '326', board: 'AI', title: 'AI 组：本地部署 Qwen 做赛题摘要的踩坑记录', author: '王雨桐', authorGroup: 'AI 组', tags: ['Qwen', '本地部署'], replyCount: 15, viewCount: 594, likeCount: 36, lastActiveAt: '2 天前', lastReplyBy: '赵天宇', pinned: false, hot: false },
+  { id: '325', board: 'GENERAL', title: '工作室新到三台示波器，使用登记和注意事项', author: '周子墨', authorGroup: '综合', tags: ['设备', '登记'], replyCount: 7, viewCount: 310, likeCount: 11, lastActiveAt: '2 天前', lastReplyBy: '李明轩', pinned: false, hot: false }
 ]
 
+/** 今日热议（侧栏）：头像按作者固定映射 */
 const hotRank = [
-  { title: '电控培训第三期：电机闭环控制速成', heat: 926 },
-  { title: '建模组十月招新面试题与评分标准', heat: 814 },
-  { title: 'PCB 电源完整性 Layout 检查清单', heat: 690 },
-  { title: '步兵机器人功率限制策略复盘', heat: 577 },
-  { title: '本地部署 Qwen 做赛题摘要踩坑记录', heat: 498 }
+  { title: '电控培训第三期：电机闭环控制速成', author: '赵天宇' },
+  { title: '建模组十月招新面试题与评分标准', author: '陈子昂' },
+  { title: 'PCB 电源完整性 Layout 检查清单', author: '陈子昂' },
+  { title: '步兵机器人功率限制策略复盘', author: '孙嘉仪' },
+  { title: '本地部署 Qwen 做赛题摘要踩坑记录', author: '王雨桐' }
 ]
-
-function fmtViews(n: number): string {
-  return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)
-}
 </script>
 
 <template>
-  <div class="home-grid">
-    <div>
-      <div class="section-head">
-        <h2>综合讨论<i>LATEST TOPICS</i></h2>
-        <p>本周新增 32 帖 · 全站成员 186 人</p>
-      </div>
-
-      <div class="board-tabs">
-        <div class="tabs">
+  <div class="grid">
+    <!-- 主列白盒：频道两行在盒内，行下即主题列表（不另起盒子） -->
+    <div class="box">
+      <div class="tabs">
+        <a href="#" :class="{ on: activeBoard === 'ALL' }" @click.prevent="activeBoard = 'ALL'">全部</a>
+        <a
+          v-for="b in BOARDS"
+          :key="b.code"
+          href="#"
+          :class="{ on: activeBoard === b.code }"
+          @click.prevent="activeBoard = b.code"
+        >{{ b.name }}</a>
+        <span class="right">
           <a
-            v-for="b in BOARDS"
-            :key="b.code"
+            v-for="s in SORTS"
+            :key="s.code"
             href="#"
-            :class="{ active: activeBoard === b.code }"
-            @click.prevent="activeBoard = b.code"
-          >{{ b.name }}</a>
-        </div>
-        <div class="sort">
-          <a href="#" :class="{ active: activeSort === 'latest' }" @click.prevent="activeSort = 'latest'">最新</a>
-          <a href="#" :class="{ active: activeSort === 'hot' }" @click.prevent="activeSort = 'hot'">最热</a>
-          <a href="#" :class="{ active: activeSort === 'pinned' }" @click.prevent="activeSort = 'pinned'">置顶</a>
-        </div>
+            :class="{ on: activeSort === s.code }"
+            @click.prevent="activeSort = s.code"
+          >{{ s.name }}</a>
+        </span>
+      </div>
+      <div class="tabs2">
+        <a v-for="t in hotTags" :key="t" href="#" @click.prevent>{{ t }}</a>
       </div>
 
-      <div
-        v-for="(t, i) in topics"
-        :key="t.id"
-        class="topic-row"
-        :class="{ pin: t.pinned }"
-      >
-        <span class="idx">{{ ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'][i] ?? '·' }}</span>
-        <div class="t-main">
+      <!-- 主题行：48px 真人头像 + 标题（400 字重 1.3 行高）+ meta + 回复数胶囊 -->
+      <div v-for="t in topics" :key="t.id" class="cell">
+        <img class="ava" :src="avatarOf(t.author, 48)" :alt="t.author">
+        <div class="mid">
           <div class="t-title">
-            <span v-if="t.pinned" class="pintag">置顶</span>
+            <span v-if="t.pinned" class="pin">置顶</span>
             <router-link :to="`/topic/${t.id}`">{{ t.title }}</router-link>
-            <span class="board-stamp">{{ boardName(t.board) }}</span>
           </div>
           <div class="t-meta">
-            <i class="ava">{{ t.author.slice(0, 1) }}</i>{{ t.author }} · {{ t.authorGroup }}
-            <span class="chips"><i v-for="tag in t.tags" :key="tag">{{ tag }}</i></span>
+            <span class="node">{{ boardName(t.board) }}</span><b>{{ t.author }}</b> · {{ t.lastActiveAt }} · 最后回复来自 <b>{{ t.lastReplyBy }}</b>
           </div>
         </div>
-        <div class="t-nums">
-          <span :class="{ hot: t.hot }"><b>{{ t.replyCount }}</b>回复</span>
-          <span><b>{{ fmtViews(t.viewCount) }}</b>浏览</span>
-          <span :class="{ hot: t.hot }"><b>{{ t.likeCount }}</b>点赞</span>
-        </div>
-        <span class="t-active mono">{{ t.lastActiveAt }}</span>
-      </div>
-
-      <div class="list-foot">
-        <span class="mono">共 86 帖 · 第 1 / 13 页</span>
-        <span class="fs">热度 = 点赞加权 × 时间衰减</span>
+        <span class="pill">{{ t.replyCount }}</span>
       </div>
     </div>
 
-    <aside class="rail">
-      <div class="rail-card">
-        <h5>本周热帖榜<i>TOP 5</i></h5>
-        <ol class="hotrank">
-          <li v-for="(h, i) in hotRank" :key="h.title">
-            <b>{{ i + 1 }}</b><span>{{ h.title }}</span><em>{{ h.heat }}</em>
-          </li>
-        </ol>
+    <div class="side">
+      <div class="box brand-box">
+        <div class="slogan">VIO 论坛 = 团队的技术集散地</div>
+        <div class="sub">培训笔记、排障记录、复盘总结都发在这里</div>
+        <button class="btn-post" type="button">创作新主题</button>
+        <a class="back" :href="mainSite">返回主站 →</a>
       </div>
-      <div class="rail-card">
-        <h5>社区状态</h5>
-        <div class="stat-grid">
-          <div><b>23</b><span>当前在线</span></div>
-          <div><b>32</b><span>本周新帖</span></div>
-          <div><b>186</b><span>成员</span></div>
+      <div class="box">
+        <h5>今日热议主题</h5>
+        <ul class="hot">
+          <li v-for="h in hotRank" :key="h.title">
+            <img class="hava" :src="avatarOf(h.author, 24)" :alt="h.author">
+            <router-link to="/topic/331">{{ h.title }}</router-link>
+          </li>
+        </ul>
+      </div>
+      <div class="box">
+        <h5>社区运行状况</h5>
+        <div class="stat">
+          <div><span>注册成员</span><b>186</b></div>
+          <div><span>主题</span><b>86</b></div>
+          <div><span>回复</span><b>512</b></div>
         </div>
       </div>
-      <div class="rail-card">
-        <h5>会审公约</h5>
-        <p class="tip">排障记录、培训笔记、复盘总结都可发帖；优质帖由版主推荐归档进知识库。禁止与赛事无关的水帖。</p>
-        <button class="btn-ink" type="button">发布新帖</button>
+      <div class="box">
+        <h5>最近热门版块</h5>
+        <div class="nodes">
+          <a v-for="b in BOARDS" :key="b.code" href="#" @click.prevent>{{ b.name }}</a>
+        </div>
       </div>
-    </aside>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.home-grid { display: grid; grid-template-columns: 1fr 300px; gap: 26px; }
-.section-head { display: flex; align-items: baseline; gap: 16px; padding-bottom: 12px; border-bottom: 1.5px solid var(--vio-ink); margin-bottom: 4px; }
-.section-head h2 { font-family: var(--vio-serif); font-size: 23px; letter-spacing: 0.16em; font-weight: 700; }
-.section-head h2 i { font-style: normal; font-family: var(--vio-mono); font-size: 10px; color: var(--vio-ink-3); letter-spacing: 0.18em; margin-left: 10px; }
-.section-head p { font-size: 12px; color: var(--vio-ink-3); font-family: var(--vio-fangsong); letter-spacing: 0.08em; flex: 1; }
-.board-tabs { display: flex; justify-content: space-between; align-items: center; margin: 14px 0 8px; }
-.tabs { display: flex; gap: 22px; }
-.tabs a { font-size: 13.5px; color: var(--vio-ink-2); letter-spacing: 0.12em; padding-bottom: 4px; border-bottom: 2px solid transparent; }
-.tabs a.active { color: var(--vio-blue-ink); font-weight: 700; border-bottom-color: var(--vio-blue-ink); }
-.sort { display: flex; font-family: var(--vio-mono); font-size: 11.5px; }
-.sort a { padding: 4px 12px; border: 1px solid var(--vio-rule); color: var(--vio-ink-3); margin-left: -1px; background: var(--vio-sheet); }
-.sort a.active { color: var(--vio-paper); background: var(--vio-ink); border-color: var(--vio-ink); }
-.topic-row { display: flex; align-items: center; gap: 16px; padding: 14px 10px; border-bottom: 1px solid var(--vio-rule-soft); transition: background 0.2s var(--vio-ease); }
-.topic-row:hover { background: var(--vio-wash); }
-.topic-row .idx { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--vio-rule); border-radius: 50%; font-size: 13px; color: var(--vio-ink-3); }
-.topic-row.pin .idx { border-color: var(--vio-seal); color: var(--vio-seal); }
-.t-main { flex: 1; min-width: 0; }
-.t-title { font-size: 15px; font-weight: 600; line-height: 1.5; }
-.t-title a { color: var(--vio-ink); }
-.t-title a:hover { color: var(--vio-blue-ink); text-decoration: underline; }
-.pintag { font-size: 10.5px; color: var(--vio-seal); border: 1px solid var(--vio-seal); padding: 0 7px; margin-right: 8px; letter-spacing: 0.1em; vertical-align: 2px; }
-.board-stamp { font-size: 11px; color: var(--vio-blue-ink); background: var(--vio-wash); padding: 1px 8px; margin-left: 8px; letter-spacing: 0.08em; vertical-align: 2px; }
-.t-meta { margin-top: 5px; font-size: 12px; color: var(--vio-ink-3); display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-.ava { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--vio-wash); color: var(--vio-blue-ink); font-size: 10px; font-weight: 700; font-style: normal; font-family: var(--vio-serif); border: 1px solid var(--vio-rule); }
-.chips { display: inline-flex; gap: 5px; margin-left: 4px; }
-.chips i { font-style: normal; font-size: 11px; color: #3D5AB8; background: var(--vio-wash); padding: 0 7px; border-radius: 2px; }
-.t-nums { display: flex; gap: 20px; white-space: nowrap; }
-.t-nums span { font-size: 10.5px; color: var(--vio-ink-3); text-align: center; letter-spacing: 0.06em; }
-.t-nums b { display: block; font-family: var(--vio-mono); font-size: 15px; color: var(--vio-ink); font-weight: 600; }
-.t-nums .hot b { color: var(--vio-seal); }
-.t-active { width: 90px; text-align: right; font-size: 11px; color: var(--vio-ink-3); }
-.list-foot { display: flex; justify-content: space-between; align-items: center; padding: 16px 10px 4px; font-size: 12px; color: var(--vio-ink-3); }
-.rail { display: flex; flex-direction: column; gap: 16px; }
-.rail-card { background: var(--vio-sheet); border: 1px solid var(--vio-rule); padding: 16px 18px; }
-.rail-card h5 { font-family: var(--vio-serif); font-size: 14.5px; letter-spacing: 0.16em; font-weight: 700; padding-bottom: 9px; border-bottom: 1px solid var(--vio-ink); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; }
-.rail-card h5 i { font-style: normal; font-family: var(--vio-mono); font-size: 9.5px; color: var(--vio-ink-3); letter-spacing: 0.14em; }
-.hotrank { list-style: none; }
-.hotrank li { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px dotted var(--vio-rule); font-size: 12.5px; }
-.hotrank li:last-child { border-bottom: none; }
-.hotrank b { font-family: var(--vio-mono); font-size: 12px; color: var(--vio-ink-3); width: 15px; flex: none; }
-.hotrank li:first-child b { color: var(--vio-seal); font-size: 14px; }
-.hotrank span { flex: 1; color: var(--vio-ink-2); line-height: 1.55; }
-.hotrank em { font-style: normal; font-family: var(--vio-mono); color: var(--vio-blue-ink); font-size: 12px; font-weight: 700; }
-.stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; text-align: center; }
-.stat-grid div { border-right: 1px solid var(--vio-rule-soft); padding: 4px 0; }
-.stat-grid div:last-child { border-right: none; }
-.stat-grid b { display: block; font-family: var(--vio-disp-latin); font-size: 21px; color: var(--vio-blue-ink); font-variant-numeric: tabular-nums; }
-.stat-grid span { font-size: 10.5px; color: var(--vio-ink-3); }
-.tip { font-family: var(--vio-fangsong); font-size: 12.5px; color: var(--vio-ink-2); line-height: 2; margin-bottom: 12px; }
-.btn-ink { padding: 8px 22px; background: var(--vio-ink); color: var(--vio-paper); border: none; font-size: 13px; letter-spacing: 0.18em; text-indent: 0.18em; font-family: var(--vio-serif); font-weight: 700; transition: background 0.25s var(--vio-ease); }
-.btn-ink:hover { background: var(--vio-blue-ink); }
+.grid { display: grid; grid-template-columns: 1fr 270px; gap: 20px; align-items: start; }
+.box { background: var(--box); border-radius: var(--radius-box); box-shadow: var(--shadow-box); }
+
+/* 频道行：第一行版块 + 排序，第二行热门标签 */
+.tabs { padding: 10px 14px 8px; border-bottom: 1px solid var(--line); }
+.tabs a { font-size: 13px; color: var(--body); padding: 3px 9px; border-radius: 4px; margin-right: 2px; }
+.tabs a.on { background: var(--tab-dark); color: #FFF; }
+.tabs a:not(.on):hover { background: #F2F2F2; color: #000; }
+.tabs .right { float: right; }
+.tabs .right a { color: var(--fade); font-size: 12.5px; }
+.tabs .right a:hover { color: var(--ink); }
+.tabs2 { padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.tabs2 a { color: var(--fade); margin-right: 14px; }
+.tabs2 a:hover { color: var(--ink); }
+
+/* 主题行：行高约 66px，行间 1px 浅线，无卡片感 */
+.cell { display: flex; align-items: center; gap: 13px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.cell:last-child { border-bottom: none; }
+.ava { width: 48px; height: 48px; flex: none; border-radius: var(--radius-ava); object-fit: cover; }
+.mid { flex: 1; min-width: 0; }
+.t-title { font-size: 16px; line-height: 1.3; font-weight: 400; }
+.t-title a { color: var(--ink); }
+.t-title a:hover { color: #000; text-decoration: underline; }
+.pin { font-size: 11px; color: var(--fade); border: 1px solid #DDD; border-radius: 3px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
+.t-meta { margin-top: 5px; font-size: 12px; color: var(--fade); }
+.node { background: #F5F5F5; color: var(--fade); border-radius: 10px; padding: 1px 8px; margin-right: 8px; }
+.node:hover { background: #EBEBEB; color: var(--body); }
+.t-meta b { color: var(--meta); font-weight: 600; }
+.pill { flex: none; background: var(--pill); color: #FFF; font-size: 12px; border-radius: 10px; padding: 1px 9px; margin-right: 4px; }
+
+/* 右栏 */
+.side .box { padding: 12px 14px; margin-bottom: 18px; }
+.brand-box .slogan { font-size: 14px; color: var(--ink); font-weight: 600; }
+.brand-box .sub { font-size: 12.5px; color: var(--fade); margin: 4px 0 12px; }
+.btn-post { font-size: 13px; color: var(--ink); background: var(--box); border: 1px solid #CCC; border-radius: var(--radius-box); padding: 5px 14px; cursor: pointer; }
+.btn-post:hover { border-color: #999; }
+.brand-box .back { font-size: 12px; color: var(--fade); margin-left: 10px; }
+.brand-box .back:hover { color: var(--ink); }
+.side h5 { font-size: 12.5px; color: var(--fade); font-weight: 400; border-bottom: 1px solid var(--line-soft); padding-bottom: 8px; margin-bottom: 4px; }
+.hot { margin: 0; padding: 0; }
+.hot li { list-style: none; display: flex; gap: 9px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #F4F4F4; }
+.hot li:last-child { border: none; padding-bottom: 2px; }
+.hava { width: 24px; height: 24px; flex: none; border-radius: var(--radius-ava); object-fit: cover; margin-top: 1px; }
+.hot a { font-size: 12.5px; color: var(--body); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hot a:hover { color: #000; }
+.stat div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #F7F7F7; font-size: 12.5px; color: var(--fade); }
+.stat div:last-child { border: none; }
+.stat b { color: var(--body); font-weight: 600; }
+.nodes a { display: inline-block; font-size: 12px; background: #F5F5F5; color: var(--meta); border-radius: 10px; padding: 2px 10px; margin: 0 6px 6px 0; }
+.nodes a:hover { background: #EBEBEB; color: var(--ink); }
 </style>

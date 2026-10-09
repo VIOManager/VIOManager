@@ -17,6 +17,8 @@ export interface TopicItem {
   viewCount: number
   likeCount: number
   lastActiveAt: string
+  /** 最后回复人（列表 meta 行"最后回复来自 某人"用） */
+  lastReplyBy: string
   pinned: boolean
   hot: boolean
 }
