@@ -36,5 +36,14 @@ export const useUserStore = defineStore('forum-user', {
   },
   getters: {
     loggedIn: (s) => s.token.length > 0
+  },
+  actions: {
+    /** ⚠️ 开发调试件：写入 stub token 并同步 store（与主站登录桩同性质，联调后移除） */
+    devStubLogin() {
+      this.token = 'dev-stub-token'
+      this.realName = '成员'
+      this.initials = '成'
+      localStorage.setItem(TOKEN_KEY, this.token)
+    }
   }
 })
