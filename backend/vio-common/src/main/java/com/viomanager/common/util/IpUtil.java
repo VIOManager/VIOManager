@@ -33,6 +33,9 @@ public final class IpUtil {
 
     /** 是否内网/本机地址：127 段、10 段、192.168 段、172.16-31 段、IPv6 本机 */
     private static boolean isInternalIp(String ip) {
+        if (ip == null || ip.isEmpty()) {
+            return false;
+        }
         if ("127.0.0.1".equals(ip) || "::1".equals(ip) || "0:0:0:0:0:0:0:1".equals(ip)) {
             return true;
         }
