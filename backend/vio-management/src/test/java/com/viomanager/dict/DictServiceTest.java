@@ -73,14 +73,14 @@ class DictServiceTest {
         insertItem("SKILL", "python", "Python 开发", "PRESET", "APPROVED", 2);
         insertItem("SKILL", "miniapp", "小程序开发", "USER", "APPROVED", 3);
         insertItem("SKILL", "vue3", "Vue3 前端", "USER", "PENDING", 4);
-        //3.不该出现的：停用项、已删项、别的字典
+        //3.不该出现的：停用项、已删项、别的字典（值避开演示数据的 MATERIAL_TYPE 预设项，防撞唯一键）
         insertItem("SKILL", "stopped", "停用项", "PRESET", "APPROVED", 5);
         jdbcTemplate.update(
                 "UPDATE sys_dict_item SET status = 0 WHERE dict_code = 'SKILL' AND item_value = 'stopped'");
         insertItem("SKILL", "removed", "已删项", "PRESET", "APPROVED", 6);
         jdbcTemplate.update(
                 "UPDATE sys_dict_item SET deleted = 1 WHERE dict_code = 'SKILL' AND item_value = 'removed'");
-        insertItem("MATERIAL_TYPE", "photo", "证件照", "PRESET", "APPROVED", 1);
+        insertItem("MATERIAL_TYPE", "plan", "计划书", "PRESET", "APPROVED", 9);
     }
 
     @Test

@@ -53,24 +53,33 @@ class DataScopeTest {
     @Resource
     private DictTypeProbeMapper dictTypeProbeMapper;
 
+    /** 插入测试成员前的全员数基线：开发库有演示数据等存量，绝对断言改为基线+增量 */
+    private long superBaseline;
+
+    /** 插入测试成员前 9001 子树内的成员数基线 */
+    private long deptBaseline;
+
     @BeforeEach
     void setUp() {
         //1.组织树
         insertOrg(9001L, 0L, "部门A", "/0/9001/");
         insertOrg(9002L, 9001L, "子组织A1", "/0/9001/9002/");
         insertOrg(9003L, 0L, "部门B", "/0/9003/");
-        //2.人员：部门A 2 人、子组织 1 人、部门B 1 人
+        //2.记基线（在插入测试成员之前量一遍，口径与拦截器一致）
+        superBaseline = countMembers(null);
+        deptBaseline = countMembers("/0/9001/");
+        //3.人员：部门A 2 人、子组织 1 人、部门B 1 人
         insertMember(9101L, "成员一", 9001L);
         insertMember(9102L, "成员二", 9001L);
         insertMember(9103L, "成员三", 9002L);
         insertMember(9104L, "成员四", 9003L);
-        //3.三个角色账号
+        //4.三个角色账号
         insertUser(9201L, "probe_super", "SUPER_ADMIN", null);
         insertUser(9202L, "probe_dept", "DEPT_ADMIN", 9001L);
         insertUser(9203L, "probe_student", "STUDENT", 9002L);
     }
 
-    /** 超管：不注入过滤，看得见全部 4 人 */
+    /** 超管：不注入过滤，看得见基线 + 本测试新增的 4 人 */
     @Test
     void superAdminSeesAllMembers() throws Exception {
         String token = loginOk("probe_super");
@@ -78,10 +87,10 @@ class DataScopeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.role").value("SUPER_ADMIN"))
                 .andExpect(jsonPath("$.data.orgScopeDenied").value(false))
-                .andExpect(jsonPath("$.data.orgScopedMemberCount").value(4));
+                .andExpect(jsonPath("$.data.orgScopedMemberCount").value((int) (superBaseline + 4)));
     }
 
-    /** 部门管理员：只看得见本部门子树（9001 + 9002）的 3 人，看不见部门B */
+    /** 部门管理员：只看得见本部门子树（9001 + 9002）的基线 + 3 人，看不见部门B */
     @Test
     void deptAdminSeesOnlySubtree() throws Exception {
         String token = loginOk("probe_dept");
@@ -89,7 +98,7 @@ class DataScopeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.role").value("DEPT_ADMIN"))
                 .andExpect(jsonPath("$.data.orgScopeDenied").value(false))
-                .andExpect(jsonPath("$.data.orgScopedMemberCount").value(3));
+                .andExpect(jsonPath("$.data.orgScopedMemberCount").value((int) (deptBaseline + 3)));
     }
 
     /** 学生：未声明的 ORG 查询被默认拒绝，SELF 查询（本人登录日志）放行——全部 ⊃ 本部门 ⊃ 本人 */
@@ -166,6 +175,21 @@ class DataScopeTest {
         jdbcTemplate.update(
                 "INSERT INTO sys_org (id, parent_id, name, org_type, path) VALUES (?, ?, ?, 'DEPARTMENT', ?)",
                 id, parentId, name, path);
+    }
+
+    /** 全员或指定 path 子树内的成员数（与数据范围拦截器同口径，量基线用） */
+    private long countMembers(String pathPrefix) {
+        Long count;
+        if (pathPrefix == null) {
+            count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM member WHERE deleted = 0", Long.class);
+        } else {
+            count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM member WHERE deleted = 0 AND org_id IN "
+                            + "(SELECT id FROM sys_org WHERE path LIKE CONCAT(?, '%') AND deleted = 0)",
+                    Long.class, pathPrefix);
+        }
+        return count == null ? 0 : count;
     }
 
     private void insertMember(Long id, String name, Long orgId) {
