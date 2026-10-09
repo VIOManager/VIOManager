@@ -16,13 +16,16 @@ import org.springframework.stereotype.Component;
 
 /**
  * JWT 生成与验签工具（HS256）。
- * 载荷五项：userId / role / orgId / realName / pwdUpdatedAt，两个服务共享同一密钥（JwtProperties）。
+ * 载荷六项：userId / loginName / role / orgId / realName / pwdUpdatedAt，
+ * 两个服务共享同一密钥（JwtProperties）。
+ * loginName 为 Step 6 审计新增：旧 token 无此声明时读到 null，审计 login_name 列留空。
  */
 @Component
 public class JwtUtil {
 
     /** 载荷字段名，token 生成与解析必须用同一组常量 */
     public static final String CLAIM_USER_ID = "userId";
+    public static final String CLAIM_LOGIN_NAME = "loginName";
     public static final String CLAIM_ROLE = "role";
     public static final String CLAIM_ORG_ID = "orgId";
     public static final String CLAIM_REAL_NAME = "realName";
@@ -39,11 +42,13 @@ public class JwtUtil {
     /**
      * 签发 token。pwdUpdatedAt 毫秒值进载荷，改密踢人靠它与库里的最新值比对。
      */
-    public String createToken(Long userId, String role, Long orgId, String realName, Long pwdUpdatedAt) {
+    public String createToken(Long userId, String loginName, String role, Long orgId,
+                              String realName, Long pwdUpdatedAt) {
         Date now = new Date();
         Date expire = Date.from(Instant.now().plus(jwtProperties.getExpireHours(), ChronoUnit.HOURS));
         return Jwts.builder()
                 .claim(CLAIM_USER_ID, userId)
+                .claim(CLAIM_LOGIN_NAME, loginName)
                 .claim(CLAIM_ROLE, role)
                 .claim(CLAIM_ORG_ID, orgId)
                 .claim(CLAIM_REAL_NAME, realName)
@@ -67,6 +72,7 @@ public class JwtUtil {
         }
         CurrentUser user = new CurrentUser();
         user.setUserId(claims.get(CLAIM_USER_ID, Long.class));
+        user.setLoginName(claims.get(CLAIM_LOGIN_NAME, String.class));
         user.setRole(claims.get(CLAIM_ROLE, String.class));
         user.setOrgId(claims.get(CLAIM_ORG_ID, Long.class));
         user.setRealName(claims.get(CLAIM_REAL_NAME, String.class));

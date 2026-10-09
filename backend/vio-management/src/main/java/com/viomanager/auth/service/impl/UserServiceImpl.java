@@ -80,7 +80,8 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
         }
         //5.生成 JWT，pwdUpdatedAt 毫秒值进载荷，改密踢人靠它比对
         long pwdUpdatedAt = toMillis(user.getPwdUpdatedAt());
-        String token = jwtUtil.createToken(user.getId(), user.getRole(), user.getOrgId(), user.getRealName(), pwdUpdatedAt);
+        String token = jwtUtil.createToken(user.getId(), user.getLoginName(), user.getRole(),
+                user.getOrgId(), user.getRealName(), pwdUpdatedAt);
         //6.记成功日志 + 更新最后登录信息
         saveLoginLog(user.getId(), loginName, 1, null, ip, userAgent);
         user.setLastLoginAt(LocalDateTime.now());

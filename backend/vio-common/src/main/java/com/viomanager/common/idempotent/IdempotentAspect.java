@@ -7,14 +7,13 @@ import com.viomanager.common.config.IdempotentProperties;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.Result;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.viomanager.common.util.ParamsJsonUtil;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -46,9 +45,6 @@ public class IdempotentAspect {
     /** result_summary 列宽 500，摘要超长截断 */
     private static final int SUMMARY_MAX_LENGTH = 500;
 
-    /** Jackson 线程安全可静态复用；这里只做参数摘要，不追求业务语义 */
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     @Resource
     private IdempotentRecordDao idempotentRecordDao;
 
@@ -72,7 +68,7 @@ public class IdempotentAspect {
         }
         idemKey = idemKey.trim();
         //3.请求体哈希：同 key 不同参属于前端异常使用，存档备查（拦截行为仍只看 key）
-        String requestHash = sha256Hex(argsToJson(joinPoint.getArgs()));
+        String requestHash = sha256Hex(ParamsJsonUtil.toJson(joinPoint.getArgs()));
         //4.查历史：未过期直接 1005；已过期删掉，key 可复用（方案 Step 5 验证项）
         Map<String, Object> existing = idempotentRecordDao.findByKey(idemKey);
         if (existing != null) {
@@ -119,35 +115,14 @@ public class IdempotentAspect {
         if (result instanceof Result) {
             Result<?> response = (Result<?>) result;
             text = "code=" + response.getCode() + ",message=" + response.getMessage()
-                    + ",data=" + toJson(response.getData());
+                    + ",data=" + ParamsJsonUtil.toJson(response.getData());
         } else {
-            text = toJson(result);
+            text = ParamsJsonUtil.toJson(result);
         }
         if (text != null && text.length() > SUMMARY_MAX_LENGTH) {
             text = text.substring(0, SUMMARY_MAX_LENGTH);
         }
         return text;
-    }
-
-    /** 参数数组转 JSON；混入不可序列化对象（文件流等）时退化为 deepToString，保证重试时哈希稳定 */
-    private String argsToJson(Object[] args) {
-        try {
-            return MAPPER.writeValueAsString(args);
-        } catch (Exception e) {
-            return Arrays.deepToString(args);
-        }
-    }
-
-    /** 任意对象转 JSON；失败退化为 toString（摘要用途，不苛求精确） */
-    private String toJson(Object value) {
-        if (value == null) {
-            return "null";
-        }
-        try {
-            return MAPPER.writeValueAsString(value);
-        } catch (Exception e) {
-            return String.valueOf(value);
-        }
     }
 
     /** SHA-256 十六进制（64 字符，正好对齐 request_hash 列宽） */

@@ -41,3 +41,7 @@ vio:
   idempotent:
     # 幂等键有效期（小时）：过期后同 key 视为新请求可复用（规范 §9 待确认项的建议值 24）
     expire-hours: 24
+  audit:
+    # 审计总开关（排查性能问题时可一键停）；异步写库不拖慢接口，测试里用同步模式断言
+    enabled: true
+    async: true

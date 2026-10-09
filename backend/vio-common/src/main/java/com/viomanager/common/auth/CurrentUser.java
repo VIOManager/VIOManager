@@ -13,6 +13,9 @@ public class CurrentUser {
     /** 用户 ID（sys_user.id） */
     private Long userId;
 
+    /** 登录名（学工号）。Step 6 审计要记"谁"的操作，比 userId 直观，随 token 冗余下发 */
+    private String loginName;
+
     /** 角色：SUPER_ADMIN / DEPT_ADMIN / STUDENT */
     private String role;
 

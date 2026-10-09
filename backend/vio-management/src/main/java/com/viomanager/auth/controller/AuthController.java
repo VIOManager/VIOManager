@@ -3,7 +3,9 @@ package com.viomanager.auth.controller;
 import com.viomanager.auth.dto.LoginDTO;
 import com.viomanager.auth.dto.PasswordDTO;
 import com.viomanager.auth.service.IUserService;
+import com.viomanager.common.audit.AuditLog;
 import com.viomanager.common.result.Result;
+import com.viomanager.common.util.IpUtil;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -28,13 +30,15 @@ public class AuthController {
      */
     @PostMapping("/login")
     public Result login(@Valid @RequestBody LoginDTO loginDTO, HttpServletRequest request) {
-        // IP 暂取直连地址；X-Forwarded-For 逐跳解析在 Step 6 审计统一做
-        return userService.login(loginDTO, request.getRemoteAddr(), request.getHeader("User-Agent"));
+        // IP 逐跳解析 X-Forwarded-For 取真实客户端地址（Step 3 遗留项在此落地）
+        return userService.login(loginDTO, IpUtil.resolveClientIp(request), request.getHeader("User-Agent"));
     }
 
     /**
      * 修改本人密码，改完旧 token 全部失效，前端应引导重新登录。
+     * 敏感接口：参数（新旧密码）不落审计，只记"谁改了密码"。
      */
+    @AuditLog(bizType = "AUTH_PASSWORD_CHANGE", label = "修改密码", summary = "修改本人登录密码", sensitive = true)
     @PutMapping("/password")
     public Result changePassword(@Valid @RequestBody PasswordDTO passwordDTO) {
         return userService.changePassword(passwordDTO);
