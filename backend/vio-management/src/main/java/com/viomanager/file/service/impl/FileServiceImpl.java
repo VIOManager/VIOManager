@@ -111,7 +111,10 @@ public class FileServiceImpl implements IFileService {
         record.setOrgId(user == null ? null : user.getOrgId());
         record.setCreatedBy(user == null ? null : user.getUserId());
         fileObjectMapper.insert(record);
-        //5.病毒扫描：CLEAN 放行；INFECTED 标记留证后抛 1010；连不上记 UNAVAILABLE 抛 1011
+        //5.病毒扫描：CLEAN 放行；INFECTED 标记留证后抛 1010；
+        //   扫描服务不可用不拦用户（组长 2026-10-10 拍板：不因服务故障影响使用）——
+        //   文件照常成功返回但标记 UNAVAILABLE，error 日志留痕供管理员事后关注
+        String finalScanStatus = "CLEAN";
         try {
             ClamAvScanner.ScanResult scanResult = clamAvScanner.scan(bytes);
             if (!scanResult.isClean()) {
@@ -121,15 +124,15 @@ public class FileServiceImpl implements IFileService {
             }
             updateScanStatus(record.getId(), "CLEAN", null);
         } catch (IOException e) {
-            // 方案 §7 待确认项按推荐"拒绝并提示"实现（PRD：强制检测），文件留库标记 UNAVAILABLE
             updateScanStatus(record.getId(), "UNAVAILABLE", null);
-            log.error("ClamAV 不可用，文件标记 UNAVAILABLE：fileId={}，原因：{}", record.getId(), e.getMessage());
-            throw new BizException(CommonErrorCode.SCAN_UNAVAILABLE);
+            finalScanStatus = "UNAVAILABLE";
+            log.error("ClamAV 不可用，文件已放行入库并标记 UNAVAILABLE：fileId={}，原因：{}",
+                    record.getId(), e.getMessage());
         }
         //6.组装返回
         FileUploadVO vo = new FileUploadVO();
         vo.setFileId(record.getId());
-        vo.setScanStatus("CLEAN");
+        vo.setScanStatus(finalScanStatus);
         vo.setOriginalName(originalName);
         return Result.ok(vo);
     }
@@ -143,8 +146,8 @@ public class FileServiceImpl implements IFileService {
         }
         //2.权限：超管全放行；部门管理员限本部门子树；学生仅本人上传
         checkDownloadPermission(record);
-        //3.病毒检测没过的文件不放行下载（CLEAN 是唯一闸门）
-        if (!"CLEAN".equals(record.getScanStatus())) {
+        //3.染毒文件不放行下载；UNAVAILABLE（上传时扫描服务不可用）按组长拍板照常放行
+        if ("INFECTED".equals(record.getScanStatus())) {
             throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "文件未通过病毒检测，暂不可下载");
         }
         //4.MinIO 流式回写：客户端只见文件流，永远见不到对象存储地址
