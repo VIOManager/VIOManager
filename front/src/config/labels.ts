@@ -39,3 +39,42 @@ export const SWITCH_TASK_STATUS_LABEL: Record<string, string> = {
   FAILED: '失败',
   CANCELLED: '已取消'
 }
+
+/** 比赛状态机（B 线 C01：DRAFT→PUBLISHED→REGISTERING→RUNNING→FINISHED→ARCHIVED） */
+export const CONTEST_STATUS_LABEL: Record<string, string> = {
+  DRAFT: '草稿',
+  PUBLISHED: '已发布',
+  REGISTERING: '报名中',
+  RUNNING: '比赛进行中',
+  FINISHED: '已结束',
+  ARCHIVED: '已归档'
+}
+
+/** 规则键名翻译（B 线 §0 六键，全组唯一） */
+export const RULE_KEY_LABEL: Record<string, string> = {
+  memberLimit: '每队人数上限',
+  prefillLimit: '报名预填人数上限',
+  allowRepeatJoin: '允许重复参赛',
+  crossTeamLeader: '允许跨队担任队长',
+  maxAdvisorCount: '指导教师数量上限',
+  crossTrackLimit: '跨赛道限制'
+}
+
+/** 规则来源（三级继承标注） */
+export const RULE_SOURCE_LABEL: Record<string, string> = {
+  TEMPLATE: '模板默认',
+  CONTEST: '比赛覆盖',
+  TRACK: '赛道覆盖'
+}
+
+/** 待处理比赛池状态（B 线 P01） */
+export const POOL_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待处理',
+  CONFIRMED: '已确认',
+  IGNORED: '已忽略'
+}
+
+/** 规则值展示：布尔→是/否，数值→原样 */
+export function ruleValueText(v: number | boolean): string {
+  return typeof v === 'boolean' ? (v ? '是' : '否') : String(v)
+}

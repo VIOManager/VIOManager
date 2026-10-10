@@ -114,3 +114,11 @@
 .pager button { background: none; border: 1px solid var(--vio-rule); padding: 3px 10px; cursor: pointer; font-size: 12px; color: var(--vio-ink-2); border-radius: 0; }
 .pager button:hover:not(:disabled) { border-color: var(--vio-ink); }
 .pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ⚠️ 兼容：ElMessageBox 确认框禁用过渡动画——个别 webview 环境 transitionend 不触发会导致
+   确认框关闭后 DOM 残留遮罩（实测内置浏览器复现）。0 时长时 Vue 同步完成离场，直接移除 DOM */
+.el-overlay-message-box,
+.el-overlay-message-box .el-message-box,
+.el-overlay-message-box .el-message-box * {
+  transition: none !important;
+}
