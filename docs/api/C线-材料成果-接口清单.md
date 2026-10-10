@@ -28,7 +28,7 @@
 |---|---|---|---|
 | GET | /api/material-tasks/:id/overview | 管理端队伍提交矩阵（每队每要求的状态/版本） | 管理端 |
 | GET | /api/my/materials | 学生端：本人每支队伍的任务/要求/提交状态 | 学生 |
-| POST | /api/material-submissions | 单条提交/覆盖上传 | 在队成员 ⚠️ |
+| POST | /api/material-submissions | 单条提交/覆盖上传 | 在队在册成员（lzh 2026-10-10 拍板，PRD §3.7 口径） |
 | POST | /api/material-submissions/batch | zip 批量上传（返回匹配/不匹配清单） | 在队成员 ⚠️ |
 | POST | /api/material-tasks/:id/export | 打包下载队伍全部材料（body `{teamId}`） | 管理端/本队 |
 

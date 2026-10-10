@@ -37,7 +37,7 @@ export const templates: ContestTemplate[] = [
   {
     id: 'tp1', name: '全国大学生电子设计竞赛', code: 'EDC', category: '教育部A类',
     description: '四天三夜硬件综合赛，校内选拔走本模板',
-    defaultRules: { memberLimit: 3, prefillLimit: 1, allowRepeatJoin: false, crossTeamLeader: false, maxAdvisorCount: 2, crossTrackLimit: true },
+    defaultRules: { memberLimit: 3, prefillLimit: 2, allowRepeatJoin: false, crossTeamLeader: false, maxAdvisorCount: 2, crossTrackLimit: true },
     enabled: true, refCount: 2
   },
   {

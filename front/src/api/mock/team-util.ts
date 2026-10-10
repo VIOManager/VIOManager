@@ -4,7 +4,7 @@
  */
 import { findMockUserByToken } from './auth'
 import { meAsMember } from './member'
-import { contests } from './contest-data'
+import { contests, templates } from './contest-data'
 import { teams } from './team-data'
 import type { MockTeam, MockTeamMember } from './team-data'
 import type { TeamDetail, TeamListItem, TeamMemberItem } from '@/api/team'
@@ -64,12 +64,28 @@ export function toDetail(t: MockTeam, token: string): TeamDetail {
   }
 }
 
-/** 比赛合并规则里的数字键（组队校验用）：memberLimit / prefillLimit（模板→比赛合并，赛道覆盖略） */
-export function contestRuleNumber(contestId: string, key: string): number {
+/** 比赛合并规则取值：模板 defaultRules → 比赛 overrideRules（组队校验不用赛道级覆盖） */
+function mergedRule(contestId: string, key: string): number | boolean | undefined {
   for (const c of contests) {
     if (c.id !== contestId) continue
-    if (Object.prototype.hasOwnProperty.call(c.overrideRules, key)) return Number(c.overrideRules[key])
-    return 3 // 模板默认兜底（演示）
+    if (Object.prototype.hasOwnProperty.call(c.overrideRules, key)) return c.overrideRules[key]
+    for (const tp of templates) {
+      if (tp.id === c.templateId && Object.prototype.hasOwnProperty.call(tp.defaultRules, key)) {
+        return tp.defaultRules[key]
+      }
+    }
+    return undefined
   }
-  return 3
+  return undefined
+}
+
+/** 数字键（memberLimit / prefillLimit）；prefillLimit 三人队默认 2（lzh 2026-10-10 拍板） */
+export function contestRuleNumber(contestId: string, key: string, fallback: number): number {
+  const v = mergedRule(contestId, key)
+  return typeof v === 'number' ? v : fallback
+}
+
+/** 布尔键（allowRepeatJoin / crossTeamLeader 等），未配置按 false 处理 */
+export function contestRuleBool(contestId: string, key: string): boolean {
+  return mergedRule(contestId, key) === true
 }

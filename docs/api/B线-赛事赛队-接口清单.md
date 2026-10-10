@@ -13,7 +13,7 @@
 | PUT | /api/contest-templates/:id | 编辑 | 管理端 |
 | DELETE | /api/contest-templates/:id | 删除（被比赛引用拒删 4012） | 管理端 |
 
-**规则键名全组唯一（六键）**：`memberLimit / prefillLimit / allowRepeatJoin / crossTeamLeader / maxAdvisorCount / crossTrackLimit`。⚠️ prefillLimit 三人队取 1 还是 2 待拍板。
+**规则键名全组唯一（六键）**：`memberLimit / prefillLimit / allowRepeatJoin / crossTeamLeader / maxAdvisorCount / crossTrackLimit`。prefillLimit 三人队默认 **2**（lzh 2026-10-10 拍板）。
 
 **规则三级继承**：模板 `defaultRules` → 比赛 `overrideRules` → 赛道 `overrideRules`，**JSON 只存被覆盖的键**。详情接口返回合并结果并逐键标注来源：`{ key, value, source: TEMPLATE|CONTEST|TRACK }`，合并逻辑在后端做。
 
@@ -60,7 +60,7 @@
 | POST | /api/teams/:id/advisors | 加指导教师（**生成审批单**；非教师类型 4006） | 队长/管理端 |
 | DELETE | /api/teams/:id/advisors/:advisorId | 移除指导教师 | 队长/管理端 |
 
-**组队申请校验序**（POST /api/teams）：报名期（4001）→ 队名同比赛唯一（4002）→ 本人未参加同比赛其他队伍（4004）→ 预填成员数 ≤ prefillLimit（4003）。⚠️ 4004 是否含"待确认"成员待拍板（前端当前含）。
+**组队申请校验序**（POST /api/teams）：报名期（4001）→ 队名同比赛唯一（4002）→ 重复参赛检查（4004，**lzh 2026-10-10 拍板**：受比赛规则 `allowRepeatJoin` 控制，允许则不拦；不允许时仅拦**已确认**参加同比赛其他队伍者，待确认不算）→ 预填成员数 ≤ prefillLimit（4003，三人队默认预填 **2**，同日拍板）。
 
 **成员状态机**：`UNCONFIRMED → CONFIRMED / REJECTED`；主动退出 `EXITED`；被移除 `REMOVED`。退出/移除后立即失去材料上传、成果提交、队伍查看权限。
 
