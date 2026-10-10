@@ -11,6 +11,8 @@ export interface MockCtx {
   query: Record<string, unknown>
   body: Record<string, unknown>
   token: string
+  /** X-Idempotency-Key 请求头（规范 §6 幂等键，写接口 mock 可校验缺失） */
+  idemKey: string
 }
 
 export interface MockHandler {

@@ -16,6 +16,11 @@ function readToken(config: AxiosRequestConfig): string {
   return auth.startsWith('Bearer ') ? auth.slice(7) : ''
 }
 
+function readIdemKey(config: AxiosRequestConfig): string {
+  const h = config.headers as Record<string, string> | undefined
+  return h?.['X-Idempotency-Key'] ?? h?.['x-idempotency-key'] ?? ''
+}
+
 /** axios 自定义适配器：mock 模式入口（http.ts 装配） */
 export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResponse> {
   await new Promise((r) => setTimeout(r, 150)) // 模拟网络延迟，loading 态可见
@@ -35,8 +40,9 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
       bodyData = {}
     }
   }
+  // 注意：文件上传的 FormData 原样透传给处理器（files mock 里自行 .get('file')）
   const body: Result = hit
-    ? hit.h.reply({ params: hit.params, query: (config.params as Record<string, unknown>) ?? {}, body: (bodyData as Record<string, unknown>) ?? {}, token })
+    ? hit.h.reply({ params: hit.params, query: (config.params as Record<string, unknown>) ?? {}, body: (bodyData as Record<string, unknown>) ?? {}, token, idemKey: readIdemKey(config) })
     : fail(1404, `mock 未注册：${method} ${url}`)
   return { data: body, status: 200, statusText: 'OK', headers: {}, config: config as never }
 }
@@ -50,5 +56,5 @@ registerMock({ method: 'get', path: '/api/_probe/4002', reply: () => fail(4002, 
 
 // ── 模块 mock 登记（新增模块在此追加一行）──
 import './auth'
-
 import './dict'
+import './files'
