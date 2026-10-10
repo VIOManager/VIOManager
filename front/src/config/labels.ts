@@ -99,7 +99,24 @@ export const APPROVAL_TYPE_LABEL: Record<string, string> = {
   TEAM_CREATE: '组队申请',
   TEAM_ADD_MEMBER: '加人申请',
   TEAM_REMOVE_MEMBER: '移除队员',
-  TEAM_ADD_ADVISOR: '指导教师申请'
+  TEAM_ADD_ADVISOR: '指导教师申请',
+  ACHIEVEMENT_SUBMIT: '成果提交'
+}
+
+/** 成果类型（PRD §3.8：获奖/评级/资质/活动成果/其他） */
+export const ACHIEVEMENT_TYPE_LABEL: Record<string, string> = {
+  AWARD: '获奖',
+  RATING: '评级',
+  QUALIFICATION: '资质',
+  ACTIVITY: '活动成果',
+  OTHER: '其他'
+}
+
+/** 成果状态：队长提交待审批 → 管理员通过/驳回（管理员录入直接生效） */
+export const ACHIEVEMENT_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待审批',
+  APPROVED: '已通过',
+  REJECTED: '已驳回'
 }
 
 /** 材料类型（PRD §3.7 固定 12 种预设；defaultFormats 为新建要求时的默认允许格式） */

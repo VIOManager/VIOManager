@@ -26,7 +26,9 @@ let seq = 1
 
 export const approvals: MockApproval[] = [
   { id: 'ap-demo1', bizType: 'TEAM_ADD_MEMBER', bizId: 't1', title: '李明轩 · 电波突击队申请加人：王雨桐', detail: '申请将王雨桐加入「电波突击队」', status: 'PENDING', applicantName: '李明轩', createdAt: '2026-10-07 21:14:00', unread: true },
-  { id: 'ap-demo2', bizType: 'TEAM_CREATE', bizId: 't2', title: '陈子昂 · 创建赛队「像素工坊」', detail: '比赛：2026 电子设计校内选拔赛 · 软件赛道', status: 'PENDING', applicantName: '陈子昂', createdAt: '2026-10-07 15:02:00', unread: true }
+  { id: 'ap-demo2', bizType: 'TEAM_CREATE', bizId: 't2', title: '陈子昂 · 创建赛队「像素工坊」', detail: '比赛：2026 电子设计校内选拔赛 · 软件赛道', status: 'PENDING', applicantName: '陈子昂', createdAt: '2026-10-07 15:02:00', unread: true },
+  // 与成果演示数据 a3 对应（电波突击队待审批评级成果）
+  { id: 'ap-demo3', bizType: 'ACHIEVEMENT_SUBMIT', bizId: 'a3', title: '李明轩 · 电波突击队提交成果：智能循迹小车', detail: '评级成果 · 校级优秀 · 待管理员审批', status: 'PENDING', applicantName: '李明轩', createdAt: '2026-10-08 19:30:00', unread: true }
 ]
 
 /** 供 team/achievement 等 mock 写入新审批单 */
