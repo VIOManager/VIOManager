@@ -33,4 +33,20 @@ public class BizException extends RuntimeException {
     public int getCode() {
         return code;
     }
+
+    /**
+     * 沿异常因果链找最内层的 BizException，没有返回 null。
+     * 用途：MyBatis 会把拦截器（如数据范围拒绝）抛出的业务异常包成 MyBatisSystemException，
+     * 接到包装异常后用这个方法把真正的业务码解出来。
+     */
+    public static BizException unwrap(Throwable e) {
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof BizException) {
+                return (BizException) cause;
+            }
+            cause = cause.getCause();
+        }
+        return null;
+    }
 }

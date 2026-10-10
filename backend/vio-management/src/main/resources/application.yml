@@ -11,6 +11,12 @@ server:
 spring:
   application:
     name: vio-management
+  servlet:
+    multipart:
+      # ⚠️ 刻意高于 vio.file.max-size-mb（25 > 20）：业务校验先给出 1009 业务码，
+      # 这里是最后防线，超了由全局异常处理器同样转 1009
+      max-file-size: 25MB
+      max-request-size: 30MB
   datasource:
     # 宿主端口默认 3307：对应 compose 的 MySQL 容器映射（避开本机原生 MySQL 的 3306）
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${MYSQL_DATABASE:viomanager}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
@@ -29,3 +35,30 @@ minio:
 
 app:
   version: @project.version@
+
+vio:
+  jwt:
+    # ⚠️ 安全：HS256 要求密钥至少 32 字节；生产必须用环境变量 JWT_SECRET 覆盖这个开发默认值（PRD §5）
+    secret: ${JWT_SECRET:viomanager-local-dev-secret-key-32bytes-minimum}
+    expire-hours: 2   # 阶段2 论坛只验签不查库，改密踢人靠短时效兜底（架构调整方案 §4）
+  auth:
+    # 免认证路径，逗号分隔；以后新增公开接口在此登记
+    skip-paths: /api/health,/api/auth/login
+  idempotent:
+    # 幂等键有效期（小时）：过期后同 key 视为新请求可复用（规范 §9 待确认项的建议值 24）
+    expire-hours: 24
+  audit:
+    # 审计总开关（排查性能问题时可一键停）；异步写库不拖慢接口，测试里用同步模式断言
+    enabled: true
+    async: true
+  file:
+    # 文件服务：桶名 / 单文件大小上限 / 扩展名白名单 / ClamAV 连接位
+    bucket: vio-files
+    max-size-mb: 20
+    allowed-extensions: jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx,ppt,pptx,zip
+    clamav:
+      host: ${CLAMAV_HOST:localhost}
+      port: ${CLAMAV_PORT:3310}
+  approval:
+    # 审批单有效期（天）：到期未处理由定时任务转 EXPIRED（方案 §7 待确认项，建议值 7）
+    expire-days: 7
