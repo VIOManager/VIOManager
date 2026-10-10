@@ -15,8 +15,8 @@ import type { MockMember } from './member-data'
 import type { MemberDetail, MemberListItem } from '@/api/member'
 import type { PageResult } from '@/api/types'
 
-/** 当前登录账号对应的成员（admin→m1 / dept01→m2 / 2023319024→m7） */
-function meAsMember(token: string): MockMember | null {
+/** 当前登录账号对应的成员（admin→m1 / dept01→m2 / 2023319024→m7）；赛队等 mock 复用 */
+export function meAsMember(token: string): MockMember | null {
   const u = findMockUserByToken(token)
   if (!u) return null
   for (const m of members) {

@@ -23,7 +23,9 @@ export interface MockUser {
 const users: MockUser[] = [
   { id: '1', loginName: 'admin', password: 'abc123', realName: '李明', role: 'SUPER_ADMIN', defaultPassword: 1 },
   { id: '2', loginName: 'dept01', password: 'abc123', realName: '陈志远', role: 'DEPT_ADMIN', defaultPassword: 0 },
-  { id: '3', loginName: '2023319024', password: 'abc123', realName: '王雨桐', role: 'STUDENT', defaultPassword: 0 }
+  { id: '3', loginName: '2023319024', password: 'abc123', realName: '王雨桐', role: 'STUDENT', defaultPassword: 0 },
+  // 学生第二账号：周子墨（只在已完赛 c3 的队伍，可演示 c1 组队申请成功路径与 4004 分支对照）
+  { id: '4', loginName: '2023319005', password: 'abc123', realName: '周子墨', role: 'STUDENT', defaultPassword: 0 }
 ]
 
 /** sessionStorage 键：已签发 token 列表（跨刷新存活的"服务端会话"） */

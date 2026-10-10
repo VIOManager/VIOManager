@@ -60,7 +60,7 @@ async function onSubmit() {
             <input v-model="form.password" type="password" placeholder="请输入密码" autocomplete="current-password" />
           </label>
           <button type="submit" class="btn-stamp" :disabled="loading">{{ loading ? '登记中…' : '登记登录' }}</button>
-          <p class="note">默认密码 abc123，首次登记后按安全规定修改；忘记密码请联系超级管理员重置。<br />mock 演示账号：admin（超管·未改默认密码）/ dept01（部门管理员）/ 2023319024（学生），密码均为 abc123</p>
+          <p class="note">默认密码 abc123，首次登记后按安全规定修改；忘记密码请联系超级管理员重置。<br />mock 演示账号：admin（超管·未改默认密码）/ dept01（部门管理员）/ 2023319024（学生·在队）/ 2023319005（学生·无队），密码均为 abc123</p>
           <div class="seal" aria-hidden="true"><i>黑龙江科技大学<br />科创团队</i></div>
         </form>
       </div>

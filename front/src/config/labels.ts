@@ -78,3 +78,26 @@ export const POOL_STATUS_LABEL: Record<string, string> = {
 export function ruleValueText(v: number | boolean): string {
   return typeof v === 'boolean' ? (v ? '是' : '否') : String(v)
 }
+
+/** 赛队成员状态机（B 线 §5） */
+export const TEAM_MEMBER_STATUS_LABEL: Record<string, string> = {
+  UNCONFIRMED: '待确认',
+  CONFIRMED: '已确认',
+  REJECTED: '已拒绝',
+  EXITED: '已退出',
+  REMOVED: '已移除'
+}
+
+/** 赛队内角色 */
+export const TEAM_ROLE_LABEL: Record<string, string> = {
+  LEADER: '队长',
+  MEMBER: '队员'
+}
+
+/** 审批类型（暂定，骨架审批中心清单未出） */
+export const APPROVAL_TYPE_LABEL: Record<string, string> = {
+  TEAM_CREATE: '组队申请',
+  TEAM_ADD_MEMBER: '加人申请',
+  TEAM_REMOVE_MEMBER: '移除队员',
+  TEAM_ADD_ADVISOR: '指导教师申请'
+}
