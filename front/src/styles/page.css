@@ -1,0 +1,114 @@
+/**
+ * 业务页面通用版式（图纸档案）——页头/面板/台账表/筛选条/状态戳/按钮
+ * 对应方案：《前端ABC模块页面开发-优化方案》§5（图纸档案定调，禁止组件库默认样式兜底）
+ * 用法：各业务页 template 直接用这些类；页面特有样式仍写自己的 scoped 块
+ */
+
+/* 页头：大标题 + 右侧批注元信息（源自概览页图签指标带语言） */
+.dossier-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--vio-ink);
+  margin-bottom: 18px;
+}
+.dossier-head h3 { font-family: var(--vio-serif); font-size: 26px; letter-spacing: 0.1em; font-weight: 700; }
+.dossier-meta { display: flex; gap: 22px; font-size: 11.5px; color: var(--vio-ink-3); align-items: center; }
+
+/* 面板卡 */
+.panel { background: var(--vio-sheet); border: 1px solid var(--vio-rule); padding: 16px 20px; }
+.panel-h {
+  font-family: var(--vio-serif);
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--vio-ink);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.panel-h .sub { font-family: var(--vio-body); font-size: 12px; color: var(--vio-ink-3); letter-spacing: 0; font-weight: 400; }
+
+/* 台账表：业务列表统一表格语言 */
+.ledger { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ledger th {
+  text-align: left;
+  font-family: var(--vio-fangsong);
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--vio-ink-3);
+  letter-spacing: 0.1em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--vio-rule);
+}
+.ledger td { padding: 9px 10px; border-bottom: 1px solid var(--vio-rule-soft); color: var(--vio-ink-2); }
+.ledger tr:last-child td { border-bottom: none; }
+.ledger .num { text-align: right; }
+.ledger tbody tr:hover td { background: var(--vio-wash); }
+.ledger tbody tr.linkrow { cursor: pointer; }
+
+/* 筛选条 */
+.fbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+
+/* 状态戳（印章式小标签） */
+.stamp { display: inline-block; font-size: 11px; padding: 1px 8px; letter-spacing: 0.06em; border: 1px solid; white-space: nowrap; }
+.stamp.ok { color: var(--vio-ok); border-color: var(--vio-ok); }
+.stamp.warn { color: var(--vio-warn); border-color: var(--vio-warn); }
+.stamp.bad { color: var(--vio-seal); border-color: var(--vio-seal); }
+.stamp.dim { color: var(--vio-ink-3); border-color: var(--vio-rule); }
+.stamp.blue { color: var(--vio-blue-ink); border-color: var(--vio-blue-ink); }
+
+/* 行内文字操作按钮 */
+.btn-act { background: none; border: none; color: var(--vio-blue-ink); font-size: 12.5px; cursor: pointer; padding: 2px 6px; }
+.btn-act:hover { text-decoration: underline; }
+.btn-act.danger { color: var(--vio-seal); }
+.btn-act:disabled { color: var(--vio-ink-3); cursor: not-allowed; text-decoration: none; }
+
+/* 实心主按钮 / 描边次按钮 */
+.btn-ink {
+  padding: 7px 18px;
+  background: var(--vio-blue-ink);
+  color: #F6F7F2;
+  border: none;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.25s var(--vio-ease);
+}
+.btn-ink:hover:not(:disabled) { background: var(--vio-blue-deep); }
+.btn-ink:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-line {
+  padding: 7px 16px;
+  background: none;
+  border: 1px solid var(--vio-rule);
+  color: var(--vio-ink-2);
+  font-size: 12.5px;
+  border-radius: 0;
+  cursor: pointer;
+  transition: all 0.25s var(--vio-ease);
+}
+.btn-line:hover:not(:disabled) { border-color: var(--vio-ink); color: var(--vio-ink); }
+.btn-line:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 线框输入框（与 Element 表单区分的原生轻量输入） */
+.input-line {
+  border: 1px solid var(--vio-rule);
+  background: var(--vio-sheet);
+  padding: 7px 10px;
+  font-size: 13px;
+  border-radius: 0;
+  color: var(--vio-ink);
+}
+.input-line:focus { outline: none; border-color: var(--vio-blue-ink); }
+
+/* 空状态 */
+.empty-note { padding: 34px 0; text-align: center; color: var(--vio-ink-3); font-family: var(--vio-fangsong); font-size: 13px; letter-spacing: 0.1em; }
+
+/* 分页条 */
+.pager { display: flex; gap: 14px; align-items: center; justify-content: flex-end; margin-top: 12px; font-size: 12px; color: var(--vio-ink-3); }
+.pager button { background: none; border: 1px solid var(--vio-rule); padding: 3px 10px; cursor: pointer; font-size: 12px; color: var(--vio-ink-2); border-radius: 0; }
+.pager button:hover:not(:disabled) { border-color: var(--vio-ink); }
+.pager button:disabled { opacity: 0.4; cursor: not-allowed; }
