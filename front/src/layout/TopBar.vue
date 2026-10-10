@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
  * 顶栏：面包屑（取路由 meta）+ 待办 + 用户区
- * 对应方案：Step 2；改密/退出入口在右上角（PRD §3.1）
- * ⚠️ 角色切换器为开发调试件：用于大框阶段验证三端菜单显隐（Step 2 验证项），
- *    联调后必须移除，正式角色来自 A01 登录响应
- * TODO(Step3)：退出登录接真实登出并清 token；改密弹窗（A02）
+ * 对应方案：Step 2；FS2 补改密闭环（PRD §3.1：右上角改密，改后强制重新登录）
+ * 待办数：接审批中心未读数接口（暂定 /api/approvals/pending-count），路由切换时刷新
+ * ⚠️ 角色切换器为开发调试件：用于验证三端菜单显隐，联调后必须移除（角色实际来自登录响应）
  */
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { apiPendingCount } from '@/api/approval'
+import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import type { Role } from '@/types'
 
 const route = useRoute()
@@ -26,6 +27,31 @@ const ROLE_LABEL: Record<Role, string> = {
   STUDENT: '学生用户'
 }
 
+// ── 待办红点：审批中心未读数（审批单变化集中在路由切换后，够用即可）──
+const pendingCount = ref(0)
+async function loadPending() {
+  if (!user.token) return
+  try {
+    const resp = await apiPendingCount()
+    pendingCount.value = resp.count
+  } catch {
+    // 未读数拉取失败不打断页面
+  }
+}
+onMounted(loadPending)
+watch(() => route.path, loadPending)
+
+// ── 改密弹窗：顶栏手动入口 + 默认密码登录自动引导 ──
+const pwdVisible = ref(false)
+// PRD §3.1：每次用默认密码登录都弹安全提示；immediate 覆盖"刷新后恢复身份已是引导态"的时序
+watch(
+  () => user.defaultPassword,
+  (v) => {
+    if (v === 1) pwdVisible.value = true
+  },
+  { immediate: true }
+)
+
 function onLogout() {
   user.logout()
   router.push('/login')
@@ -38,7 +64,7 @@ function onLogout() {
       <template v-if="crumb.group">{{ crumb.group }} / </template><b>{{ crumb.title }}</b>
     </span>
     <div class="topbar-right">
-      <span class="chip mono" title="待办（Step 6 审批中心落地后接未读数）">待办 2</span>
+      <span class="chip mono" title="审批中心未读待办" @click="router.push('/approval')" style="cursor: pointer">待办 {{ pendingCount }}</span>
       <!-- ⚠️ 开发调试件：三端菜单显隐验证用，联调后移除 -->
       <select
         class="role-switch mono"
@@ -51,8 +77,10 @@ function onLogout() {
         <option value="STUDENT">学生</option>
       </select>
       <span class="user"><i class="ava">{{ user.realName.slice(0, 1) }}</i>{{ user.realName }} · {{ ROLE_LABEL[user.role] }}</span>
+      <button class="btn-plain" @click="pwdVisible = true">改密</button>
       <button class="btn-plain" @click="onLogout">退出</button>
     </div>
+    <ChangePasswordDialog v-model="pwdVisible" />
   </header>
 </template>
 

@@ -11,10 +11,24 @@ import { useUserStore } from '@/stores/user'
 
 const AdminLayout = () => import('@/layout/AdminLayout.vue')
 const LoginPage = () => import('@/views/login/LoginPage.vue')
-const OverviewPage = () => import('@/views/overview/OverviewPage.vue')
 const PlaceholderPage = () => import('@/views/common/PlaceholderPage.vue')
 
-/** 由菜单配置派生子路由：概览为真实页，其余先挂占位页（各业务线按接口清单陆续替换） */
+/** 已落地的真实页面：菜单路径 → 懒加载组件（未列出的路径仍挂占位页，随开发逐步替换） */
+const REAL_PAGES: Record<string, () => Promise<unknown>> = {
+  '/overview': () => import('@/views/overview/OverviewPage.vue'),
+  '/org': () => import('@/views/org/OrgPage.vue'),
+  '/personnel': () => import('@/views/personnel/PersonnelPage.vue'),
+  '/semester': () => import('@/views/semester/SemesterPage.vue'),
+  '/competition': () => import('@/views/competition/CompetitionPage.vue'),
+  '/team': () => import('@/views/team/TeamPage.vue'),
+  '/my/team': () => import('@/views/my/MyTeamPage.vue'),
+  '/material': () => import('@/views/material/MaterialPage.vue'),
+  '/my/material': () => import('@/views/my/MyMaterialPage.vue'),
+  '/achievement': () => import('@/views/achievement/AchievementPage.vue'),
+  '/my/achievement': () => import('@/views/my/MyAchievementPage.vue')
+}
+
+/** 由菜单配置派生子路由：真实页用真实组件，其余先挂占位页 */
 function menuChildren(): RouteRecordRaw[] {
   const all = [...ADMIN_MENU, ...STUDENT_MENU]
   const seen = new Set<string>()
@@ -24,7 +38,7 @@ function menuChildren(): RouteRecordRaw[] {
     seen.add(m.path)
     children.push({
       path: m.path.replace(/^\//, ''),
-      component: m.path.endsWith('overview') ? OverviewPage : PlaceholderPage,
+      component: REAL_PAGES[m.path] ?? PlaceholderPage,
       meta: { title: m.title, group: m.group }
     })
   }
