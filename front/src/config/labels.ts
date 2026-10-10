@@ -23,3 +23,19 @@ export const MEMBER_TYPE_LABEL: Record<string, string> = {
   TEACHER: '教师',
   OTHER: '其他'
 }
+
+/** 学期状态（A 线 S01） */
+export const SEMESTER_STATUS_LABEL: Record<string, string> = {
+  PLANNED: '未开始',
+  ACTIVE: '进行中',
+  ARCHIVED: '已归档'
+}
+
+/** 学期切换任务状态（A 线 S06） */
+export const SWITCH_TASK_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待执行',
+  EXECUTING: '执行中',
+  SUCCESS: '已完成',
+  FAILED: '失败',
+  CANCELLED: '已取消'
+}

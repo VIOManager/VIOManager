@@ -17,7 +17,8 @@ const PlaceholderPage = () => import('@/views/common/PlaceholderPage.vue')
 const REAL_PAGES: Record<string, () => Promise<unknown>> = {
   '/overview': () => import('@/views/overview/OverviewPage.vue'),
   '/org': () => import('@/views/org/OrgPage.vue'),
-  '/personnel': () => import('@/views/personnel/PersonnelPage.vue')
+  '/personnel': () => import('@/views/personnel/PersonnelPage.vue'),
+  '/semester': () => import('@/views/semester/SemesterPage.vue')
 }
 
 /** 由菜单配置派生子路由：真实页用真实组件，其余先挂占位页 */
