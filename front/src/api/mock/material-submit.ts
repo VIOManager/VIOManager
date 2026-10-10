@@ -12,6 +12,7 @@ import type { MockTeam } from './team-data'
 import { nextSubId, requirements, submissions } from './material-data'
 import type { MockTask } from './material-data'
 import { allTasks, findTask, toReqView } from './material'
+import { teamVisible } from './scope'
 import { MATERIAL_TYPE_LABEL } from '@/config/labels'
 import type { MaterialSubmitInfo, MyTeamMaterial, TeamMaterialRow } from '@/api/material'
 
@@ -74,6 +75,8 @@ registerMock({
     const rows: TeamMaterialRow[] = []
     for (const tm of teams) {
       if (tm.contestId !== task.contestId || tm.status !== 'ACTIVE') continue
+      // 部门管理员：仅本部门子树队伍（按队长组织归属）
+      if (!teamVisible(tm.leaderId, ctx.token)) continue
       rows.push({
         teamId: tm.id, teamName: tm.name, leaderName: tm.leaderName,
         completeRate: tm.materialCompleteRate, statusText: tm.materialStatus,

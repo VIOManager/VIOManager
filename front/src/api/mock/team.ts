@@ -13,6 +13,7 @@ import { contests } from './contest-data'
 import { pushApproval } from './approval'
 import { teams } from './team-data'
 import { contestRuleNumber, findTeam, toDetail, toListItem, viewerRoleOf } from './team-util'
+import { teamVisible } from './scope'
 import type { TeamListItem, TeamMemberSearchItem } from '@/api/team'
 import { members } from './member-data'
 
@@ -28,6 +29,8 @@ registerMock({
     for (const t of teams) {
       if (contestId && t.contestId !== contestId) continue
       if (keyword && t.name.indexOf(keyword) < 0 && t.projectName.indexOf(keyword) < 0) continue
+      // 部门管理员：仅本部门子树队伍（按队长组织归属）
+      if (!teamVisible(t.leaderId, ctx.token)) continue
       // 学生仅见自己所在的队伍
       if (u && u.role === 'STUDENT') {
         if (!me) continue

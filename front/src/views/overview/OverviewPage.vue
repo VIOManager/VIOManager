@@ -11,24 +11,35 @@ import { useUserStore } from '@/stores/user'
 
 const user = useUserStore()
 
-/** 三端指标位（静态演示；真实数据按角色由后端裁剪后返回） */
-const metrics = computed(() =>
-  user.role === 'STUDENT'
-    ? [
-        { label: '我的队伍', value: '2', sub: '电波突击队 · 像素工坊' },
-        { label: '我的成果', value: '3', sub: '本学期新增 1' },
-        { label: '待办事项', value: '4', sub: '入队确认 1 · 材料 2' },
-        { label: '材料状态', value: '75%', sub: '电波突击队 待补 1 项' },
-        { label: '本周绩效', value: '86', sub: '近 4 周活跃度上升' }
-      ]
-    : [
-        { label: '在册成员', value: '186', sub: '本月 +4' },
-        { label: '进行中比赛', value: '12', sub: '报名中 5' },
-        { label: '活跃赛队', value: '47', sub: '本月 +6' },
-        { label: '待审批', value: '9', sub: '需今日处理 3', warn: true },
-        { label: '材料待补', value: '5', sub: '截止 W8 周五', warn: true }
-      ]
-)
+/** 三端指标位（静态演示；真实数据按角色由后端裁剪后返回）
+ *  超管=全平台口径，部门管理员=本部门口径（数媒协会子树），学生=个人口径——数字刻意不同，防止演示时看不出权限差异 */
+const metrics = computed(() => {
+  if (user.role === 'STUDENT') {
+    return [
+      { label: '我的队伍', value: '2', sub: '电波突击队 · 像素工坊' },
+      { label: '我的成果', value: '3', sub: '本学期新增 1' },
+      { label: '待办事项', value: '4', sub: '入队确认 1 · 材料 2' },
+      { label: '材料状态', value: '75%', sub: '电波突击队 待补 1 项' },
+      { label: '本周绩效', value: '86', sub: '近 4 周活跃度上升' }
+    ]
+  }
+  if (user.role === 'DEPT_ADMIN') {
+    return [
+      { label: '在册成员', value: '107', sub: '数媒协会系 · 本月 +3' },
+      { label: '进行中比赛', value: '8', sub: '报名中 3' },
+      { label: '活跃赛队', value: '30', sub: '本月 +4' },
+      { label: '待审批', value: '5', sub: '需今日处理 2', warn: true },
+      { label: '材料待补', value: '2', sub: '截止 W8 周五', warn: true }
+    ]
+  }
+  return [
+    { label: '在册成员', value: '186', sub: '本月 +4' },
+    { label: '进行中比赛', value: '12', sub: '报名中 5' },
+    { label: '活跃赛队', value: '47', sub: '本月 +6' },
+    { label: '待审批', value: '9', sub: '需今日处理 3', warn: true },
+    { label: '材料待补', value: '5', sub: '截止 W8 周五', warn: true }
+  ]
+})
 
 const todos = [
   { type: '组队', text: '李明轩 · 机械之心 A 队申请加人：王雨桐', time: '10-07 21:14' },
@@ -37,12 +48,17 @@ const todos = [
   { type: '移除', text: '赵天宇 · 北疆行者申请移除队员', time: '10-06 20:31' }
 ]
 
-const depts = [
-  { name: '数媒协会', members: 62, teams: 18, pending: 3 },
-  { name: '数媒二楼', members: 45, teams: 12, pending: 2 },
-  { name: '电控工作室', members: 41, teams: 11, pending: 3 },
-  { name: '建模组', members: 38, teams: 6, pending: 1 }
-]
+/** 部门数据表：超管看全平台四个子组织，部门管理员只看自己子树（数媒系） */
+const depts = computed(() => {
+  const all = [
+    { name: '数媒协会', members: 62, teams: 18, pending: 3 },
+    { name: '数媒二楼', members: 45, teams: 12, pending: 2 },
+    { name: '电控工作室', members: 41, teams: 11, pending: 3 },
+    { name: '建模组', members: 38, teams: 6, pending: 1 }
+  ]
+  if (user.role === 'DEPT_ADMIN') return all.filter((d) => d.name === '数媒协会' || d.name === '数媒二楼')
+  return all
+})
 </script>
 
 <template>

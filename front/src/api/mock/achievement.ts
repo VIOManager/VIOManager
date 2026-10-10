@@ -14,6 +14,7 @@ import { approvals, pushApproval } from './approval'
 import { allTasks } from './material'
 import { nextReqId, requirements } from './material-data'
 import { recomputeTeam } from './material-submit'
+import { teamVisible } from './scope'
 import type { AchievementItem, AchievementType } from '@/api/achievement'
 import type { MockAchievement } from './achievement-data'
 
@@ -109,6 +110,8 @@ registerMock({
       if (status && a.status !== status) continue
       if (keyword && a.name.indexOf(keyword) < 0 && a.level.indexOf(keyword) < 0) continue
       if (myTeamIds.length > 0 && myTeamIds.indexOf(a.teamId) < 0) continue
+      // 部门管理员：仅本部门子树队伍的成果（按队长组织归属）
+      if (!teamVisible(findTeamById(a.teamId)?.leaderId ?? '', ctx.token)) continue
       out.push(toItem(a))
     }
     return ok(out)
@@ -123,7 +126,9 @@ registerMock({
     if (!a) return fail(1004, '成果不存在')
     const u = findMockUserByToken(ctx.token)
     const me = meAsMember(ctx.token)
-    const privileged = (u && u.role !== 'STUDENT') || (me && isActiveMemberOf(a.teamId, me.id))
+    // 管理端可看，但部门管理员仅限本部门子树队伍
+    const adminOk = !!u && u.role !== 'STUDENT' && teamVisible(findTeamById(a.teamId)?.leaderId ?? '', ctx.token)
+    const privileged = adminOk || (me && isActiveMemberOf(a.teamId, me.id))
     if (!privileged) return fail(5007, '仅本队成员与管理端可查看成果详情')
     return ok({
       ...toItem(a), description: a.description, evidenceFileId: a.evidenceFileId,
@@ -183,7 +188,9 @@ registerMock({
     const a = findAch(ctx.params.id)
     if (!a) return fail(1004, '成果不存在')
     const u = findMockUserByToken(ctx.token)
-    if (!u || u.role === 'STUDENT') return fail(1003, '仅管理端可审批成果')
+    if (!u || u.role === 'STUDENT' || !teamVisible(findTeamById(a.teamId)?.leaderId ?? '', ctx.token)) {
+      return fail(1003, '仅管理端可审批本部门成果')
+    }
     if (a.status !== 'PENDING') return fail(1001, '该成果不在待审批状态')
     if (String(ctx.body.action) === 'APPROVE') {
       a.status = 'APPROVED'
@@ -237,6 +244,7 @@ registerMock({
     const teamId = String(ctx.body.teamId ?? '')
     const tm = findTeamById(teamId)
     if (!tm) return fail(1004, '赛队不存在')
+    if (!teamVisible(tm.leaderId, ctx.token)) return fail(1003, '无权导出本部门以外队伍的清单')
     // 5008：获奖清单为正式凭据，队伍存在未通过（待审批/已驳回）成果时禁止导出
     for (const a of achievements) {
       if (a.teamId === teamId && a.status !== 'APPROVED') return fail(5008, '该队伍存在未通过审批的成果，通过后再导出')

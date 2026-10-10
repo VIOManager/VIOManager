@@ -1,70 +1,15 @@
 /**
  * 组织管理 mock（A 线 O01–O06）
- * ⚠️ 演示数据：本部 + 三个子组织（数媒协会下挂数媒二楼，用于演示多级树与 3006 防循环）
- * 关键校验：3006 上级不能选自身或子孙；3007 有子组织拒删；根组织不可删
+ * 数据范围：部门管理员仅见/仅可管理本部门子树（scope.ts，模拟后端 DataScope）
+ * 关键校验：3006 上级不能选自身或子孙；3007 有子组织拒删；根组织不可删；越权操作 1003
  * TODO(联调)：后端组织接口就绪后删除本文件
  */
 import { fail, ok, registerMock } from './registry'
+import { findNode, findParent, isDescendant, tree } from './org-data'
+import { deptScopeOrgIds, deptScopeRoot, orgInScope } from './scope'
 import type { CollegeItem, OrgNode } from '@/api/org'
 
 let seq = 20
-
-const tree: OrgNode[] = [
-  {
-    id: 'o1',
-    name: '科创团队本部',
-    orgType: 'ROOT',
-    isSubOrg: false,
-    managerName: '李明',
-    leaderName: '李明',
-    sortNo: 1,
-    status: 'ENABLED',
-    level: 1,
-    children: [
-      {
-        id: 'o11', name: '数媒协会', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '陈志远', leaderName: '陈志远',
-        sortNo: 1, status: 'ENABLED', level: 2,
-        children: [
-          { id: 'o111', name: '数媒二楼', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '周子墨', leaderName: '周子墨', sortNo: 1, status: 'ENABLED', level: 3, children: [] }
-        ]
-      },
-      { id: 'o12', name: '电控工作室', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '赵天宇', leaderName: '赵天宇', sortNo: 2, status: 'ENABLED', level: 2, children: [] },
-      { id: 'o13', name: '建模组', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '陈子昂', leaderName: '陈子昂', sortNo: 3, status: 'ENABLED', level: 2, children: [] }
-    ]
-  }
-]
-
-/** 供其他 mock 模块按 id 反查组织（人员档案回填 orgName 用） */
-export function findOrgNodeById(id: string): OrgNode | null {
-  return findNode(tree, id)
-}
-
-function findNode(list: OrgNode[], id: string): OrgNode | null {
-  for (const n of list) {
-    if (n.id === id) return n
-    const hit = findNode(n.children, id)
-    if (hit) return hit
-  }
-  return null
-}
-
-function findParent(list: OrgNode[], id: string, parent: OrgNode | null): OrgNode | null {
-  for (const n of list) {
-    if (n.id === id) return parent
-    const hit = findParent(n.children, id, n)
-    if (hit) return hit
-  }
-  return null
-}
-
-/** 判断 id 是否为 ancestor 的子孙节点（3006 防循环用） */
-function isDescendant(ancestor: OrgNode, id: string): boolean {
-  for (const c of ancestor.children) {
-    if (c.id === id) return true
-    if (isDescendant(c, id)) return true
-  }
-  return false
-}
 
 /** 13 学院 39 专业的演示子集（真实全量由后端内置生成） */
 const colleges: CollegeItem[] = [
@@ -76,15 +21,26 @@ const colleges: CollegeItem[] = [
 ]
 
 // ⚠️ 注册顺序：/tree 与 /colleges 必须先于 /:id，否则会被 :id 段吃掉
-registerMock({ method: 'get', path: '/api/orgs/tree', reply: () => ok(tree) })
+registerMock({
+  method: 'get',
+  path: '/api/orgs/tree',
+  reply: (ctx) => {
+    // 部门管理员：以自己所在组织为根的子树
+    const root = deptScopeRoot(ctx.token)
+    return ok(root ? [root] : tree)
+  }
+})
 registerMock({ method: 'get', path: '/api/orgs/colleges', reply: () => ok(colleges) })
 
 registerMock({
   method: 'get',
   path: '/api/orgs/:id',
   reply: (ctx) => {
+    const scope = deptScopeOrgIds(ctx.token)
     const node = findNode(tree, ctx.params.id)
-    return node ? ok(node) : fail(1004, '组织不存在')
+    if (!node) return fail(1004, '组织不存在')
+    if (!orgInScope(node.id, scope)) return fail(1003, '无权查看本部门以外的组织')
+    return ok(node)
   }
 })
 
@@ -92,11 +48,13 @@ registerMock({
   method: 'post',
   path: '/api/orgs',
   reply: (ctx) => {
+    const scope = deptScopeOrgIds(ctx.token)
     const name = String(ctx.body.name ?? '').trim()
     if (!name) return fail(1001, '组织名称不能为空')
     const parentId = String(ctx.body.parentId ?? '')
     const parent = parentId ? findNode(tree, parentId) : null
     if (parentId && !parent) return fail(1004, '上级组织不存在')
+    if (parent && !orgInScope(parent.id, scope)) return fail(1003, '只能在本人部门范围内创建组织')
     const node: OrgNode = {
       id: 'o' + seq++,
       name,
@@ -119,14 +77,17 @@ registerMock({
   method: 'put',
   path: '/api/orgs/:id',
   reply: (ctx) => {
+    const scope = deptScopeOrgIds(ctx.token)
     const node = findNode(tree, ctx.params.id)
     if (!node) return fail(1004, '组织不存在')
+    if (!orgInScope(node.id, scope)) return fail(1003, '无权管理本部门以外的组织')
     const newParentId = String(ctx.body.parentId ?? '')
     if (newParentId && newParentId !== (findParent(tree, node.id, null)?.id ?? '')) {
       // 换上级：防循环校验（3006）
       if (newParentId === node.id || isDescendant(node, newParentId)) return fail(3006, '上级组织不能选自身或其子孙')
       const newParent = findNode(tree, newParentId)
       if (!newParent) return fail(1004, '上级组织不存在')
+      if (!orgInScope(newParent.id, scope)) return fail(1003, '上级组织超出本人部门范围')
       const oldParent = findParent(tree, node.id, null)
       const oldSiblings = oldParent ? oldParent.children : tree
       oldSiblings.splice(oldSiblings.indexOf(node), 1)
@@ -146,8 +107,10 @@ registerMock({
   method: 'delete',
   path: '/api/orgs/:id',
   reply: (ctx) => {
+    const scope = deptScopeOrgIds(ctx.token)
     const node = findNode(tree, ctx.params.id)
     if (!node) return fail(1004, '组织不存在')
+    if (!orgInScope(node.id, scope)) return fail(1003, '无权删除本部门以外的组织')
     if (node.orgType === 'ROOT') return fail(1003, '根组织不允许删除')
     if (node.children.length > 0) return fail(3007, '组织下有子组织，禁止删除')
     const parent = findParent(tree, node.id, null)

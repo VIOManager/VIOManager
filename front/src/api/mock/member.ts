@@ -7,7 +7,8 @@
  */
 import { fail, ok, registerMock } from './registry'
 import { findMockUserByToken } from './auth'
-import { findOrgNodeById } from './org'
+import { findOrgNodeById } from './org-data'
+import { deptScopeOrgIds, orgInScope } from './scope'
 import { members } from './member-data'
 import type { MockMember } from './member-data'
 
@@ -25,11 +26,14 @@ export function meAsMember(token: string): MockMember | null {
   return null
 }
 
-/** M02 详情按角色裁剪：管理角色/本人全量；其他学生仅基础字段 */
+/** M02 详情按角色裁剪：超管全量；部门管理员仅本部门成员全量；本人全量；其他学生仅基础字段 */
 function detailFor(m: MockMember, token: string): MemberDetail {
   const u = findMockUserByToken(token)
   const me = meAsMember(token)
-  const privileged = (u && (u.role === 'SUPER_ADMIN' || u.role === 'DEPT_ADMIN')) || (me && me.id === m.id)
+  const scope = deptScopeOrgIds(token)
+  const privileged =
+    (u && (u.role === 'SUPER_ADMIN' || (u.role === 'DEPT_ADMIN' && orgInScope(m.orgId, scope)))) ||
+    (me && me.id === m.id)
   if (!privileged) {
     return { id: m.id, name: m.name, college: m.college, className: m.className, memberType: m.memberType, orgName: m.orgName, skills: m.skills, limited: true }
   }
@@ -58,8 +62,11 @@ registerMock({
     const memberType = String(ctx.query.memberType ?? '')
     const skill = String(ctx.query.skill ?? '')
     const hasAccount = String(ctx.query.hasAccount ?? '')
+    const scope = deptScopeOrgIds(ctx.token)
     let list: MockMember[] = []
     for (const m of members) {
+      // 部门管理员：仅本部门子树成员
+      if (!orgInScope(m.orgId, scope)) continue
       if (keyword) {
         const hit = m.name.indexOf(keyword) >= 0 || m.studentNo.indexOf(keyword) >= 0 || m.phone.indexOf(keyword) >= 0
         if (!hit) continue
@@ -125,8 +132,10 @@ registerMock({
   method: 'put',
   path: '/api/members/:id',
   reply: (ctx) => {
+    const scope = deptScopeOrgIds(ctx.token)
     for (const m of members) {
       if (m.id !== ctx.params.id) continue
+      if (!orgInScope(m.orgId, scope)) return fail(1003, '无权修改本部门以外的人员')
       const studentNo = String(ctx.body.studentNo ?? m.studentNo)
       if (studentNo !== m.studentNo) return fail(3002, '学号不可修改')
       m.name = String(ctx.body.name ?? m.name)
@@ -155,8 +164,10 @@ registerMock({
   method: 'delete',
   path: '/api/members/:id',
   reply: (ctx) => {
+    const scope = deptScopeOrgIds(ctx.token)
     for (const m of members) {
       if (m.id !== ctx.params.id) continue
+      if (!orgInScope(m.orgId, scope)) return fail(1003, '无权删除本部门以外的人员')
       if (m.isLeader) return fail(3003, '该人员是队长，需先解散队伍')
       const me = meAsMember(ctx.token)
       if (me && me.id === m.id) return fail(3004, '不能删除当前登录账号')
