@@ -45,7 +45,7 @@ onMounted(async () => {
     <div class="dossier-head">
       <h3>赛队管理</h3>
       <div class="dossier-meta mono">
-        <span>共 {{ list.length }} 支</span>
+        <span>{{ loading ? '加载中…' : '共 ' + list.length + ' 支' }}</span>
         <span>B 线 · TE01–TE13</span>
       </div>
     </div>

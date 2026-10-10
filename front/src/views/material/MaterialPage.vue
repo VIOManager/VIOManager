@@ -19,6 +19,7 @@ import TeamOverviewPanel from './TeamOverviewPanel.vue'
 const tab = ref('tasks')
 const contests = ref<ContestListItem[]>([])
 const tasks = ref<MaterialTask[]>([])
+const loading = ref(false)
 const contestFilter = ref('')
 
 const taskDialogVisible = ref(false)
@@ -31,7 +32,12 @@ const currentTask = ref<MaterialTask | null>(null)
 const currentReqs = ref<MaterialRequirement[]>([])
 
 async function loadTasks() {
-  tasks.value = await apiMaterialTasks(contestFilter.value || undefined)
+  loading.value = true
+  try {
+    tasks.value = await apiMaterialTasks(contestFilter.value || undefined)
+  } finally {
+    loading.value = false
+  }
 }
 
 async function loadReqs() {
@@ -112,7 +118,7 @@ onMounted(async () => {
     <div class="dossier-head">
       <h3>材料管理</h3>
       <div class="dossier-meta mono">
-        <span>共 {{ tasks.length }} 个任务</span>
+        <span>{{ loading ? '加载中…' : '共 ' + tasks.length + ' 个任务' }}</span>
         <span>C 线 · MT / MR / MS</span>
       </div>
     </div>
