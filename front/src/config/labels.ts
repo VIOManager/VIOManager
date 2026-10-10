@@ -101,3 +101,36 @@ export const APPROVAL_TYPE_LABEL: Record<string, string> = {
   TEAM_REMOVE_MEMBER: '移除队员',
   TEAM_ADD_ADVISOR: '指导教师申请'
 }
+
+/** 材料类型（PRD §3.7 固定 12 种预设；defaultFormats 为新建要求时的默认允许格式） */
+export interface MaterialTypeDef {
+  value: string
+  label: string
+  defaultFormats: string[]
+}
+
+export const MATERIAL_TYPES: MaterialTypeDef[] = [
+  { value: 'REGISTRATION_FORM', label: '报名表', defaultFormats: ['pdf', 'docx'] },
+  { value: 'PROJECT_PROPOSAL', label: '项目书', defaultFormats: ['pdf'] },
+  { value: 'COMMITMENT_LETTER', label: '承诺书', defaultFormats: ['pdf'] },
+  { value: 'ID_COPY', label: '身份证复印件', defaultFormats: ['pdf', 'jpg'] },
+  { value: 'STUDENT_ID_COPY', label: '学生证复印件', defaultFormats: ['pdf', 'jpg'] },
+  { value: 'TEAM_PHOTO', label: '团队合照', defaultFormats: ['jpg', 'png'] },
+  { value: 'DEFENSE_SLIDES', label: '答辩PPT', defaultFormats: ['pptx', 'pdf'] },
+  { value: 'RESEARCH_REPORT', label: '研究报告', defaultFormats: ['pdf', 'docx'] },
+  { value: 'SOURCE_CODE', label: '源代码', defaultFormats: ['zip', 'rar'] },
+  { value: 'AWARD_CERTIFICATE', label: '获奖证书', defaultFormats: ['pdf', 'jpg'] },
+  { value: 'EVIDENCE', label: '佐证材料', defaultFormats: ['pdf', 'jpg', 'zip'] },
+  { value: 'OTHER', label: '其他', defaultFormats: ['pdf', 'zip'] }
+]
+
+/** 材料类型值 → 中文名（页面翻译用；含兜底） */
+export const MATERIAL_TYPE_LABEL: Record<string, string> = Object.fromEntries(
+  MATERIAL_TYPES.map((t) => [t.value, t.label])
+)
+
+/** 材料提交状态（C 线：未交 / 已交） */
+export const MATERIAL_SUBMIT_LABEL: Record<string, string> = {
+  NOT_SUBMITTED: '未交',
+  SUBMITTED: '已交'
+}

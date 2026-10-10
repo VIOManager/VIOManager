@@ -21,7 +21,9 @@ const REAL_PAGES: Record<string, () => Promise<unknown>> = {
   '/semester': () => import('@/views/semester/SemesterPage.vue'),
   '/competition': () => import('@/views/competition/CompetitionPage.vue'),
   '/team': () => import('@/views/team/TeamPage.vue'),
-  '/my/team': () => import('@/views/my/MyTeamPage.vue')
+  '/my/team': () => import('@/views/my/MyTeamPage.vue'),
+  '/material': () => import('@/views/material/MaterialPage.vue'),
+  '/my/material': () => import('@/views/my/MyMaterialPage.vue')
 }
 
 /** 由菜单配置派生子路由：真实页用真实组件，其余先挂占位页 */
