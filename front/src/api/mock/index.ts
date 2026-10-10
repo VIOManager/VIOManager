@@ -50,3 +50,5 @@ registerMock({ method: 'get', path: '/api/_probe/4002', reply: () => fail(4002, 
 
 // ── 模块 mock 登记（新增模块在此追加一行）──
 import './auth'
+
+import './dict'

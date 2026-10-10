@@ -10,7 +10,7 @@
 import { fail, ok, registerMock, setTokenChecker } from './registry'
 import type { Role } from '@/types'
 
-interface MockUser {
+export interface MockUser {
   id: string
   loginName: string
   password: string
@@ -45,8 +45,8 @@ function saveTokens(): void {
   sessionStorage.setItem(TOKEN_STORE_KEY, JSON.stringify(Array.from(validTokens)))
 }
 
-/** token 形如 mock-token-{用户id}-{序号}；me 等接口据此反查用户 */
-function findUserByToken(token: string): MockUser | null {
+/** token 形如 mock-token-{用户id}-{时间戳}；me 等接口据此反查用户（其他 mock 模块复用） */
+export function findMockUserByToken(token: string): MockUser | null {
   const m = /^mock-token-(\d+)-\d+$/.exec(token)
   if (!m) return null
   for (const u of users) {
@@ -82,7 +82,7 @@ registerMock({
   method: 'get',
   path: '/api/auth/me',
   reply: (ctx) => {
-    const found = findUserByToken(ctx.token)
+    const found = findMockUserByToken(ctx.token)
     if (!found) return fail(1002, '登录已过期')
     return ok({ realName: found.realName, role: found.role, defaultPassword: found.defaultPassword })
   }
@@ -92,7 +92,7 @@ registerMock({
   method: 'put',
   path: '/api/auth/password',
   reply: (ctx) => {
-    const found = findUserByToken(ctx.token)
+    const found = findMockUserByToken(ctx.token)
     if (!found) return fail(1002, '登录已过期')
     const oldPassword = String(ctx.body.oldPassword ?? '')
     const newPassword = String(ctx.body.newPassword ?? '')
