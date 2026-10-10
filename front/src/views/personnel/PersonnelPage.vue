@@ -17,6 +17,7 @@ import { MEMBER_TYPE_LABEL } from '@/config/labels'
 import MaskField from '@/components/MaskField.vue'
 import MemberDetailDrawer from './MemberDetailDrawer.vue'
 import MemberFormDialog from './MemberFormDialog.vue'
+import ImportDialog from './ImportDialog.vue'
 
 const query = reactive({ page: 1, size: 20, keyword: '', orgId: '', memberType: '', skill: '', hasAccount: '' })
 const data = ref<PageResult<MemberListItem>>({ list: [], total: 0, page: 1, size: 20 })
@@ -26,6 +27,7 @@ const { selectable: skillOptions } = useDict('SKILL')
 const orgOptions = ref<{ id: string; name: string; level: number }[]>([])
 
 const drawerVisible = ref(false)
+const importVisible = ref(false)
 const detailId = ref('')
 const formVisible = ref(false)
 const editingId = ref('')
@@ -128,6 +130,7 @@ onMounted(async () => {
         <option value="false">未绑定</option>
       </select>
       <span style="flex: 1"></span>
+      <button class="btn-line" @click="importVisible = true">Excel 导入</button>
       <button class="btn-ink" @click="openCreate">新建人员</button>
     </div>
 
@@ -168,5 +171,6 @@ onMounted(async () => {
 
     <MemberDetailDrawer v-model="drawerVisible" :member-id="detailId" @edit="openEdit" @deleted="load" />
     <MemberFormDialog v-model="formVisible" :member-id="editingId" :org-options="orgOptions" @saved="load" />
+    <ImportDialog v-model="importVisible" @done="load" />
   </div>
 </template>

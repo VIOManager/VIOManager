@@ -4,7 +4,7 @@
  * 对应方案：《前端ABC模块页面开发-优化方案》FS4
  * 机制：每次选择文件即生成一个 X-Idempotency-Key（规范 §6 幂等，重复点击/重试不会重复入库）；
  *    上传中按钮禁用；结果展示安全扫描状态（1010 拒绝由 http 拦截器统一弹提示）
- * ⚠️ 安全：accept/maxSizeMB 只是前置拦截，真正的安全校验以后端扫描结果（1010）为准
+ * ⚠️ 安全：accept/maxMb 只是前置拦截，真正的安全校验以后端扫描结果（1010）为准
  */
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -17,10 +17,10 @@ const props = withDefaults(
     accept?: string
     /** 辅助说明（格式/大小/命名规则） */
     tip?: string
-    maxSizeMB?: number
+    maxMb?: number
     buttonText?: string
   }>(),
-  { accept: '', tip: '', maxSizeMB: 10, buttonText: '选择文件上传' }
+  { accept: '', tip: '', maxMb: 10, buttonText: '选择文件上传' }
 )
 
 const emit = defineEmits<{ uploaded: [file: UploadResp] }>()
@@ -50,8 +50,8 @@ function onChange(e: Event) {
   const file = input.files && input.files[0]
   input.value = '' // 清空选择，允许重选同一文件再次触发 change
   if (!file) return
-  if (file.size > props.maxSizeMB * 1024 * 1024) {
-    ElMessage.warning('文件超过 ' + props.maxSizeMB + 'MB 限制')
+  if (file.size > props.maxMb * 1024 * 1024) {
+    ElMessage.warning('文件超过 ' + props.maxMb + 'MB 限制')
     return
   }
   currentFile = file

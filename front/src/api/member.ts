@@ -48,6 +48,8 @@ export interface MemberDetail {
   photoFileId?: string
   signatureFileId?: string
   createdAt?: string
+  /** 已绑定账号的登录名（M13 绑定后返回） */
+  loginName?: string
 }
 
 export interface MemberQuery {
@@ -121,4 +123,23 @@ export function apiBindAccount(id: string, loginName?: string): Promise<null> {
 }
 export function apiResetAccount(id: string, loginName?: string, resetPassword?: boolean): Promise<null> {
   return put('/api/members/' + id + '/account', { loginName, resetPassword })
+}
+
+/**
+ * 下载导入模板（M06）。mock 模式前端自生成 CSV 占位；真实模式走后端文件流
+ * ⚠️ 待确认：PRD §3.2 文字写"13 列"但字段清单实际列了 14 项，本模板按字段清单（14 列）
+ */
+export function apiDownloadTemplate(): void {
+  const useMock = import.meta.env.VITE_USE_MOCK === 'true'
+  if (!useMock) {
+    window.open((import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8088') + '/api/members/import-template')
+    return
+  }
+  const header = '姓名,学号/学工号,手机号,学院,专业,班级,性别,民族,身份证号,邮箱,证件照,电子签名,所属组织,类型'
+  const blob = new Blob(['﻿' + header + '\n'], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = '人员导入模板.csv'
+  a.click()
+  URL.revokeObjectURL(a.href)
 }

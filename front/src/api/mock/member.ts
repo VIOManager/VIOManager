@@ -8,35 +8,12 @@
 import { fail, ok, registerMock } from './registry'
 import { findMockUserByToken } from './auth'
 import { findOrgNodeById } from './org'
+import { members } from './member-data'
+import type { MockMember } from './member-data'
+
+/** 新成员 id 发号器 */let seq = 20
 import type { MemberDetail, MemberListItem } from '@/api/member'
 import type { PageResult } from '@/api/types'
-
-interface MockMember extends MemberListItem {
-  gender: string
-  nation: string
-  email: string
-  idCard: string
-  photoFileId: string
-  signatureFileId: string
-  createdAt: string
-  /** 演示 3003：队长身份禁止删除 */
-  isLeader?: boolean
-  /** 绑定的登录账号（hasAccount=true 时有效） */
-  loginName?: string
-}
-
-let seq = 20
-
-const members: MockMember[] = [
-  { id: 'm1', name: '李明', studentNo: 'T1001', college: '计算机与信息工程学院', major: '软件工程', className: '', phone: '13800000001', memberType: 'TEACHER', orgId: 'o1', orgName: '科创团队本部', hasAccount: true, idCardLast4: '0031', skills: ['python'], gender: '男', nation: '汉族', email: 'liming@usth.edu.cn', idCard: '230103198501010031', photoFileId: '', signatureFileId: '', createdAt: '2026-09-01 09:00:00', loginName: 'admin' },
-  { id: 'm2', name: '陈志远', studentNo: 'T1002', college: '计算机与信息工程学院', major: '计算机科学与技术', className: '', phone: '13800000002', memberType: 'TEACHER', orgId: 'o11', orgName: '数媒协会', hasAccount: true, idCardLast4: '0217', skills: ['python', '视频剪辑'], gender: '男', nation: '汉族', email: 'chenzy@usth.edu.cn', idCard: '230103198802140217', photoFileId: '', signatureFileId: '', createdAt: '2026-09-01 09:00:00', loginName: 'dept01' },
-  { id: 'm3', name: '赵天宇', studentNo: '2023319001', college: '电子与信息工程学院', major: '电子信息工程', className: '电信23-1班', phone: '13900000003', memberType: 'STUDENT', orgId: 'o12', orgName: '电控工作室', hasAccount: false, idCardLast4: '1042', skills: ['CAD', '机械设计'], gender: '男', nation: '汉族', email: 'zhaoty@stu.usth.edu.cn', idCard: '230106200503141042', photoFileId: '', signatureFileId: '', createdAt: '2026-09-02 10:00:00' },
-  { id: 'm4', name: '陈子昂', studentNo: '2023319002', college: '计算机与信息工程学院', major: '软件工程', className: '软工23-2班', phone: '13900000004', memberType: 'STUDENT', orgId: 'o13', orgName: '建模组', hasAccount: false, idCardLast4: '2218', skills: ['python', 'AIGC'], gender: '男', nation: '汉族', email: 'chenza@stu.usth.edu.cn', idCard: '230106200505122218', photoFileId: '', signatureFileId: '', createdAt: '2026-09-02 10:00:00' },
-  { id: 'm5', name: '李明轩', studentNo: '2023319003', college: '计算机与信息工程学院', major: '软件工程', className: '软工23-2班', phone: '13900000005', memberType: 'STUDENT', orgId: 'o11', orgName: '数媒协会', hasAccount: true, idCardLast4: '3390', skills: ['视频剪辑'], gender: '男', nation: '汉族', email: 'limx@stu.usth.edu.cn', idCard: '230106200508233390', photoFileId: '', signatureFileId: '', createdAt: '2026-09-03 14:00:00', isLeader: true, loginName: '2023319003' },
-  { id: 'm6', name: '孙嘉仪', studentNo: '2023319004', college: '计算机与信息工程学院', major: '计算机科学与技术', className: '计科23-1班', phone: '13900000006', memberType: 'STUDENT', orgId: 'o111', orgName: '数媒二楼', hasAccount: false, idCardLast4: '5567', skills: ['AIGC'], gender: '女', nation: '汉族', email: 'sunjy@stu.usth.edu.cn', idCard: '230106200511085567', photoFileId: '', signatureFileId: '', createdAt: '2026-09-03 14:00:00' },
-  { id: 'm7', name: '王雨桐', studentNo: '2023319024', college: '计算机与信息工程学院', major: '软件工程', className: '软工23-2班', phone: '13900000007', memberType: 'STUDENT', orgId: 'o11', orgName: '数媒协会', hasAccount: true, idCardLast4: '8821', skills: ['python'], gender: '女', nation: '满族', email: 'wangyt@stu.usth.edu.cn', idCard: '230106200603098821', photoFileId: '', signatureFileId: '', createdAt: '2026-09-05 16:00:00', loginName: '2023319024' },
-  { id: 'm8', name: '周子墨', studentNo: '2023319005', college: '机械工程学院', major: '机械设计制造及其自动化', className: '机自23-1班', phone: '13900000008', memberType: 'STUDENT', orgId: 'o111', orgName: '数媒二楼', hasAccount: false, idCardLast4: '6634', skills: ['CAD'], gender: '男', nation: '汉族', email: 'zhouzm@stu.usth.edu.cn', idCard: '230106200507196634', photoFileId: '', signatureFileId: '', createdAt: '2026-09-05 16:00:00' }
-]
 
 /** 当前登录账号对应的成员（admin→m1 / dept01→m2 / 2023319024→m7） */
 function meAsMember(token: string): MockMember | null {
@@ -60,7 +37,7 @@ function detailFor(m: MockMember, token: string): MemberDetail {
     id: m.id, name: m.name, studentNo: m.studentNo, college: m.college, major: m.major, className: m.className,
     phone: m.phone, gender: m.gender, nation: m.nation, email: m.email, memberType: m.memberType,
     orgId: m.orgId, orgName: m.orgName, skills: m.skills, idCardLast4: m.idCardLast4, hasAccount: m.hasAccount,
-    photoFileId: m.photoFileId, signatureFileId: m.signatureFileId, createdAt: m.createdAt
+    photoFileId: m.photoFileId, signatureFileId: m.signatureFileId, createdAt: m.createdAt, loginName: m.loginName
   }
 }
 
@@ -211,6 +188,89 @@ registerMock({
     for (const m of members) {
       if (m.id !== ctx.params.id) continue
       m.skills = Array.isArray(ctx.body.skills) ? (ctx.body.skills as string[]) : []
+      return ok(null)
+    }
+    return fail(1004, '人员不存在')
+  }
+})
+
+/** M07 Excel 导入：mock 不解析文件，返回固定行级错误样例（演示回显格式） */
+registerMock({
+  method: 'post',
+  path: '/api/members/import',
+  reply: (ctx) => {
+    if (!ctx.idemKey) return fail(1001, '缺少幂等键 X-Idempotency-Key')
+    const fd = ctx.body as unknown as FormData
+    const file = fd && typeof fd.get === 'function' ? (fd.get('file') as File | null) : null
+    if (!file) return fail(1001, '未收到文件')
+    return ok({
+      successCount: 6,
+      failCount: 2,
+      errors: [
+        { row: 3, reason: '学号 2023319001 已存在' },
+        { row: 7, reason: '所属组织「不存在的组织」匹配失败' }
+      ]
+    })
+  }
+})
+
+/** M08/M09 证件照与电子签名回填（文件先走文件服务，此处记录 fileId，覆盖式） */
+registerMock({
+  method: 'post',
+  path: '/api/members/:id/photo',
+  reply: (ctx) => {
+    for (const m of members) {
+      if (m.id === ctx.params.id) {
+        m.photoFileId = String(ctx.body.fileId ?? '')
+        return ok(null)
+      }
+    }
+    return fail(1004, '人员不存在')
+  }
+})
+registerMock({
+  method: 'post',
+  path: '/api/members/:id/signature',
+  reply: (ctx) => {
+    for (const m of members) {
+      if (m.id === ctx.params.id) {
+        m.signatureFileId = String(ctx.body.fileId ?? '')
+        return ok(null)
+      }
+    }
+    return fail(1004, '人员不存在')
+  }
+})
+
+/** M13 账号绑定：默认登录名=学工号、初始密码 abc123、defaultPassword=1 */
+registerMock({
+  method: 'post',
+  path: '/api/members/:id/account',
+  reply: (ctx) => {
+    for (const m of members) {
+      if (m.id !== ctx.params.id) continue
+      if (m.hasAccount) return fail(1001, '该人员已绑定账号')
+      const loginName = String(ctx.body.loginName ?? '').trim() || m.studentNo
+      if (!loginName) return fail(1001, '无学号，需手工指定登录名')
+      m.hasAccount = true
+      m.loginName = loginName
+      return ok(null)
+    }
+    return fail(1004, '人员不存在')
+  }
+})
+
+/** M13 账号维护：改登录名 / 重置密码（重置后回默认密码态） */
+registerMock({
+  method: 'put',
+  path: '/api/members/:id/account',
+  reply: (ctx) => {
+    for (const m of members) {
+      if (m.id !== ctx.params.id) continue
+      if (!m.hasAccount) return fail(1004, '该人员未绑定账号')
+      const loginName = String(ctx.body.loginName ?? '').trim()
+      if (loginName) m.loginName = loginName
+      // resetPassword=true → 后端重置为 abc123（mock 无密码表，语义记录即可）
       return ok(null)
     }
     return fail(1004, '人员不存在')
