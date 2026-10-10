@@ -48,6 +48,8 @@
 .ledger .num { text-align: right; }
 .ledger tbody tr:hover td { background: var(--vio-wash); }
 .ledger tbody tr.linkrow { cursor: pointer; }
+/* 窄列防竖排挤压：姓名/学号/手机号/时间等列加 nowrap */
+.ledger .nw { white-space: nowrap; }
 
 /* 筛选条 */
 .fbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }

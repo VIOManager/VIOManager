@@ -34,6 +34,11 @@ const tree: OrgNode[] = [
   }
 ]
 
+/** 供其他 mock 模块按 id 反查组织（人员档案回填 orgName 用） */
+export function findOrgNodeById(id: string): OrgNode | null {
+  return findNode(tree, id)
+}
+
 function findNode(list: OrgNode[], id: string): OrgNode | null {
   for (const n of list) {
     if (n.id === id) return n

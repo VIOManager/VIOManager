@@ -16,7 +16,8 @@ const PlaceholderPage = () => import('@/views/common/PlaceholderPage.vue')
 /** 已落地的真实页面：菜单路径 → 懒加载组件（未列出的路径仍挂占位页，随开发逐步替换） */
 const REAL_PAGES: Record<string, () => Promise<unknown>> = {
   '/overview': () => import('@/views/overview/OverviewPage.vue'),
-  '/org': () => import('@/views/org/OrgPage.vue')
+  '/org': () => import('@/views/org/OrgPage.vue'),
+  '/personnel': () => import('@/views/personnel/PersonnelPage.vue')
 }
 
 /** 由菜单配置派生子路由：真实页用真实组件，其余先挂占位页 */

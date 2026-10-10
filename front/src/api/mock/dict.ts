@@ -11,16 +11,14 @@ import type { DictItem } from '@/api/dict'
 
 let seq = 100
 
-/** SKILL 技能字典（内存数据，刷新还原） */
+/** SKILL 技能字典（内存数据，刷新还原）；预置项按 PRD §3.2：python/CAD/AIGC/视频剪辑/机械设计/其他 */
 const skillItems: DictItem[] = [
-  { id: 'd1', label: '电控', source: 'PRESET', auditStatus: 'APPROVED' },
-  { id: 'd2', label: '建模', source: 'PRESET', auditStatus: 'APPROVED' },
-  { id: 'd3', label: 'AI', source: 'PRESET', auditStatus: 'APPROVED' },
+  { id: 'd1', label: 'python', source: 'PRESET', auditStatus: 'APPROVED' },
+  { id: 'd2', label: 'CAD', source: 'PRESET', auditStatus: 'APPROVED' },
+  { id: 'd3', label: 'AIGC', source: 'PRESET', auditStatus: 'APPROVED' },
   { id: 'd4', label: '视频剪辑', source: 'PRESET', auditStatus: 'APPROVED' },
-  { id: 'd5', label: '编程开发', source: 'PRESET', auditStatus: 'APPROVED' },
-  { id: 'd6', label: '机械设计', source: 'PRESET', auditStatus: 'APPROVED' },
-  { id: 'd7', label: '文案策划', source: 'PRESET', auditStatus: 'APPROVED' },
-  { id: 'd8', label: '视觉设计', source: 'PRESET', auditStatus: 'APPROVED' },
+  { id: 'd5', label: '机械设计', source: 'PRESET', auditStatus: 'APPROVED' },
+  { id: 'd6', label: '其他', source: 'PRESET', auditStatus: 'APPROVED' },
   { id: 'd9', label: '嵌入式开发', source: 'USER', auditStatus: 'PENDING', createdByName: '王雨桐' },
   { id: 'd10', label: '结构设计', source: 'USER', auditStatus: 'APPROVED', createdByName: '李明轩' },
   { id: 'd11', label: '摄影', source: 'USER', auditStatus: 'REJECTED', createdByName: '陈子昂' }

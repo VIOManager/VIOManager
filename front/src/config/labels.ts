@@ -16,3 +16,10 @@ export const DICT_SOURCE_LABEL: Record<string, string> = {
   PRESET: '预置',
   USER: '用户补充'
 }
+
+/** 人员类型（PRD §3.2：学生/教师/其他） */
+export const MEMBER_TYPE_LABEL: Record<string, string> = {
+  STUDENT: '学生',
+  TEACHER: '教师',
+  OTHER: '其他'
+}
