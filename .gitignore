@@ -47,3 +47,6 @@ temp/
 
 # Docker 本地数据
 docker-data/
+
+# 内部工作文档（方案/实现记录），只在本地沉淀，不上传仓库
+.agentdocs/

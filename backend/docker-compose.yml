@@ -1,0 +1,52 @@
+# 本地开发环境：三容器（MySQL + MinIO + ClamAV）。
+# 生产 6 容器口径（含前端 nginx、AI 服务）属部署层，不在此文件（骨架方案 K5 结论）。
+# 用法：cd backend && docker compose up -d；推倒重建用 docker compose down -v（本地库重建零成本）。
+name: vio-backend
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: vio-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev-root-123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-viomanager}
+    # ⚠️ 冲突：binlog 必须开 ROW 格式并保留 14 天——二期 Canal/binlog 订阅的前置，
+    # 去掉这些参数会导致二期订阅改造时全组返工（骨架方案 §1 本期不做 Canal 但先开 binlog）
+    command:
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --server-id=1
+      - --binlog-expire-logs-seconds=1209600   # 14 天
+    ports:
+      # 宿主端口默认 3307：避开开发者本机常驻的原生 MySQL；要改设 MYSQL_PORT
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - vio-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  minio:
+    image: minio/minio:latest
+    container_name: vio-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-vio-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev-minio-123}
+    ports:
+      - "9000:9000"   # S3 API，应用配置 MINIO_ENDPOINT 指向这里
+      - "9001:9001"   # 管理控制台
+    volumes:
+      - vio-minio-data:/data
+
+  clamav:
+    image: clamav/clamav:latest
+    container_name: vio-clamav
+    ports:
+      - "3310:3310"   # ClamD 协议端口，Step 8 文件服务接入
+
+volumes:
+  vio-mysql-data:
+  vio-minio-data:

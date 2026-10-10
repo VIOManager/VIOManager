@@ -1,70 +1,102 @@
-# A 线基础数据接口清单：人员 / 组织 / 字典 / 学期
+# A 线接口清单——人员档案 + 组织管理 + 学期管理
 
-作者:lzh（前端） | 创建时间:2026-10-10 14:30
+> 作者：ZCode（方案架构师）｜创建时间：2026-10-07 21:50
+> 负责人：A（基础数据线）｜错误码段：3xxx
+> 状态：待组长与 A 确认后录入 Apifox；**录入后以 Apifox 为准，本文件不再更新**
+> 依据：PRD §3.2 人员档案、§3.3 组织、§3.4 学期；表：sys_org、member、member_skill、sys_dict_type/item、semester、semester_switch_task
+> 通用约定（响应体、分页、ID 字符串、时间格式等）见《全局接口与开发规范》，本文不重复
 
-> 字段明细见 `front/src/api/member.ts / org.ts / dict.ts / semester.ts`（契约源）。
+## 0. 前置依赖（组长骨架先交付，A 线才能开工的部分）
 
-## 1. 人员档案（M01–M13，PRD §3.2）
+- 文件服务：上传返回 fileId（证件照、电子签名走它）
+- 账号服务：sys_user 创建、改登录名、重置密码（M13 底层依赖）
+- 数据范围注解：组织子树自动过滤
+- 字段裁剪组件：§2.3 权限表的统一实现
 
-| 方法 | 路径 | 说明 | 权限 |
-|---|---|---|---|
-| GET | /api/members | 分页查询（page/size/keyword/orgId/memberType/skill/hasAccount） | 管理端 |
-| GET | /api/members/:id | 详情（按视角裁剪，见下） | 管理端/本人 |
-| POST | /api/members | 新建（学号可空但不可重复 3001） | 管理端 |
-| PUT | /api/members/:id | 编辑（学号不可改 3002） | 管理端 |
-| DELETE | /api/members/:id | 删除（队长拒删 3003 / 当前登录账号拒删 3004；业务记录保留） | 管理端 |
-| GET | /api/members/:id/id-card | 完整身份证号（**写审计日志**） | 超管/本部门管理员/本队队长/本人 |
-| PUT | /api/members/:id/skills | 更新技能标签 | 管理端 |
-| POST | /api/members/import | Excel/CSV 批量导入（multipart + 幂等键） | 管理端 |
-| POST | /api/members/:id/photo | 回填证件照 fileId | 管理端 |
-| POST | /api/members/:id/signature | 回填电子签名 fileId | 管理端 |
-| POST | /api/members/:id/account | 绑定登录账号（初始密码 abc123） | 管理端 |
-| PUT | /api/members/:id/account | 改登录名 / 重置密码（重置后回默认密码态） | 管理端 |
-| GET | /api/members/import-template | 下载导入模板（文件流） | 管理端 |
+## 1. 错误码初始表（3xxx，维护在 Apifox 本线目录）
 
-**详情视角裁剪规则（M02）**：超管/部门管理员/本人 → 全量字段；其他学生 → 仅 `name/college/className/memberType/orgName/skills` 且 `limited=true`。判定在后端做，前端不传参。
+| code | 含义 |
+|------|------|
+| 3001 | 学号已存在 |
+| 3002 | 学号不可修改 |
+| 3003 | 该人员是队长，需先解散队伍 |
+| 3004 | 不能删除当前登录账号 |
+| 3005 | Excel 导入行错误（message 带行号与原因） |
+| 3006 | 上级组织不能选自身或其子孙 |
+| 3007 | 组织下有子组织，禁止删除 |
+| 3008 | 学期名称已存在 |
+| 3009 | 学期有关联业务数据，禁止删除 |
+| 3010 | 无权查看该敏感信息 |
 
-**导入返回**：`{ successCount, failCount, errors: [{row, reason}] }`。
+## 2. 组织管理（/api/orgs，表 sys_org）
 
-⚠️ 模板列数：PRD §3.2 文字写 13 列、字段清单 14 项，前端按 **14 列**（姓名/学号/手机号/学院/专业/班级/性别/民族/身份证号/邮箱/证件照/电子签名/所属组织/类型），以拍板为准。
+| 编号 | 接口 | 说明 |
+|------|------|------|
+| O01 | GET /api/orgs/tree | 组织树。超管全平台，部门管理员仅本部门子树。节点含 id name orgType isSubOrg managerName leaderName sortNo status level children |
+| O02 | POST /api/orgs | 创建。body：parentId name orgType isSubOrg managerId leaderName sortNo。校验 3006 |
+| O03 | PUT /api/orgs/{id} | 编辑；改上级同样校验防循环引用 |
+| O04 | DELETE /api/orgs/{id} | 有子组织拒绝（3007）；删除后该组织人员 org_id 置空 |
+| O05 | GET /api/orgs/{id} | 详情 |
+| O06 | GET /api/orgs/colleges | 13 学院 39 专业静态映射（内置生成，不查库），全站学院下拉统一用它 |
 
-## 2. 组织管理（O01–O06，PRD §3.3）
+## 3. 人员档案（/api/members，表 member / member_skill）
 
-| 方法 | 路径 | 说明 | 权限 |
-|---|---|---|---|
-| GET | /api/orgs/tree | 组织树（children 嵌套，带 managerName/leaderName/sortNo/status/level） | 管理端 |
-| GET | /api/orgs/colleges | 学院-专业映射（后端内置，不查库） | 登录 |
-| GET | /api/orgs/:id | 节点详情 | 管理端 |
-| POST | /api/orgs | 新建（parentId/name/leaderName/sortNo） | 管理端 |
-| PUT | /api/orgs/:id | 编辑（改父级后端防循环引用 3006） | 管理端 |
-| DELETE | /api/orgs/:id | 删除（有子组织拒删 3007；成员 org_id 置空） | 管理端 |
+| 编号 | 接口 | 说明 |
+|------|------|------|
+| M01 | GET /api/members | 列表。筛选：keyword（姓名/学号/手机号模糊）、orgId、memberType、skill、hasAccount。列表项：id name studentNo college major className phone memberType orgName hasAccount idCardLast4 skills。**列表不返回身份证、证件照、邮箱**，进详情 |
+| M02 | GET /api/members/{id} | 详情。字段按 §2.3 裁剪：超管/本部门管理员全量；本队队长见大部分（身份证走 M10）；本人全量；其他仅姓名/学院/班级/技能 |
+| M03 | POST /api/members | 手工新建（管理员）。studentNo 可空、不可重复（3001） |
+| M04 | PUT /api/members/{id} | 编辑。studentNo 不接受变更（3002） |
+| M05 | DELETE /api/members/{id} | 队长拒绝（3003）；当前登录账号拒绝（3004）；普通队员删除时清除队伍成员关系；材料/成果等业务记录保留 |
+| M06 | GET /api/members/import-template | 13 列 Excel 模板下载 |
+| M07 | POST /api/members/import | multipart 上传。学号已存在的行跳过；图片列留空不报错；所属组织按名称匹配，不存在或不唯一该行报错。返回 successCount failCount errors 行号与原因 |
+| M08 | POST /api/members/{id}/photo | 证件照上传，覆盖式单图，走文件服务回填 photo_file_id |
+| M09 | POST /api/members/{id}/signature | 电子签名上传，覆盖式单图 |
+| M10 | GET /api/members/{id}/id-card | 完整身份证号。仅超管/本部门管理员/本队队长/本人；**写审计日志（操作人、时间、IP）** |
+| M11 | GET /api/members/{id}/photo 与 /signature | 下载，权限同 M10，写审计 |
+| M12 | PUT /api/members/{id}/skills | 更新技能标签；本人或管理员；值来自 SKILL 字典 |
+| M13 | POST/PUT /api/members/{id}/account | 管理员绑定账号（登录名默认=学工号、初始密码 abc123、default_password=1）；PUT 改登录名/重置密码（重置后 default_password 回 1）。底层调组长账号服务 |
 
-⚠️ leaderName 当前直接传姓名；人员选择器落地后改传 managerId（前端 TODO 联调）。
+### 技能字典（SKILL 字典归 A 维护）
 
-## 3. 技能字典（D01–D03，PRD §3.2）
+| 编号 | 接口 | 说明 |
+|------|------|------|
+| D01 | GET /api/dicts/SKILL | 字典项列表，含 PRESET 与用户补充项（带 auditStatus） |
+| D02 | POST /api/dicts/SKILL/items | 用户补充新技能，audit_status=PENDING |
+| D03 | POST /api/dicts/items/{id}/audit | 管理员审核：通过入库 / 驳回 |
 
-| 方法 | 路径 | 说明 | 权限 |
-|---|---|---|---|
-| GET | /api/dicts/:type | 字典项列表（当前 type=SKILL） | 登录 |
-| POST | /api/dicts/:type/items | 用户补充新项（入库即 PENDING） | 登录 |
-| POST | /api/dicts/items/:itemId/audit | 管理员审核（pass=true 通过 / false 驳回） | 管理端 |
+## 4. 学期管理（/api/semesters，仅超管）
 
-字典项结构：`{ id, label, source: PRESET|USER, auditStatus: APPROVED|PENDING|REJECTED, createdByName? }`。
-**业务约束**：表单可选项 = PRESET + APPROVED；PENDING/REJECTED 不可选。页面禁止硬编码技能枚举（红线），新增业务字典一律走本组接口。
+| 编号 | 接口 | 说明 |
+|------|------|------|
+| S01 | GET /api/semesters | 列表 |
+| S02 | POST /api/semesters | 创建，名称不可重复（3008）。含起止日期、教学周数 |
+| S03 | PUT /api/semesters/{id} | 编辑基础信息 |
+| S04 | DELETE /api/semesters/{id} | 有关联比赛/赛队/成果/切换任务拒绝（3009） |
+| S05 | POST /api/semesters/switch-tasks | 发起切换。body：toSemesterId password（超管密码二次确认）。生成 30 分钟待执行窗口任务 |
+| S06 | GET /api/semesters/switch-tasks | 任务列表，含状态与影响快照（待归档比赛数、待继承赛队数、成员关系数） |
+| S07 | POST /api/semesters/switch-tasks/{id}/cancel | 窗口内取消 |
+| S08 | POST /api/semesters/switch-tasks/{id}/execute | 执行。乐观锁校验 version、进入维护锁定、旧学期归档、未结束比赛/赛队/成员关系继承。**执行引擎由组长骨架提供，A 负责任务管理与界面** |
 
-## 4. 学期与切换（S01–S08，PRD §3.4，仅超管）
+切换任务状态机：
 
-| 方法 | 路径 | 说明 | 权限 |
-|---|---|---|---|
-| GET | /api/semesters | 学期列表 | 登录 |
-| POST | /api/semesters | 新建（名称不可重复 3008） | 超管 |
-| PUT | /api/semesters/:id | 编辑 | 超管 |
-| DELETE | /api/semesters/:id | 删除（有关联业务数据拒删 3009） | 超管 |
-| POST | /api/semesters/switch-tasks | 发起切换（**超管密码二次确认**，密码错 2002） | 超管 |
-| GET | /api/semesters/switch-tasks | 切换任务列表 | 超管 |
-| POST | /api/semesters/switch-tasks/:id/cancel | 取消（30 分钟待执行窗口内） | 超管 |
-| POST | /api/semesters/switch-tasks/:id/execute | 执行（**乐观锁**：body 带 version，版本不符 3011） | 超管 |
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING_EXECUTE : 发起并进入窗口
+    PENDING_EXECUTE --> CANCELLED : 窗口内取消
+    PENDING_EXECUTE --> RUNNING : 到点执行
+    RUNNING --> SUCCESS : 继承完成
+    RUNNING --> FAILED : 失败并记录原因
+```
 
-**切换任务结构**：`{ id, toSemesterName, status: PENDING|EXECUTING|SUCCESS|FAILED|CANCELLED, createdAt, deadline(30分钟窗口), impact: {contestCount, teamCount, memberRelationCount}, version }`。
+## 5. 与组长骨架的对接点
 
-**impact 影响快照**在发起时计算并固化展示（待归档比赛数/待继承赛队数/成员关系数）。执行成功的落库动作按 PRD §3.4：旧学期 ARCHIVED、已结束比赛归档、成员关系按规则继承。
+- M08/M09/M11 的文件存取全部走 /api/files（组长）
+- M13 底层依赖账号服务（组长）；登录、改密、JWT 由 /api/auth（组长）承担，A 不做
+- S08 执行引擎由骨架提供；A 提供任务 CRUD 与状态查询
+
+## 6. 待确认事项
+
+- [ ] (需用户确认) M13 挂 /api/members 前缀（A 出接口调组长服务）——本清单默认此方案
+- [ ] (需用户确认) 学期切换的维护锁定按 PRD 字面"全员禁止访问"实现，还是"全员只读、禁写"——本清单按全员禁止访问预留
+- [ ] (需用户确认) 组织 orgType 枚举是否需要字典化以支持扩展（默认写死枚举）

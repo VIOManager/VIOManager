@@ -1,67 +1,85 @@
-# C 线材料成果接口清单：材料任务 / 提交 / 成果
+# C 线接口清单——材料管理 + 成果管理
 
-作者:lzh（前端） | 创建时间:2026-10-10 14:30
+> 作者：ZCode（方案架构师）｜创建时间：2026-10-07 21:50
+> 负责人：C（材料成果线）｜错误码段：5xxx
+> 状态：待组长与 C 确认后录入 Apifox；**录入后以 Apifox 为准，本文件不再更新**
+> 依据：PRD §3.7 材料、§3.8 成果；表：material_task、material_requirement、material_submission、achievement、achievement_file
+> 前置依赖：B 线队伍/比赛数据（提交校验）、组长文件服务（/api/files）、组长审批中心（ACHIEVEMENT_SUBMIT）
 
-> 字段明细见 `front/src/api/material.ts / achievement.ts`（契约源）。
-> ⚠️ 5xxx 错误码为前端自拟暂定，后端可重排（前端只改 labels/mock 两处）。
+## 1. 错误码初始表（5xxx）
 
-## 1. 材料任务与要求（MT01–04 / MR01–03，PRD §3.7，管理端）
+| code | 含义 |
+|------|------|
+| 5001 | 文件格式不允许 |
+| 5002 | 文件超过大小上限 |
+| 5003 | 非本队在队成员，禁止操作 |
+| 5004 | 材料要求与赛队所属比赛不匹配 |
+| 5005 | 该要求已有提交记录，禁止删除 |
+| 5006 | 任务下存在已提交的要求，禁止删除 |
+| 5007 | 仅当前队长可上传佐证材料 |
+| 5008 | 仅审批通过的成果可导出 |
+| 5009 | 无该文件下载权限 |
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | /api/material-tasks | 任务列表（contestId 过滤），含 requirementCount 与交齐队伍统计 |
-| POST | /api/material-tasks | 新建（contestId/title/deadline）；同比赛重复建 5001 |
-| PUT | /api/material-tasks/:id | 改任务名/截止时间 |
-| DELETE | /api/material-tasks/:id | 删除（**任务下任一要求有提交记录拒删 5006**） |
-| GET | /api/material-tasks/:id/requirements | 要求列表 |
-| POST | /api/material-tasks/:id/requirements | 加要求（表单校验 1001） |
-| PUT | /api/requirements/:id | 编辑要求 |
-| DELETE | /api/requirements/:id | 删除（**已有提交记录拒删 5005**） |
+## 2. 材料任务与要求（/api/materials，管理端配置）
 
-要求结构：`{ id, taskId, type, required, formats: string[], namingRule, maxSizeMb }`。
+| 编号 | 接口 | 说明 |
+|------|------|------|
+| MT01 | GET /api/materials/tasks | 任务列表。筛选 contestId；含要求条数、截止时间、状态 |
+| MT02 | POST /api/materials/tasks | 创建任务。body：contestId name description deadline |
+| MT03 | PUT /api/materials/tasks/{id} | 编辑任务 |
+| MT04 | DELETE /api/materials/tasks/{id} | 任务下任一要求有提交记录拒绝（5006） |
+| MR01 | POST /api/materials/tasks/{id}/requirements | 添加材料要求。body：materialType（12 种预设枚举）name requiredFlag allowedFormats maxSizeMb namingRule |
+| MR02 | PUT /api/materials/requirements/{id} | 编辑要求 |
+| MR03 | DELETE /api/materials/requirements/{id} | 已有提交记录拒绝（5005） |
 
-**type 为 12 种预设枚举**（报名表/项目书/承诺书/身份证复印件/学生证复印件/团队合照/答辩PPT/研究报告/源代码/获奖证书/佐证材料/其他，值见 `front/src/config/labels.ts` MATERIAL_TYPES）。⚠️ 是否落字典表由后端定，前端当前按固定枚举处理。
+12 种材料类型枚举：REGISTRATION_FORM 报名表、PROJECT_PLAN 项目书、COMMITMENT 承诺书、ID_COPY 身份证复印件、STUDENT_CARD_COPY 学生证复印件、TEAM_PHOTO 团队合照、DEFENSE_PPT 答辩PPT、RESEARCH_REPORT 研究报告、SOURCE_CODE 源代码、AWARD_CERT 获奖证书、EVIDENCE 佐证材料、OTHER 其他。
 
-## 2. 材料提交与下载（MS01–MS06）
+## 3. 材料提交与查看
 
-| 方法 | 路径 | 说明 | 权限 |
-|---|---|---|---|
-| GET | /api/material-tasks/:id/overview | 管理端队伍提交矩阵（每队每要求的状态/版本） | 管理端 |
-| GET | /api/my/materials | 学生端：本人每支队伍的任务/要求/提交状态 | 学生 |
-| POST | /api/material-submissions | 单条提交/覆盖上传 | 在队在册成员（lzh 2026-10-10 拍板，PRD §3.7 口径） |
-| POST | /api/material-submissions/batch | zip 批量上传（返回匹配/不匹配清单） | 在队成员 ⚠️ |
-| POST | /api/material-tasks/:id/export | 打包下载队伍全部材料（body `{teamId}`） | 管理端/本队 |
+| 编号 | 接口 | 说明 |
+|------|------|------|
+| MS01 | GET /api/materials/teams/{teamId}/overview | 队伍提交概览（管理端或本队成员）：每条要求的状态、当前版本、提交人、提交时间；整体齐全率。管理端另有打点详情视图 |
+| MS02 | POST /api/materials/requirements/{requirementId}/submit | 上传单份材料。**队长或队员均可**（PRD §3.7）；校验格式（5001）大小（5002）比赛匹配（5004）；同一要求覆盖上传：旧版本 is_current=0、versionNo+1；**提交后触发齐全率与队伍 material_status 重算**（必交项全齐→SUBMITTED，有缺→PENDING） |
+| MS03 | POST /api/materials/requirements/{requirementId}/submit-zip | 压缩包批量上传，按命名规则解析匹配到各要求；命名不匹配的文件跳过并在响应中返回清单（见待确认） |
+| MS04 | GET /api/materials/submissions/{submissionId}/download | 下载单个文件。本队成员或管理端（5009）；走鉴权流式下载，不暴露存储地址 |
+| MS05 | GET /api/materials/teams/{teamId}/package | 打包下载全队材料（zip 流）；管理端或本队成员 |
+| MS06 | GET /api/materials/my | 学生视角：我的队伍材料状态、待补清单、截止提醒 |
 
-**提交校验序**（POST /api/material-submissions，body `{requirementId, teamId, fileId, fileName}`）：
-要求与赛队比赛匹配（5001）→ 未过截止（5002）→ 提交人是该队在册成员（5003）→ 文件扩展名在要求白名单（5004）。
+## 4. 成果（/api/achievements）
 
-**覆盖上传**：同一要求重复提交 → 旧版本记录失效（valid=false 保留痕迹）、新版本 version+1，**齐全率只按有效版本计**。
+| 编号 | 接口 | 说明 |
+|------|------|------|
+| A01 | GET /api/achievements | 列表。管理角色全量；普通用户仅自己所在队伍的成果与个人视角。筛选 semesterId teamId type status |
+| A02 | GET /api/achievements/{id} | 详情（含佐证文件信息） |
+| A03 | POST /api/achievements | 提交成果。队长提交：type name level awardDate description evidenceFileId → PENDING 走 ACHIEVEMENT_SUBMIT 审批；管理员录入：submitChannel=ADMIN 直接生效 |
+| A04 | PUT /api/achievements/{id} | 管理员编辑名称/级别/日期/描述 |
+| A05 | DELETE /api/achievements/{id} | 管理员删除，级联清理附件关联 |
+| A06 | POST /api/achievements/{id}/evidence | 佐证材料上传/覆盖。**仅当前队长**（5007）；单文件覆盖式；不限于奖状，论文、专利、作品均可 |
+| A07 | GET /api/achievements/export | 获奖导出。仅本人或管理员；仅导出 APPROVED 成果（5008）；默认 Excel |
+| A08 | GET /api/achievements/my/contributions | 个人贡献：参赛记录 + 获奖记录，从赛队成员关系与成果**动态聚合**，不读冗余表 |
 
-**齐全率联动（关键）**：每次提交/批量后重算该队 `completeRate = 有效提交数/要求数`，必传项未齐则队伍 `materialStatus = "待补 N 项"`、齐全则"齐全"，**该字段同时出现在 B 线赛队列表与详情**，需两张表联动更新。
+## 5. 成果与材料的联动（本线核心规则）
 
-**zip 批量**：前端先传文件服务拿 fileId，再调 batch；后端解压后按文件名匹配要求，返回 `{matched: [{requirementId, type}], unmatched: [文件名]}`，前端展示不匹配清单。
+```mermaid
+flowchart LR
+    A[成果审批通过] --> B{该队是否已传佐证材料}
+    B -- 未传 --> C[材料必交项自动加一 系统生成项]
+    B -- 已传 --> D[不追加]
+    C --> E[齐全率重算 队伍材料状态刷新]
+```
 
-## 3. 成果（A01–A08，PRD §3.8）
+- 联动规则：有审批通过成果但未传佐证的队伍，必交项额外加 1 条"成果佐证材料"（material_requirement.system_generated=1，管理端不可增删）；**待审批状态不提前占用**
+- 佐证补传后（A06 或 MS02 命中系统项），齐全率分母不变、分子补齐
 
-| 方法 | 路径 | 说明 | 权限 |
-|---|---|---|---|
-| GET | /api/achievements | 列表（teamId/status/keyword 过滤）；**学生只回自己所在队伍的** | 登录 |
-| GET | /api/achievements/:id | 详情（含 viewerIsLeader）；非本队成员 5007 | 管理端/本队 |
-| POST | /api/achievements | 提交/录入（见下方分支） | 见下方 |
-| POST | /api/achievements/:id/review | 管理员审批（body `{action: APPROVE\|REJECT, comment}`） | 管理端 |
-| PUT | /api/achievements/:id/evidence | 佐证覆盖上传（body `{fileId, fileName}`） | **仅当前队长** 5007 |
-| DELETE | /api/achievements/:id | 删除（仅未通过的可删；已通过不可删 1001） | 管理端 |
-| POST | /api/achievements/export | 获奖导出（body `{teamId}`） | 管理端 |
-| GET | /api/my/achievements | 学生端：队伍清单（含队长标识）+ 成果 | 学生 |
+## 6. 与其他线/骨架的对接点
 
-**提交分支**（POST /api/achievements）：学生提交必须是其队伍队长（5007）→ 状态 `PENDING` + 生成 `ACHIEVEMENT_SUBMIT` 审批单；管理员录入直接 `APPROVED` 并立即触发 §5 联动。
+- 组长审批中心：A03 队长提交产生 ACHIEVEMENT_SUBMIT；审批通过后进程内回调 C 线 Service（成果置 APPROVED + 触发 §5 联动）
+- 组长文件服务：MS02/MS03/A06 上传均先走 /api/files 拿 fileId 再建关联记录
+- B 线：MS02 校验"必须在队 + 材料任务属于赛队所在比赛"时读 B 的 team 数据
+- A 线：A07 导出按成员聚合时读 member 基础信息
 
-**成果结构**：`{ teamId, type: AWARD|RATING|QUALIFICATION|ACTIVITY|OTHER, name, level, achievedAt, description, status: PENDING|APPROVED|REJECTED, evidenceFileId, evidenceFileName }`。
+## 7. 待确认事项
 
-**§5 联动（审批通过时，必做）**：
-1. 成果状态 → APPROVED，审批单状态同步翻转；
-2. 该队所在比赛的**材料任务自动新增一条"佐证材料"必交项**（若无）——type=EVIDENCE、required=true；
-3. 重算该队齐全率（新增必交项未交会拉低百分比，队伍状态变"待补"）。
-前端已验证：75% 齐全的队伍在成果通过后变 60% 待补 2 项。
-
-**导出**：队伍存在未通过（PENDING/REJECTED）成果时 5008 拦截；导出内容仅含 APPROVED 的获奖（AWARD）类型。⚠️ 真实形态（文件流/异步任务）待拍板，前端当前展示 note 文案。
+- [ ] (需用户确认) MS03 zip 批量上传遇命名不匹配文件的策略：默认**跳过该文件并在响应返回清单**（备选：整包拒绝）
+- [ ] (需用户确认) A07 导出格式默认 Excel（xlsx），是否需要追加 PDF
+- [ ] (需用户确认) 齐全率百分数保留 2 位小数（DECIMAL 5,2），前端展示取整或保留 1 位

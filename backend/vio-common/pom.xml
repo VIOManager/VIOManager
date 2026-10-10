@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  vio-common 底座 jar：无业务、无数据库，只放骨架公共组件。
+  Step 1 统一响应异常、Step 2 基座字段、Step 5 幂等、Step 6 审计的实现落本模块，
+  阶段2 论坛服务直接复用同一 jar。
+  ⚠️ 冲突：本模块是独立版本化的骨架专属领地，只有骨架负责人能改，业务代码禁止进入；
+  它不是被否掉的"全局包"（骨架方案 §2.1）。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.viomanager</groupId>
+        <artifactId>vio-backend</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vio-common</artifactId>
+    <name>vio-common</name>
+    <description>骨架公共底座：跨服务复用的非业务组件</description>
+
+    <dependencies>
+        <!--
+          web 与 validation 以 provided 引入：common 里的全局异常处理器等组件编译期需要它们，
+          但不传递给使用方——由各 Boot 服务自带 starter，避免版本被 jar 锁死。
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!--
+          显式声明 jackson-databind（provided）：不加的话会被 jjwt-jackson 的传递依赖
+          抢成 runtime 作用域（runtime 不进编译期），JacksonConfig 等类直接编译失败
+        -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- MyBatis-Plus 基座组件（配置类 / 审计填充 / BaseEntity）编译期需要，运行期由使用方自带 -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!--
+          AOP：幂等切面（Step 5）与审计切面（Step 6）编译期需要 @Aspect / ProceedingJoinPoint；
+          JdbcTemplate / DuplicateKeyException 由上面的 mybatis-plus starter 传递（其内部依赖 starter-jdbc），
+          运行期由使用方自带同款 starter，版本不被 jar 锁死
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- JWT：过滤器与工具类在 common，阶段2 论坛共用同一套验签 -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</project>
