@@ -94,13 +94,45 @@ export const TEAM_ROLE_LABEL: Record<string, string> = {
   MEMBER: '队员'
 }
 
-/** 审批类型（暂定，骨架审批中心清单未出） */
+/** 审批业务类型（审批中心清单 §6 词表，9 项；新增 bizType 须先在该清单登记） */
 export const APPROVAL_TYPE_LABEL: Record<string, string> = {
   TEAM_CREATE: '组队申请',
   TEAM_ADD_MEMBER: '加人申请',
   TEAM_REMOVE_MEMBER: '移除队员',
   TEAM_ADD_ADVISOR: '指导教师申请',
-  ACHIEVEMENT_SUBMIT: '成果提交'
+  TEAM_DISSOLVE: '解散赛队',
+  ACHIEVEMENT_SUBMIT: '成果提交',
+  PROJECT_VIEW: '项目查看申请',
+  MILESTONE_APPROVE: '节点审核',
+  SEMESTER_SWITCH: '学期切换'
+}
+
+/** 审批状态机（审批中心清单 §3：PENDING 一跳终结，四个终态） */
+export const APPROVAL_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待处理',
+  APPROVED: '已通过',
+  REJECTED: '已驳回',
+  CANCELLED: '已取消',
+  EXPIRED: '已过期'
+}
+
+/** 审批流水动作（approval_record.action） */
+export const APPROVAL_ACTION_LABEL: Record<string, string> = {
+  CREATE: '发起申请',
+  CANCEL: '取消申请',
+  APPROVE: '批准',
+  REJECT: '驳回',
+  AGREE: '同意',
+  REFUSE: '拒绝',
+  EXPIRE: '过期'
+}
+
+/** 审批流水操作人身份（approval_record.operator_role） */
+export const APPROVAL_ROLE_LABEL: Record<string, string> = {
+  APPLICANT: '申请人',
+  TARGET: '目标人',
+  APPROVER: '审批人',
+  SYSTEM: '系统'
 }
 
 /** 成果类型（PRD §3.8：获奖/评级/资质/活动成果/其他） */

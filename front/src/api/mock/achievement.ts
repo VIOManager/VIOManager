@@ -10,11 +10,11 @@ import { findMockUserByToken } from './auth'
 import { meAsMember } from './member'
 import { teams } from './team-data'
 import { achievements, nextAchId } from './achievement-data'
-import { approvals, pushApproval } from './approval'
+import { approvals, pushApproval, registerApprovalHandler, settleByBiz } from './approval-data'
 import { allTasks } from './material'
 import { nextReqId, requirements } from './material-data'
 import { recomputeTeam } from './material-submit'
-import { teamVisible } from './scope'
+import { orgIdOfMember, teamVisible } from './scope'
 import type { AchievementItem, AchievementType } from '@/api/achievement'
 import type { MockAchievement } from './achievement-data'
 
@@ -81,12 +81,7 @@ function applyEvidenceLinkage(teamId: string): void {
   recomputeTeam(teamId)
 }
 
-/** 审批通过/驳回后同步审批单状态（审批中心列表联动） */
-function flipApproval(achId: string, status: 'APPROVED' | 'REJECTED'): void {
-  for (const ap of approvals) {
-    if (ap.bizType === 'ACHIEVEMENT_SUBMIT' && ap.bizId === achId) ap.status = status
-  }
-}
+/** 业务线自审接口（review）内不再直接动审批单，统一走 settleByBiz 同步终结（只置状态与流水，不触发回调） */
 
 registerMock({
   method: 'get',
@@ -171,8 +166,12 @@ registerMock({
     if (status === 'PENDING') {
       pushApproval({
         bizType: 'ACHIEVEMENT_SUBMIT', bizId: ach.id,
-        title: ach.submittedBy + ' · ' + tm.name + '提交成果：' + ach.name,
-        detail: ach.level + ' · 待管理员审批', applicantName: ach.submittedBy
+        bizTitle: ach.submittedBy + ' · ' + tm.name + '提交成果：' + ach.name,
+        applyReason: ach.level + ' · 待管理员审批',
+        payload: { achievementId: ach.id },
+        applicantMemberId: me ? me.id : '',
+        applicantName: ach.submittedBy,
+        approverOrgId: orgIdOfMember(tm.leaderId)
       })
     } else {
       applyEvidenceLinkage(teamId)
@@ -192,14 +191,11 @@ registerMock({
       return fail(1003, '仅管理端可审批本部门成果')
     }
     if (a.status !== 'PENDING') return fail(1001, '该成果不在待审批状态')
-    if (String(ctx.body.action) === 'APPROVE') {
-      a.status = 'APPROVED'
-      flipApproval(a.id, 'APPROVED')
-      applyEvidenceLinkage(a.teamId)
-      return ok(null)
-    }
-    a.status = 'REJECTED'
-    flipApproval(a.id, 'REJECTED')
+    const result = String(ctx.body.action) === 'APPROVE' ? 'APPROVED' : 'REJECTED'
+    a.status = result
+    // 业务线自审：同步终结关联审批单（只置状态与流水，不再触发回调——业务数据已在本接口改完）
+    settleByBiz(a.id, result, u.realName, String(ctx.body.comment ?? ''))
+    if (result === 'APPROVED') applyEvidenceLinkage(a.teamId)
     return ok(null)
   }
 })
@@ -268,5 +264,31 @@ registerMock({
     }
     const items = achievements.filter((a) => myTeams.some((t) => t.teamId === a.teamId)).map(toItem)
     return ok({ teams: myTeams, items })
+  }
+})
+
+// ── 审批回调 SPI（清单 §5）：审批中心批准/驳回 ACHIEVEMENT_SUBMIT 单后，成果落终态；批准触发 §5 材料联动 ──
+registerApprovalHandler('ACHIEVEMENT_SUBMIT', {
+  onApproved: (ap) => {
+    let achId = ''
+    try {
+      achId = String((JSON.parse(ap.payloadJson || '{}') as Record<string, unknown>).achievementId ?? '')
+    } catch {
+      achId = ''
+    }
+    const a = findAch(achId)
+    if (!a) return
+    a.status = 'APPROVED'
+    applyEvidenceLinkage(a.teamId)
+  },
+  onRejected: (ap) => {
+    let achId = ''
+    try {
+      achId = String((JSON.parse(ap.payloadJson || '{}') as Record<string, unknown>).achievementId ?? '')
+    } catch {
+      achId = ''
+    }
+    const a = findAch(achId)
+    if (a) a.status = 'REJECTED'
   }
 })

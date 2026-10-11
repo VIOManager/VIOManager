@@ -2,19 +2,20 @@
 /**
  * 顶栏：面包屑（取路由 meta）+ 待办 + 用户区
  * 对应方案：Step 2；FS2 补改密闭环（PRD §3.1：右上角改密，改后强制重新登录）
- * 待办数：接审批中心未读数接口（暂定 /api/approvals/pending-count），路由切换时刷新
+ * 待办数：审批中心 P08 未读数（todoCount 邀请/通知 + resultCount 申请结果），路由切换时刷新
  * ⚠️ 角色切换器为开发调试件：用于验证三端菜单显隐，联调后必须移除（角色实际来自登录响应）
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { apiPendingCount } from '@/api/approval'
+import { useApprovalStore } from '@/stores/approval'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import type { Role } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 const user = useUserStore()
+const approval = useApprovalStore()
 
 const crumb = computed(() => ({
   group: (route.meta.group as string) ?? '',
@@ -27,16 +28,10 @@ const ROLE_LABEL: Record<Role, string> = {
   STUDENT: '学生用户'
 }
 
-// ── 待办红点：审批中心未读数（审批单变化集中在路由切换后，够用即可）──
-const pendingCount = ref(0)
+// ── 待办红点：审批中心 P08 未读数（审批单变化集中在路由切换后，够用即可）──
 async function loadPending() {
   if (!user.token) return
-  try {
-    const resp = await apiPendingCount()
-    pendingCount.value = resp.count
-  } catch {
-    // 未读数拉取失败不打断页面
-  }
+  await approval.refresh()
 }
 onMounted(loadPending)
 watch(() => route.path, loadPending)
@@ -64,7 +59,12 @@ function onLogout() {
       <template v-if="crumb.group">{{ crumb.group }} / </template><b>{{ crumb.title }}</b>
     </span>
     <div class="topbar-right">
-      <span class="chip mono" title="审批中心未读待办" @click="router.push('/approval')" style="cursor: pointer">待办 {{ pendingCount }}</span>
+      <span
+        class="chip mono"
+        :title="'审批中心未读：邀请/通知 ' + approval.todoCount + ' · 申请结果 ' + approval.resultCount"
+        @click="router.push('/approval')"
+        style="cursor: pointer"
+      >待办 {{ approval.total }}</span>
       <!-- ⚠️ 开发调试件：三端菜单显隐验证用，联调后移除 -->
       <select
         class="role-switch mono"

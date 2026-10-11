@@ -5,7 +5,7 @@
  *    禁止把本配置当作任何安全依据（规范 §5.3）
  * ⚠️ 边界（2026-10-08 组长拍板）：社区三模块（团队论坛 / 技术交流 / 知识库）整体迁出，
  *    归属独立论坛网站（微服务论坛服务配套前端）；主站不再设社区分组
- * TODO(后续步骤)：badge 改由 P08 未读数接口驱动，当前为静态演示值
+ * badge 说明：审批中心红点由 P08 未读数驱动（layout/SideMenu.vue 接 stores/approval），本表不维护数值
  */
 import type { MenuEntry, Role } from '@/types'
 
@@ -32,7 +32,7 @@ export const ADMIN_MENU: MenuEntry[] = [
   { path: '/team', title: '赛队管理', group: G.BIZ, roles: ADMIN },
   { path: '/material', title: '材料管理', group: G.BIZ, roles: ADMIN },
   { path: '/achievement', title: '成果管理', group: G.BIZ, roles: ADMIN },
-  { path: '/approval', title: '审批中心', group: G.COOP, roles: ALL, badge: 2 },
+  { path: '/approval', title: '审批中心', group: G.COOP, roles: ALL },
   { path: '/project', title: '项目管理', group: G.COOP, roles: ADMIN },
   { path: '/schedule', title: '排班管理', group: G.COOP, roles: ADMIN },
   { path: '/performance', title: '绩效统计', group: G.COOP, roles: ADMIN },
@@ -48,7 +48,7 @@ export const STUDENT_MENU: MenuEntry[] = [
   { path: '/my/achievement', title: '我的成果', group: '我的', roles: ['STUDENT'] },
   { path: '/my/schedule', title: '我的排班', group: '我的', roles: ['STUDENT'] },
   { path: '/my/performance', title: '我的绩效', group: '我的', roles: ['STUDENT'] },
-  { path: '/approval', title: '审批中心', group: '协同', roles: ALL, badge: 2 }
+  { path: '/approval', title: '审批中心', group: '协同', roles: ALL }
 ]
 
 /** 按角色取菜单：过滤 + 保持分组顺序 */

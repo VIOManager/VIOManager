@@ -10,7 +10,8 @@ import { fail, ok, registerMock } from './registry'
 import { findMockUserByToken } from './auth'
 import { meAsMember } from './member'
 import { contests } from './contest-data'
-import { pushApproval } from './approval'
+import { pushApproval } from './approval-data'
+import { orgIdOfMember } from './scope'
 import { teams } from './team-data'
 import { contestRuleBool, contestRuleNumber, findTeam, toDetail, toListItem, viewerRoleOf } from './team-util'
 import { teamVisible } from './scope'
@@ -89,11 +90,15 @@ registerMock({
     const prefill = Array.isArray(ctx.body.prefillMemberIds) ? (ctx.body.prefillMemberIds as string[]) : []
     const prefillLimit = contestRuleNumber(contestId, 'prefillLimit', 2)
     if (prefill.length > prefillLimit) return fail(4003, '预填成员数超过上限（' + prefillLimit + '）')
+    // 创建型单据：bizId 提交时为 null，批准回调建队后回填（清单 §5 契约 3）
     const ap = pushApproval({
-      bizType: 'TEAM_CREATE', bizId: contestId + ':' + name,
-      title: (me ? me.name : '未知') + ' · 创建赛队「' + name + '」',
-      detail: '比赛：' + contest.name + '；项目：' + String(ctx.body.projectName ?? ''),
-      applicantName: me ? me.name : '未知'
+      bizType: 'TEAM_CREATE', bizId: null,
+      bizTitle: (me ? me.name : '未知') + ' · 创建赛队「' + name + '」',
+      applyReason: '比赛：' + contest.name + '；项目：' + String(ctx.body.projectName ?? ''),
+      payload: { contestId, name, projectName: String(ctx.body.projectName ?? ''), prefillMemberIds: prefill },
+      applicantMemberId: me ? me.id : '',
+      applicantName: me ? me.name : '未知',
+      approverOrgId: me ? me.orgId : ''
     })
     return ok({ approvalId: ap.id })
   }
@@ -157,9 +162,14 @@ registerMock({
     if (!target) return fail(1004, '目标人不存在')
     pushApproval({
       bizType: 'TEAM_ADD_MEMBER', bizId: t.id,
-      title: t.leaderName + ' · ' + t.name + '申请加人：' + target.name,
-      detail: '申请将' + target.name + '加入「' + t.name + '」',
-      applicantName: t.leaderName, targetMemberId: memberId
+      bizTitle: t.leaderName + ' · ' + t.name + '申请加人：' + target.name,
+      applyReason: '申请将' + target.name + '加入「' + t.name + '」',
+      payload: { teamId: t.id, memberId, memberName: target.name },
+      applicantMemberId: t.leaderId,
+      applicantName: t.leaderName,
+      approverOrgId: orgIdOfMember(t.leaderId),
+      targetMemberId: memberId,
+      targetMemberName: target.name
     })
     return ok(null)
   }
@@ -194,9 +204,12 @@ registerMock({
       if (m.role === 'LEADER') return fail(4010, '队长不可自我移除或退出')
       pushApproval({
         bizType: 'TEAM_REMOVE_MEMBER', bizId: t.id,
-        title: t.leaderName + ' · ' + t.name + '申请移除队员：' + m.name,
-        detail: '申请将' + m.name + '移出「' + t.name + '」',
-        applicantName: t.leaderName
+        bizTitle: t.leaderName + ' · ' + t.name + '申请移除队员：' + m.name,
+        applyReason: '申请将' + m.name + '移出「' + t.name + '」',
+        payload: { teamId: t.id, memberId: m.memberId, memberName: m.name },
+        applicantMemberId: t.leaderId,
+        applicantName: t.leaderName,
+        approverOrgId: orgIdOfMember(t.leaderId)
       })
       return ok(null)
     }
@@ -252,9 +265,12 @@ registerMock({
     }
     pushApproval({
       bizType: 'TEAM_ADD_ADVISOR', bizId: t.id,
-      title: t.leaderName + ' · ' + t.name + '申请指导教师：' + target.name,
-      detail: '申请教师' + target.name + '指导「' + t.name + '」',
-      applicantName: t.leaderName
+      bizTitle: t.leaderName + ' · ' + t.name + '申请指导教师：' + target.name,
+      applyReason: '申请教师' + target.name + '指导「' + t.name + '」',
+      payload: { teamId: t.id, memberId, memberName: target.name },
+      applicantMemberId: t.leaderId,
+      applicantName: t.leaderName,
+      approverOrgId: orgIdOfMember(t.leaderId)
     })
     return ok(null)
   }
