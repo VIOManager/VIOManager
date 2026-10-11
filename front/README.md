@@ -52,7 +52,7 @@ npm run dev                        # http://localhost:5174
 | 08 成果管理 | /achievement | 队长提交走审批、§5 联动（通过后材料任务自动补佐证必交项）、获奖导出 |
 | 09 审批中心 | /approval | 三视角（待办/我发起的/我是目标人）、P08 红点（顶栏+菜单+tab 角标）、详情快照与流水、批准/驳回/取消/同意/拒绝全操作、幂等键防重 |
 
-学生端：/my/overview、/my/team（组队申请）、/my/material（待补清单+zip 批量）、/my/achievement（队长提交）、/my/schedule、/my/performance（后两个为占位）。
+学生端：/my/overview（我的概览：指标带聚合我的赛队/成果/材料/审批红点，学期刻度尺接真）、/my/team（组队申请）、/my/material（待补清单+zip 批量）、/my/achievement（队长提交）、/my/schedule、/my/performance（后两个为占位，排班/绩效接口未出）。
 
 ## 角色数据范围演示（admin vs dept01 对照）
 
