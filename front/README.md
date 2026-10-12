@@ -16,6 +16,10 @@ cp .env.example .env.development   # 按需改 VITE_API_BASE_URL（Apifox Mock /
 npm run dev                        # http://localhost:5174
 ```
 
+> 论坛站是独立前端（`forum/`，`npm run dev` 起在 5175）。主站侧边栏底部有「VIO 论坛 ↗」入口，
+> 地址由 `VITE_FORUM_URL` 配置（默认 5175）；开发期两站不同源，论坛首次进入走引导页补调试 token，
+> 生产环境同网关下共享登录态。
+
 ## mock 假数据与真实后端的切换（重要）
 
 前端自带一套"假后端"（`src/api/mock/`），开发期不依赖任何服务就能跑通全部页面：
