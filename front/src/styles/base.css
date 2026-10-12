@@ -1,0 +1,30 @@
+/**
+ * 全局基础样式（图纸档案）
+ * 仅放跨页通用规则；页面样式一律写在各组件 scoped 块内
+ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #app { height: 100%; }
+
+body {
+  font-family: var(--vio-body);
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--vio-ink);
+  background: var(--vio-paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--vio-blue-ink); text-decoration: none; }
+
+/* 等宽数字：数据、编号、时间统一（图纸档案的数据语言） */
+.mono { font-family: var(--vio-mono); font-variant-numeric: tabular-nums; }
+
+/* 仿宋批注：全站辅助说明文字的统一语气 */
+.fs { font-family: var(--vio-fangsong); font-style: normal; }
+
+:focus-visible { outline: 2px solid var(--vio-blue-ink); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

@@ -1,0 +1,52 @@
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+.classpath
+.project
+.settings/
+
+# Java / Maven / Gradle
+target/
+build/
+out/
+*.class
+.gradle/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+.npm/
+.pnpm-store/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Logs & temp
+*.log
+logs/
+tmp/
+temp/
+
+# Env & secrets（密钥/密码一律不入库）
+.env
+.env.*
+!.env.example
+
+# Docker 本地数据
+docker-data/
+
+# 内部工作文档（方案/实现记录），只在本地沉淀，不上传仓库
+.agentdocs/

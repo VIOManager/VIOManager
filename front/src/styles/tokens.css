@@ -1,0 +1,47 @@
+/**
+ * 设计令牌：方向一「图纸档案」（Step D0 组长 2026-10-08 拍板定调）
+ * 对应样张：.agentdocs/design-preview/direction-1-blueprint/
+ * 同步映射 Element Plus 运行时变量（--el-*），全站禁止另起色值
+ */
+:root {
+  /* 图纸档案令牌 */
+  --vio-paper: #F9FAF7;        /* 冷白纸底 */
+  --vio-sheet: #FFFFFF;        /* 卡面 */
+  --vio-ink: #1B2330;          /* 主墨色 */
+  --vio-ink-2: #4A5568;        /* 次级文字 */
+  --vio-ink-3: #8B95A5;        /* 批注灰 */
+  --vio-blue-ink: #1D3A8F;     /* 钢笔墨蓝（主色） */
+  --vio-blue-deep: #142B6E;    /* 主色按压态 */
+  --vio-rule: #C9CFD8;         /* 图线 */
+  --vio-rule-soft: #E3E7ED;    /* 细图线 */
+  --vio-seal: #C0392B;         /* 印章红（仅印章/警示/红点） */
+  --vio-wash: #EEF1F6;         /* 淡蓝底 */
+  --vio-ok: #1E7B4F;
+  --vio-warn: #B06A0C;
+  --vio-danger: #B03527;
+  --vio-serif: "SimSun", "NSimSun", "宋体", serif;
+  --vio-fangsong: "FangSong", "仿宋", "STFangsong", serif;
+  --vio-body: "Microsoft YaHei", "Segoe UI Variable Text", sans-serif;
+  --vio-mono: "Cascadia Mono", Consolas, monospace;
+  --vio-disp-latin: "Bahnschrift", "Segoe UI Variable Display", sans-serif;
+  --vio-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Element Plus 变量映射：组件库只做结构，皮走令牌（方案 Step 2 约定） */
+  --el-color-primary: var(--vio-blue-ink);
+  --el-color-success: var(--vio-ok);
+  --el-color-warning: var(--vio-warn);
+  --el-color-danger: var(--vio-danger);
+  --el-color-error: var(--vio-danger);
+  --el-border-radius-base: 2px;
+  --el-border-radius-small: 0;
+  --el-font-family: var(--vio-body);
+  --el-border-color: var(--vio-rule);
+  --el-border-color-light: var(--vio-rule-soft);
+  --el-border-color-lighter: var(--vio-rule-soft);
+  --el-text-color-primary: var(--vio-ink);
+  --el-text-color-regular: var(--vio-ink-2);
+  --el-text-color-secondary: var(--vio-ink-3);
+  --el-fill-color-light: var(--vio-wash);
+  --el-bg-color: var(--vio-sheet);
+  --el-bg-color-page: var(--vio-paper);
+}

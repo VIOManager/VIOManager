@@ -1,0 +1,43 @@
+/**
+ * 论坛站设计令牌：V2EX 范式（2026-10-09 lzh 拍板，论坛独立换皮）
+ * 依据：《论坛V2EX风格重设计-优化方案》§4；视觉基准样张 .agentdocs/design-preview/forum-v2ex/
+ * ⚠️ 冲突：本令牌仅服务 forum/ 论坛站；与主站 front/ 的 tokens.css 同名但互不相干，
+ *    图纸档案令牌禁止回潮论坛站，品牌蓝已全站退出
+ */
+:root {
+  /* 灰阶底色与盒子 */
+  --bg: #E2E2E2;           /* 页面灰底 */
+  --box: #FFFFFF;          /* 内容白盒 */
+  --box-soft: #FAFAFA;     /* 盒内次级底（回复盒头、附件条） */
+
+  /* 文字四阶 */
+  --ink: #333333;          /* 标题 */
+  --body: #555555;         /* 正文 */
+  --fade: #999999;         /* 弱化字 */
+  --meta: #778087;         /* 链接与作者灰蓝（V2EX 标志性灰蓝） */
+
+  /* 分隔线与激活态 */
+  --line: #E2E2E2;         /* 盒边框分隔 */
+  --line-soft: #F0F0F0;    /* 列表细分隔 */
+  --tab-dark: #34393F;     /* 激活 tab / 选中态（炭黑，非品牌蓝） */
+  --pill: #AAB0C6;         /* 回复数/收藏数胶囊底 */
+
+  /* 字栈照抄 V2EX；列表标题 400 常规字重 + 1.3 行高（v1/v2 用 500 字重发闷被批，勿改） */
+  --font: "Helvetica Neue", "Luxi Sans", "DejaVu Sans", Tahoma, "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+  /* 圆角与阴影：盒 3px、头像 4px、胶囊全圆角；全站只允许这一种阴影 */
+  --radius-box: 3px;
+  --radius-ava: 4px;
+  --shadow-box: 0 2px 3px rgba(0, 0, 0, 0.06);
+
+  /* Element Plus 中性化：论坛页面基本不用 El 组件，万一用到不许冒品牌蓝 */
+  --el-color-primary: var(--tab-dark);
+  --el-border-radius-base: var(--radius-box);
+  --el-font-family: var(--font);
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--body);
+  --el-bg-color: var(--box);
+  --el-bg-color-page: var(--bg);
+  --el-border-color: var(--line);
+  --el-border-color-light: var(--line-soft);
+}
