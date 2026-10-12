@@ -183,3 +183,107 @@ export const MATERIAL_SUBMIT_LABEL: Record<string, string> = {
   NOT_SUBMITTED: '未交',
   SUBMITTED: '已交'
 }
+
+/** 绩效周报状态机（绩效清单 §2：驳回不删记录，改后重进待审核） */
+export const WEEKLY_STATUS_LABEL: Record<string, string> = {
+  SUBMITTED: '待审核',
+  SCORED: '已打分',
+  REJECTED: '已驳回'
+}
+
+/** 绩效内置标签（绩效清单 §4，打分后自动挂） */
+export const PERF_TAG_LABEL: Record<string, string> = {
+  ACTIVITY_UP: '活跃度上升',
+  ACTIVITY_DOWN: '活跃度下降',
+  TOP_CONTRIBUTOR: '功劳度高',
+  STREAK: '连续贡献',
+  EFFICIENT_WEEK: '高效周'
+}
+
+/** 排班导入批次状态机（排班清单 §2） */
+export const IMPORT_BATCH_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待归一化',
+  MAPPING: '待确认映射',
+  COMPLETED: '已完成',
+  FAILED: '解析失败'
+}
+
+/** 排班单双周标记（course_timetable.week_parity） */
+export const WEEK_PARITY_LABEL: Record<string, string> = {
+  ALL: '每周',
+  ODD: '单周',
+  EVEN: '双周'
+}
+
+/** 项目状态（项目清单：ACTIVE→FINISHED→ARCHIVED 按序流转） */
+export const PROJECT_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: '进行中',
+  FINISHED: '已完结',
+  ARCHIVED: '已归档'
+}
+
+/** 项目可见性（项目清单 §2） */
+export const PROJECT_VISIBILITY_LABEL: Record<string, string> = {
+  PRIVATE: '仅项目内',
+  ORG: '本部门可见',
+  PUBLIC: '全平台可见'
+}
+
+/** 项目任务优先级 */
+export const TASK_PRIORITY_LABEL: Record<string, string> = {
+  LOW: '低',
+  NORMAL: '普通',
+  HIGH: '高',
+  URGENT: '紧急'
+}
+
+/** 项目任务状态 */
+export const TASK_STATUS_LABEL: Record<string, string> = {
+  TODO: '待办',
+  DOING: '进行中',
+  DONE: '已完成'
+}
+
+/** 比赛时间节点类型（项目清单 §3.4） */
+export const MILESTONE_TYPE_LABEL: Record<string, string> = {
+  REGISTER_START: '报名开始',
+  REGISTER_END: '报名截止',
+  WORK_SUBMIT: '作品提交',
+  OTHER: '其他'
+}
+
+/** 时间节点状态机（DRAFT→PENDING→APPROVED/REJECTED，REJECTED 可重提） */
+export const MILESTONE_STATUS_LABEL: Record<string, string> = {
+  DRAFT: '草稿',
+  PENDING: '审核中',
+  APPROVED: '已通过',
+  REJECTED: '已驳回'
+}
+
+/** 查看授权类型（项目清单 §3.7：ONCE 一次性 / LIMITED 限时） */
+export const GRANT_TYPE_LABEL: Record<string, string> = {
+  ONCE: '一次性',
+  LIMITED: '限时'
+}
+
+/** 查看授权状态 */
+export const GRANT_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待审批',
+  ACTIVE: '生效中',
+  EXPIRED: '已失效',
+  REVOKED: '已撤销'
+}
+
+/** 项目文件分类（PR26 fileCategory） */
+export const PROJECT_FILE_CATEGORY_LABEL: Record<string, string> = {
+  DOC: '文档',
+  IMAGE: '图片',
+  CODE: '代码',
+  OTHER: '其他'
+}
+
+/** 项目内角色（project_member.role） */
+export const PROJECT_ROLE_LABEL: Record<string, string> = {
+  OWNER: '所有人',
+  MEMBER: '成员'
+}

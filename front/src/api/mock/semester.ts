@@ -12,7 +12,7 @@ import type { Semester, SwitchTask } from '@/api/semester'
 let seq = 10
 let taskSeq = 1
 
-const semesters: Semester[] = [
+export const semesters: Semester[] = [
   { id: 's1', name: '2026春季学期', startDate: '2026-03-02', endDate: '2026-07-10', weekCount: 18, status: 'ARCHIVED' },
   { id: 's2', name: '2026秋季学期', startDate: '2026-08-31', endDate: '2027-01-09', weekCount: 18, status: 'ACTIVE' },
   { id: 's3', name: '2027春季学期', startDate: '2027-03-01', endDate: '2027-07-09', weekCount: 18, status: 'PLANNED' }
