@@ -287,3 +287,13 @@ export const PROJECT_ROLE_LABEL: Record<string, string> = {
   OWNER: '所有人',
   MEMBER: '成员'
 }
+
+/** 排班星期（weekday 1–7） */
+export const WEEKDAY_LABEL: Record<number, string> = {
+  1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日'
+}
+
+/** 排班节次（slotIndex 1–5，两大节一档） */
+export const SLOT_LABEL: Record<number, string> = {
+  1: '1–2 节', 2: '3–4 节', 3: '5–6 节', 4: '7–8 节', 5: '9–10 节'
+}

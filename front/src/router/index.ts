@@ -29,7 +29,9 @@ const REAL_PAGES: Record<string, () => Promise<unknown>> = {
   '/my/achievement': () => import('@/views/my/MyAchievementPage.vue'),
   '/approval': () => import('@/views/approval/ApprovalPage.vue'),
   '/performance': () => import('@/views/performance/PerformancePage.vue'),
-  '/my/performance': () => import('@/views/my/MyPerformancePage.vue')
+  '/my/performance': () => import('@/views/my/MyPerformancePage.vue'),
+  '/schedule': () => import('@/views/schedule/SchedulePage.vue'),
+  '/my/schedule': () => import('@/views/my/MySchedulePage.vue')
 }
 
 /** 由菜单配置派生子路由：真实页用真实组件，其余先挂占位页 */
