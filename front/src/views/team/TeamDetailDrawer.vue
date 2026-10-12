@@ -15,6 +15,7 @@ import { useUserStore } from '@/stores/user'
 import { TEAM_MEMBER_STATUS_LABEL, TEAM_ROLE_LABEL } from '@/config/labels'
 import MaskField from '@/components/MaskField.vue'
 import MemberAddDialog from './MemberAddDialog.vue'
+import TeamProjectPanel from './TeamProjectPanel.vue'
 
 const visible = defineModel<boolean>({ required: true })
 const props = defineProps<{ teamId: string }>()
@@ -220,6 +221,8 @@ async function onRemoveAdvisor(id: string) {
         </table>
         <p v-else class="empty-note" style="padding: 14px 0">暂无指导教师</p>
       </div>
+
+      <TeamProjectPanel :team-id="props.teamId" :contest-id="detail.contestId" :viewer-is-leader="detail.viewerRole === 'LEADER'" />
     </template>
 
     <MemberAddDialog v-model="addVisible" :team-id="props.teamId" />
