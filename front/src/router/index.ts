@@ -16,6 +16,7 @@ const PlaceholderPage = () => import('@/views/common/PlaceholderPage.vue')
 /** 已落地的真实页面：菜单路径 → 懒加载组件（未列出的路径仍挂占位页，随开发逐步替换） */
 const REAL_PAGES: Record<string, () => Promise<unknown>> = {
   '/overview': () => import('@/views/overview/OverviewPage.vue'),
+  '/my/overview': () => import('@/views/overview/OverviewPage.vue'),
   '/org': () => import('@/views/org/OrgPage.vue'),
   '/personnel': () => import('@/views/personnel/PersonnelPage.vue'),
   '/semester': () => import('@/views/semester/SemesterPage.vue'),
@@ -25,7 +26,13 @@ const REAL_PAGES: Record<string, () => Promise<unknown>> = {
   '/material': () => import('@/views/material/MaterialPage.vue'),
   '/my/material': () => import('@/views/my/MyMaterialPage.vue'),
   '/achievement': () => import('@/views/achievement/AchievementPage.vue'),
-  '/my/achievement': () => import('@/views/my/MyAchievementPage.vue')
+  '/my/achievement': () => import('@/views/my/MyAchievementPage.vue'),
+  '/approval': () => import('@/views/approval/ApprovalPage.vue'),
+  '/performance': () => import('@/views/performance/PerformancePage.vue'),
+  '/my/performance': () => import('@/views/my/MyPerformancePage.vue'),
+  '/schedule': () => import('@/views/schedule/SchedulePage.vue'),
+  '/my/schedule': () => import('@/views/my/MySchedulePage.vue'),
+  '/project': () => import('@/views/project/ProjectPage.vue')
 }
 
 /** 由菜单配置派生子路由：真实页用真实组件，其余先挂占位页 */

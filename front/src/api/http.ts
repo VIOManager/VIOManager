@@ -79,6 +79,11 @@ export async function del<T>(url: string): Promise<T> {
   return (await http.delete(url)) as unknown as T
 }
 
+/** 带幂等键的 POST（规范 §6：审批中心等写操作要求 X-Idempotency-Key 头，键由调用方生成） */
+export async function postIdem<T>(url: string, data: unknown, idempotencyKey: string): Promise<T> {
+  return (await http.post(url, data, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
+}
+
 /** 文件上传专用：multipart 表单 + X-Idempotency-Key 幂等键（规范 §6，键由调用方生成） */
 export async function upload<T>(url: string, file: File, idempotencyKey: string): Promise<T> {
   const fd = new FormData()
@@ -89,5 +94,5 @@ export async function upload<T>(url: string, file: File, idempotencyKey: string)
 // ⚠️ 开发自验件：浏览器控制台 __http.get('/api/_probe/1002') 可验证三种拦截分支；
 // import.meta.env.DEV 在构建期为 false，会被整段摇掉，不进生产包
 if (import.meta.env.DEV) {
-  ;(window as unknown as Record<string, unknown>).__http = { get, post, put, del, upload }
+  ;(window as unknown as Record<string, unknown>).__http = { get, post, put, del, upload, postIdem }
 }

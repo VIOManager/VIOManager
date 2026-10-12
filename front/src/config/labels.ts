@@ -94,13 +94,45 @@ export const TEAM_ROLE_LABEL: Record<string, string> = {
   MEMBER: '队员'
 }
 
-/** 审批类型（暂定，骨架审批中心清单未出） */
+/** 审批业务类型（审批中心清单 §6 词表，9 项；新增 bizType 须先在该清单登记） */
 export const APPROVAL_TYPE_LABEL: Record<string, string> = {
   TEAM_CREATE: '组队申请',
   TEAM_ADD_MEMBER: '加人申请',
   TEAM_REMOVE_MEMBER: '移除队员',
   TEAM_ADD_ADVISOR: '指导教师申请',
-  ACHIEVEMENT_SUBMIT: '成果提交'
+  TEAM_DISSOLVE: '解散赛队',
+  ACHIEVEMENT_SUBMIT: '成果提交',
+  PROJECT_VIEW: '项目查看申请',
+  MILESTONE_APPROVE: '节点审核',
+  SEMESTER_SWITCH: '学期切换'
+}
+
+/** 审批状态机（审批中心清单 §3：PENDING 一跳终结，四个终态） */
+export const APPROVAL_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待处理',
+  APPROVED: '已通过',
+  REJECTED: '已驳回',
+  CANCELLED: '已取消',
+  EXPIRED: '已过期'
+}
+
+/** 审批流水动作（approval_record.action） */
+export const APPROVAL_ACTION_LABEL: Record<string, string> = {
+  CREATE: '发起申请',
+  CANCEL: '取消申请',
+  APPROVE: '批准',
+  REJECT: '驳回',
+  AGREE: '同意',
+  REFUSE: '拒绝',
+  EXPIRE: '过期'
+}
+
+/** 审批流水操作人身份（approval_record.operator_role） */
+export const APPROVAL_ROLE_LABEL: Record<string, string> = {
+  APPLICANT: '申请人',
+  TARGET: '目标人',
+  APPROVER: '审批人',
+  SYSTEM: '系统'
 }
 
 /** 成果类型（PRD §3.8：获奖/评级/资质/活动成果/其他） */
@@ -150,4 +182,118 @@ export const MATERIAL_TYPE_LABEL: Record<string, string> = Object.fromEntries(
 export const MATERIAL_SUBMIT_LABEL: Record<string, string> = {
   NOT_SUBMITTED: '未交',
   SUBMITTED: '已交'
+}
+
+/** 绩效周报状态机（绩效清单 §2：驳回不删记录，改后重进待审核） */
+export const WEEKLY_STATUS_LABEL: Record<string, string> = {
+  SUBMITTED: '待审核',
+  SCORED: '已打分',
+  REJECTED: '已驳回'
+}
+
+/** 绩效内置标签（绩效清单 §4，打分后自动挂） */
+export const PERF_TAG_LABEL: Record<string, string> = {
+  ACTIVITY_UP: '活跃度上升',
+  ACTIVITY_DOWN: '活跃度下降',
+  TOP_CONTRIBUTOR: '功劳度高',
+  STREAK: '连续贡献',
+  EFFICIENT_WEEK: '高效周'
+}
+
+/** 排班导入批次状态机（排班清单 §2） */
+export const IMPORT_BATCH_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待归一化',
+  MAPPING: '待确认映射',
+  COMPLETED: '已完成',
+  FAILED: '解析失败'
+}
+
+/** 排班单双周标记（course_timetable.week_parity） */
+export const WEEK_PARITY_LABEL: Record<string, string> = {
+  ALL: '每周',
+  ODD: '单周',
+  EVEN: '双周'
+}
+
+/** 项目状态（项目清单：ACTIVE→FINISHED→ARCHIVED 按序流转） */
+export const PROJECT_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: '进行中',
+  FINISHED: '已完结',
+  ARCHIVED: '已归档'
+}
+
+/** 项目可见性（项目清单 §2） */
+export const PROJECT_VISIBILITY_LABEL: Record<string, string> = {
+  PRIVATE: '仅项目内',
+  ORG: '本部门可见',
+  PUBLIC: '全平台可见'
+}
+
+/** 项目任务优先级 */
+export const TASK_PRIORITY_LABEL: Record<string, string> = {
+  LOW: '低',
+  NORMAL: '普通',
+  HIGH: '高',
+  URGENT: '紧急'
+}
+
+/** 项目任务状态 */
+export const TASK_STATUS_LABEL: Record<string, string> = {
+  TODO: '待办',
+  DOING: '进行中',
+  DONE: '已完成'
+}
+
+/** 比赛时间节点类型（项目清单 §3.4） */
+export const MILESTONE_TYPE_LABEL: Record<string, string> = {
+  REGISTER_START: '报名开始',
+  REGISTER_END: '报名截止',
+  WORK_SUBMIT: '作品提交',
+  OTHER: '其他'
+}
+
+/** 时间节点状态机（DRAFT→PENDING→APPROVED/REJECTED，REJECTED 可重提） */
+export const MILESTONE_STATUS_LABEL: Record<string, string> = {
+  DRAFT: '草稿',
+  PENDING: '审核中',
+  APPROVED: '已通过',
+  REJECTED: '已驳回'
+}
+
+/** 查看授权类型（项目清单 §3.7：ONCE 一次性 / LIMITED 限时） */
+export const GRANT_TYPE_LABEL: Record<string, string> = {
+  ONCE: '一次性',
+  LIMITED: '限时'
+}
+
+/** 查看授权状态 */
+export const GRANT_STATUS_LABEL: Record<string, string> = {
+  PENDING: '待审批',
+  ACTIVE: '生效中',
+  EXPIRED: '已失效',
+  REVOKED: '已撤销'
+}
+
+/** 项目文件分类（PR26 fileCategory） */
+export const PROJECT_FILE_CATEGORY_LABEL: Record<string, string> = {
+  DOC: '文档',
+  IMAGE: '图片',
+  CODE: '代码',
+  OTHER: '其他'
+}
+
+/** 项目内角色（project_member.role） */
+export const PROJECT_ROLE_LABEL: Record<string, string> = {
+  OWNER: '所有人',
+  MEMBER: '成员'
+}
+
+/** 排班星期（weekday 1–7） */
+export const WEEKDAY_LABEL: Record<number, string> = {
+  1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日'
+}
+
+/** 排班节次（slotIndex 1–5，两大节一档） */
+export const SLOT_LABEL: Record<number, string> = {
+  1: '1–2 节', 2: '3–4 节', 3: '5–6 节', 4: '7–8 节', 5: '9–10 节'
 }

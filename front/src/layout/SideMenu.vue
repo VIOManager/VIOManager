@@ -3,10 +3,11 @@
  * 侧边目录（图纸档案 · 编号目录式菜单）
  * 对应方案：Step 2；菜单数据来自 @/config/menu（三端显隐唯一数据源）
  * ⚠️ 安全：菜单过滤仅为展示层，路由与接口权限以服务端为准
- * TODO(后续步骤)：badge 接 P08 未读数接口；当前为静态演示值
+ * badge：审批中心项接 P08 未读数（stores/approval），其余项暂无红点
  */
 import { computed } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { useApprovalStore } from '@/stores/approval'
 import { menuOf } from '@/config/menu'
 import type { MenuEntry } from '@/types'
 
@@ -16,6 +17,16 @@ interface MenuGroup {
 }
 
 const user = useUserStore()
+const approval = useApprovalStore()
+
+/** 菜单红点：审批中心 = P08 合计，其余项走静态配置 */
+function badgeOf(m: MenuEntry): number {
+  if (m.path === '/approval') return approval.total
+  return m.badge ?? 0
+}
+
+/** 论坛站入口（独立站，JWT 与主站共享）：地址走环境变量，开发期默认 5175；新标签打开主站会话不丢 */
+const forumUrl = import.meta.env.VITE_FORUM_URL ?? 'http://localhost:5175'
 
 /** 按角色过滤后保持分组顺序收拢 */
 const groups = computed<MenuGroup[]>(() => {
@@ -53,11 +64,14 @@ const seq = computed(() => {
           active-class="active"
         >
           <span>{{ seq.get(m.path) }} {{ m.title }}</span>
-          <em v-if="m.badge">{{ m.badge }}</em>
+          <em v-if="badgeOf(m)">{{ badgeOf(m) }}</em>
         </router-link>
       </template>
     </nav>
-    <div class="catalog-foot mono">VOL.2026F · W6</div>
+    <div class="catalog-foot">
+      <a class="forum-link mono" :href="forumUrl" target="_blank" rel="noopener">VIO 论坛 ↗</a>
+      <span class="mono">VOL.2026F · W6</span>
+    </div>
   </aside>
 </template>
 
@@ -112,5 +126,15 @@ const seq = computed(() => {
   font-size: 10.5px;
   color: var(--vio-ink-3);
   letter-spacing: 0.14em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
+.forum-link {
+  color: var(--vio-blue-ink);
+  text-decoration: none;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.forum-link:hover { text-decoration: underline; }
 </style>
