@@ -63,6 +63,8 @@ export function apiApprovalList(query: {
   view: ApprovalView
   status?: string
   bizType?: string
+  /** 标题模糊搜索（清单 §7 遗留项，2026-10-12 lzh 拍板本期补；TODO(联调)：待后端清单正式化） */
+  keyword?: string
   page: number
   size: number
 }): Promise<PageResult<ApprovalItem>> {

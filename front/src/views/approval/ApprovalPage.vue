@@ -23,6 +23,7 @@ const isAdmin = user.role !== 'STUDENT'
 const view = ref<ApprovalView>(isAdmin ? 'TODO' : 'MINE')
 const statusFilter = ref('')
 const typeFilter = ref('')
+const keyword = ref('')
 const page = ref(1)
 const size = 20
 const total = ref(0)
@@ -48,6 +49,7 @@ async function load() {
       view: view.value,
       status: statusFilter.value || undefined,
       bizType: typeFilter.value || undefined,
+      keyword: keyword.value || undefined,
       page: page.value,
       size
     })
@@ -137,6 +139,7 @@ onMounted(load)
     </div>
 
     <div class="fbar">
+      <input v-model="keyword" class="input-line" style="width: 180px" placeholder="搜索标题（模糊）" @keyup.enter="onSearch" />
       <select v-model="statusFilter" class="input-line" @change="onSearch">
         <option value="">全部状态</option>
         <option v-for="(label, v) in APPROVAL_STATUS_LABEL" :key="v" :value="v">{{ label }}</option>

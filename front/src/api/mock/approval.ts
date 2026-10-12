@@ -75,12 +75,14 @@ registerMock({
     if (!Array.isArray(list)) return list
     const status = String(ctx.query.status ?? '')
     const bizType = String(ctx.query.bizType ?? '')
+    const keyword = String(ctx.query.keyword ?? '').trim()
     const page = Math.max(1, Number(ctx.query.page ?? 1) || 1)
     const size = Math.min(100, Math.max(1, Number(ctx.query.size ?? 20) || 20))
     const filtered: MockApproval[] = []
     for (const a of list) {
       if (status && a.status !== status) continue
       if (bizType && a.bizType !== bizType) continue
+      if (keyword && a.bizTitle.indexOf(keyword) < 0) continue
       filtered.push(a)
     }
     // 创建时间倒序（YYYY-MM-DD HH:mm:ss 字典序即时间序）
