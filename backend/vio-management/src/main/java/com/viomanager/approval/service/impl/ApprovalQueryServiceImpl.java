@@ -75,6 +75,10 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
         if (dto.getBizType() != null && !dto.getBizType().isEmpty()) {
             wrapper.eq("biz_type", dto.getBizType());
         }
+        //标题关键词模糊匹配（2026-10-12 lzh 拍板补）
+        if (dto.getKeyword() != null && !dto.getKeyword().isEmpty()) {
+            wrapper.like("biz_title", dto.getKeyword());
+        }
         wrapper.orderByDesc("created_at");
         //3.分页查询转 VO
         Page<Approval> page = approvalMapper.selectPage(

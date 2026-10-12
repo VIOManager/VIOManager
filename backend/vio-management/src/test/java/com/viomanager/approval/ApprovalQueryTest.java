@@ -100,6 +100,28 @@ class ApprovalQueryTest extends ApprovalTestBase {
     }
 
     @Test
+    void listFiltersByKeyword() throws Exception {
+        //1.标题关键词模糊搜：张三 → 命中张三发起的两张
+        mockMvc.perform(get("/api/approvals").param("view", "TODO")
+                        .param("keyword", "张三")
+                        .header("Authorization", "Bearer " + superToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2));
+        //2.三张单标题都含"申请" → 全命中
+        mockMvc.perform(get("/api/approvals").param("view", "TODO")
+                        .param("keyword", "申请")
+                        .header("Authorization", "Bearer " + superToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(3));
+        //3.无命中关键词 → 0 张
+        mockMvc.perform(get("/api/approvals").param("view", "TODO")
+                        .param("keyword", "查无此队")
+                        .header("Authorization", "Bearer " + superToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
     void detailContainsPayloadAndRecords() throws Exception {
         //1.创建并批准，凑齐 SUBMIT + APPROVE 两条流水
         Long approvalId = createApproval("TEAM_CREATE", 8811L, "张三", null, null, 9301L);
