@@ -3,6 +3,7 @@ package com.viomanager.material.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.viomanager.common.datascop.DataScope;
 import com.viomanager.material.entity.MaterialSubmission;
+import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -36,4 +37,12 @@ public interface MaterialSubmissionMapper extends BaseMapper<MaterialSubmission>
     @Select("SELECT MAX(version_no) FROM material_submission "
             + "WHERE requirement_id = #{requirementId} AND team_id = #{teamId} AND deleted = 0")
     Integer selectMaxVersionNo(@Param("requirementId") Long requirementId, @Param("teamId") Long teamId);
+
+    /**
+     * 查该队当前生效提交覆盖的要求 ID 集合（齐全率重算用，DISTINCT 去重）。
+     * 手写 SQL 显式带 deleted = 0（@TableLogic 只对 BaseMapper 自动方法生效）。
+     */
+    @Select("SELECT DISTINCT requirement_id FROM material_submission "
+            + "WHERE team_id = #{teamId} AND is_current = 1 AND deleted = 0")
+    List<Long> selectCurrentRequirementIds(@Param("teamId") Long teamId);
 }
