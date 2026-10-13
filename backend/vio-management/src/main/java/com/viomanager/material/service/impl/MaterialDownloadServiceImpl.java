@@ -89,7 +89,7 @@ public class MaterialDownloadServiceImpl implements MaterialDownloadService {
         //5.zip 流式回写：entry = 要求名/文件名，重名追加序号；染毒文件跳过留痕
         try {
             response.setContentType("application/zip");
-            String encodedName = URLEncoder.encode(team.name() + "-材料打包.zip", StandardCharsets.UTF_8)
+            String encodedName = URLEncoder.encode(team.getName() + "-材料打包.zip", StandardCharsets.UTF_8)
                     .replace("+", "%20");
             response.setHeader("Content-Disposition",
                     "attachment; filename=\"" + encodedName + "\"; filename*=UTF-8''" + encodedName);

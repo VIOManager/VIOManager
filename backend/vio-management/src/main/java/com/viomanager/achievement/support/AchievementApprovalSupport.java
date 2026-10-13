@@ -81,7 +81,7 @@ public class AchievementApprovalSupport {
         ApprovalCreateDTO approval = new ApprovalCreateDTO();
         approval.setBizType("ACHIEVEMENT_SUBMIT");
         //创建型审批：bizId 留 null，批准后由回调按 payloadJson 里的 achievementId 定位成果
-        approval.setBizTitle(team.name() + " 成果提交：" + dto.getName());
+        approval.setBizTitle(team.getName() + " 成果提交：" + dto.getName());
         Map<String, String> payload = new LinkedHashMap<>();
         payload.put("achievementId", String.valueOf(achievement.getId()));
         payload.put("teamId", String.valueOf(dto.getTeamId()));
@@ -94,10 +94,10 @@ public class AchievementApprovalSupport {
         }
         approval.setApplicantMemberId(memberId);
         approval.setApplicantName(user == null ? null : user.getRealName());
-        approval.setApproverOrgId(team.orgId());
+        approval.setApproverOrgId(team.getOrgId());
         approval.setTeamId(dto.getTeamId());
-        approval.setContestId(team.contestId());
-        approval.setSemesterId(team.semesterId());
+        approval.setContestId(team.getContestId());
+        approval.setSemesterId(team.getSemesterId());
         approvalClient.createApproval(approval);
     }
 

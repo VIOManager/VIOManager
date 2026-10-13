@@ -27,7 +27,7 @@ import com.viomanager.material.vo.BatchMatchResultVO;
 import com.viomanager.material.vo.MaterialSubmitVO;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
@@ -105,7 +105,7 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
             throw new BizException(CommonErrorCode.NOT_FOUND, "材料任务不存在");
         }
         //4.比赛匹配：要求随任务、队伍随比赛，两边必须同一比赛 → 5004
-        if (!Objects.equals(task.getContestId(), team.contestId())) {
+        if (!Objects.equals(task.getContestId(), team.getContestId())) {
             throw new BizException(MaterialErrorCode.CONTEST_MISMATCH);
         }
         //5.未过截止：deadline 为 null 视为不限期；now == deadline 仍可提交
@@ -149,7 +149,7 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         submission.setTaskId(task.getId());
         submission.setContestId(task.getContestId());
         submission.setSemesterId(task.getSemesterId());
-        submission.setOrgId(team.orgId());
+        submission.setOrgId(team.getOrgId());
         submission.setFileId(dto.getFileId());
         submission.setFileName(dto.getFileName());
         submission.setFileSize(dto.getFileSize());
@@ -196,7 +196,7 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
             throw new BizException(CommonErrorCode.NOT_FOUND, "赛队不存在");
         }
         //3.比赛匹配 → 5004
-        if (!Objects.equals(task.getContestId(), team.contestId())) {
+        if (!Objects.equals(task.getContestId(), team.getContestId())) {
             throw new BizException(MaterialErrorCode.CONTEST_MISMATCH);
         }
         //4.未过截止（deadline 为 null = 不限期）→ 1006
@@ -234,10 +234,13 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
 
     /** 逗号分隔格式串拆成小写列表做白名单比对（管理员录入可能是大写，比对统一小写） */
     private List<String> splitFormats(String joined) {
-        return Arrays.stream(joined.split(","))
-                .map(String::trim)
-                .map(String::toLowerCase)
-                .filter(f -> !f.isEmpty())
-                .toList();
+        List<String> formats = new ArrayList<>();
+        for (String part : joined.split(",")) {
+            String trimmed = part.trim().toLowerCase();
+            if (!trimmed.isEmpty()) {
+                formats.add(trimmed);
+            }
+        }
+        return formats;
     }
 }
