@@ -42,6 +42,9 @@ class ContestServiceTest extends ApprovalTestBase {
     /** 模板 CRUD 全流程：创建→详情→编辑→列表→删除 */
     @Test
     void templateCrud() throws Exception {
+        //1.库里演示模板会污染列表计数，断言按 基线+本测试新增
+        Integer tplBaseline = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM contest_template WHERE deleted = 0", Integer.class);
         String json = mockMvc.perform(post("/api/contest-templates")
                         .header("Authorization", "Bearer " + superToken)
                         .header("X-Idempotency-Key", "cs-tpl-create")
@@ -74,7 +77,7 @@ class ContestServiceTest extends ApprovalTestBase {
                         .header("Authorization", "Bearer " + superToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.length()").value(1));
+                .andExpect(jsonPath("$.data.length()").value((tplBaseline == null ? 0 : tplBaseline) + 1));
 
         mockMvc.perform(delete("/api/contest-templates/" + tplId)
                         .header("Authorization", "Bearer " + superToken)
@@ -179,6 +182,13 @@ class ContestServiceTest extends ApprovalTestBase {
     /** 学生仅可见 PUBLISHED 及之后状态的比赛 */
     @Test
     void studentDataScope() throws Exception {
+        //1.先取基线再插数：演示比赛会污染计数，学生按可见口径、超管按全量，断言都是 基线+本测试新增
+        Integer visibleBaseline = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM contest WHERE deleted = 0 "
+                        + "AND status IN ('PUBLISHED','REGISTERING','RUNNING','FINISHED','ARCHIVED')",
+                Integer.class);
+        Integer allBaseline = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM contest WHERE deleted = 0", Integer.class);
         jdbcTemplate.update(
                 "INSERT INTO contest (id, name, semester_id, org_id, status, source_type, deleted) "
                         + "VALUES (?, ?, ?, ?, 'DRAFT', 'MANUAL', 0)",
@@ -188,20 +198,20 @@ class ContestServiceTest extends ApprovalTestBase {
                         + "VALUES (?, ?, ?, ?, 'PUBLISHED', 'MANUAL', 0)",
                 4900102L, "已发布赛", SEMESTER_ID, ORG_ID);
 
-        // 学生仅见 PUBLISHED
+        // 学生仅见 PUBLISHED（本测试新增可见 1 条：已发布赛）
         mockMvc.perform(get("/api/contests")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data.length()").value((visibleBaseline == null ? 0 : visibleBaseline) + 1))
                 .andExpect(jsonPath("$.data[0].name").value("已发布赛"));
 
-        // 超管见全部
+        // 超管见全部（本测试新增 2 条：草稿赛 + 已发布赛）
         mockMvc.perform(get("/api/contests")
                         .header("Authorization", "Bearer " + superToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.length()").value(2));
+                .andExpect(jsonPath("$.data.length()").value((allBaseline == null ? 0 : allBaseline) + 2));
     }
 
     /** 从 JSON 响应中提取 data.id（Long 全局序列化为 String） */

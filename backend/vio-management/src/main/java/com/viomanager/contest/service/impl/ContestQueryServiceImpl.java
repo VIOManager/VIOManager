@@ -18,6 +18,7 @@ import com.viomanager.contest.vo.TrackVO;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +48,7 @@ public class ContestQueryServiceImpl implements IContestQueryService {
 
     /** 学生可见状态：PUBLISHED 及之后（不含 DRAFT） */
     private static final List<String> STUDENT_VISIBLE =
-            List.of("PUBLISHED", "REGISTERING", "RUNNING", "FINISHED", "ARCHIVED");
+            Arrays.asList("PUBLISHED", "REGISTERING", "RUNNING", "FINISHED", "ARCHIVED");
 
     @Resource
     private JdbcTemplate jdbcTemplate;

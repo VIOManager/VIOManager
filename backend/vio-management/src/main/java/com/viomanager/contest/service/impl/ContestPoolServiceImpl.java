@@ -97,7 +97,10 @@ public class ContestPoolServiceImpl implements IContestPoolService {
                 .set("status", "CONFIRMED")
                 .set("handled_at", LocalDateTime.now())
                 .set("handled_by", UserHolder.getUser().getUserId());
-        contestSourceMapper.update(null, su);
+        //1.命中 0 行说明并发下已被他人处理：抛错回滚刚建的比赛，防一源两赛
+        if (contestSourceMapper.update(null, su) == 0) {
+            throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "该来源已被处理");
+        }
         return Result.ok(vo);
     }
 
@@ -115,7 +118,10 @@ public class ContestPoolServiceImpl implements IContestPoolService {
                 .set("status", "IGNORED")
                 .set("handled_at", LocalDateTime.now())
                 .set("handled_by", UserHolder.getUser().getUserId());
-        contestSourceMapper.update(null, uw);
+        //1.命中 0 行说明已被他人确认或忽略，不谎报成功
+        if (contestSourceMapper.update(null, uw) == 0) {
+            throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "该来源已被处理");
+        }
         return Result.ok();
     }
 
