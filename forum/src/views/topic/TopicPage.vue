@@ -2,94 +2,183 @@
 /**
  * 帖子详情：面包屑 + 主楼（左 73px 大头像）+ 回复楼层 + 回复框沉底 + 右栏
  * 视觉基准：.agentdocs/design-preview/forum-v2ex/topic.html（v3 样张，lzh 已过目）
- * 依据：《论坛V2EX风格重设计-优化方案》§5.3
- * TODO(API)：详情 GET /api/forum/topics/{id}、回复 GET /api/forum/topics/{id}/replies、
- *    点赞/回复写操作带 X-Idempotency-Key（规范 §6）
- * ⚠️ 并发：点赞走 Redis 原子判重（架构方案 §5.3），前端只发请求不做防重判断
+ * 数据：F04 详情（浏览计数服务端 +1）、F05 楼层、F02 本版热议
+ * 写操作：F07 回帖（幂等键防重）、F08/F10 点赞、F09 收藏（后三者为状态型天然幂等）
+ * TODO(联调-论坛清单)：以上路径为前端预设；附件下载依赖文件服务方案，点击仅提示
  */
+import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { avatarOf } from '@/config/avatars'
+import { boardName } from '@/config/boards'
+import {
+  apiTopicDetail, apiReplyList, apiCreateReply, apiLikeTopic, apiCollectTopic, apiLikeReply,
+  type TopicDetail, type ReplyItem, type HotTopicItem, apiHotTopics
+} from '@/api/forum'
 
 const route = useRoute()
-const topicId = route.params.id
+const topicId = String(route.params.id)
 
-/** 主楼静态演示数据（联调时替换为接口返回） */
-const post = {
-  title: '赛季电控培训第三期：STM32 HAL 库电机闭环控制速成',
-  author: '赵天宇',
-  board: '电控',
-  publishAt: '2026-10-07 20:15',
-  views: '1.2k',
-  pinned: true,
-  body: [
-    '本周五晚 19:30 电控工作室开第三期培训，目标是把电机闭环从"听说过"讲到"能上手"。零基础可来，带电脑。',
-    '大纲：编码器采样与定时器输入捕获 → 速度环 PID 现场整定 → 电流环与 M3508 实测波形 → 常见坑（采样噪声、积分饱和、看门狗复位）。',
-    '报名在群里接龙，截止本周五 12:00。录屏和例程仓库会后更新到本帖附件。'
-  ],
-  attach: [
-    { name: '培训录屏-第三期.mp4', size: '386 MB', downloads: 45 },
-    { name: 'motor-pid-demo.zip', size: '2.1 MB', downloads: 63 }
-  ],
-  likeCount: 58,
-  collectCount: 23
+const detail = ref<TopicDetail | null>(null)
+const floors = ref<ReplyItem[]>([])
+const boardHot = ref<HotTopicItem[]>([])
+
+/** 回复框状态：正文、引用楼层、提交中标志 */
+const replyText = ref('')
+const quoteReply = ref<ReplyItem | null>(null)
+const submitting = ref(false)
+const replyBox = ref<HTMLTextAreaElement | null>(null)
+
+/**
+ * ⚠️ 回帖幂等键：进入页面生成；提交失败保留（重试同键，防断网重复回帖）；
+ * 提交成功后换新键（接着回复下一楼是新的内容）
+ */
+const formKey = ref(crypto.randomUUID())
+
+async function loadDetail() {
+  try {
+    detail.value = await apiTopicDetail(topicId)
+  } catch {
+    // 帖子不存在等业务错误：拦截器已提示，页面停留空态
+  }
 }
 
-/** 楼层静态演示数据 */
-const floors = [
-  { no: 1, author: '陈子昂', group: '电控组', time: '10-07 20:41', text: '上一期听完把自家车的速度环整定时间从两天压到两小时，这期必到。问下：电流环会讲到 FOC 吗？', like: 12, quote: null as null | { to: string; floor: number; text: string } },
-  { no: 2, author: '赵天宇', group: '电控组 · 版主', time: '10-07 20:58', text: '这期只到电流环概念和波形，FOC 放第四期单独讲，先把 PI 整定的手感练出来。', like: 8, quote: { to: '陈子昂', floor: 1, text: '问下：电流环会讲到 FOC 吗？' } },
-  { no: 3, author: '李明轩', group: '建模组', time: '10-07 21:32', text: '机械组的能来旁听吗？我们底盘那边也想蹭一下。', like: 3, quote: null },
-  { no: 4, author: '孙嘉仪', group: '电控组', time: '10-07 22:10', text: '可以，版主说过不限组。座位有限，早点来。', like: 5, quote: { to: '李明轩', floor: 3, text: '机械组的能来旁听吗？' } }
-]
+async function loadFloors() {
+  const res = await apiReplyList(topicId)
+  floors.value = res.list
+}
 
-/** 侧栏本版热议 */
-const boardHot = [
-  { title: 'PCB 电源完整性 Layout 检查清单', author: '陈子昂' },
-  { title: '步兵机器人功率限制策略复盘', author: '孙嘉仪' },
-  { title: '示波器测纹波的正确姿势', author: '李明轩' }
-]
+onMounted(() => {
+  loadDetail()
+  loadFloors()
+  loadBoardHot()
+})
+
+/** 右栏本版热议：全站热议里筛本版，不足三条就补全站的（演示期数据量小） */
+async function loadBoardHot() {
+  const hot = await apiHotTopics()
+  const list: HotTopicItem[] = []
+  for (let i = 0; i < hot.length; i++) {
+    if (detail.value && hot[i].id !== detail.value.id) list.push(hot[i])
+  }
+  boardHot.value = list.slice(0, 4)
+}
+
+/** 主楼点赞/取消（状态型：重复点无副作用） */
+async function toggleLike() {
+  if (!detail.value) return
+  const target = !detail.value.liked
+  const res = await apiLikeTopic(detail.value.id, target)
+  detail.value.liked = res.liked
+  detail.value.likeCount += res.liked ? 1 : -1
+}
+
+/** 主楼收藏/取消 */
+async function toggleCollect() {
+  if (!detail.value) return
+  const target = !detail.value.collected
+  const res = await apiCollectTopic(detail.value.id, target)
+  detail.value.collected = res.collected
+}
+
+/** 楼层点赞/取消 */
+async function toggleFloorLike(f: ReplyItem) {
+  const target = !f.liked
+  const res = await apiLikeReply(f.id, target)
+  f.liked = res.liked
+  f.likeCount += res.liked ? 1 : -1
+}
+
+/** 楼层"回复"：带上引用并聚焦回复框 */
+function quoteFloor(f: ReplyItem) {
+  quoteReply.value = f
+  replyText.value = ''
+  if (replyBox.value) replyBox.value.focus()
+}
+
+/** 主楼"回复"按钮：滚动到沉底回复框并聚焦 */
+function scrollToReply() {
+  if (replyBox.value) {
+    replyBox.value.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    replyBox.value.focus()
+  }
+}
+
+/** 提交回复（幂等 + 双层防重：submitting 置灰拦手抖，formKey 拦网络重试重复） */
+async function submitReply() {
+  if (submitting.value) return
+  if (!replyText.value.trim()) {
+    ElMessage.warning('回复内容不能为空')
+    return
+  }
+  submitting.value = true
+  try {
+    await apiCreateReply(
+      topicId,
+      { text: replyText.value.trim(), quoteReplyId: quoteReply.value ? quoteReply.value.id : null },
+      formKey.value
+    )
+    ElMessage.success('回复成功')
+    replyText.value = ''
+    quoteReply.value = null
+    formKey.value = crypto.randomUUID()
+    await loadFloors()
+    if (detail.value) detail.value.replyCount = floors.value.length
+  } catch {
+    // 失败：内容与 formKey 都保留，改完再点是同一次提交
+    submitting.value = false
+  }
+}
+
+/** 附件点击：下载依赖文件服务，联调前提示 */
+function attachTip() {
+  ElMessage.info('附件下载待论坛文件服务接入后开放')
+}
 </script>
 
 <template>
   <div>
-    <div class="crumb"><router-link to="/">首页</router-link> › <a href="#" @click.prevent>{{ post.board }}</a> › 主题</div>
+    <div v-if="detail" class="crumb"><router-link to="/">首页</router-link> › <a href="#" @click.prevent>{{ boardName(detail.board) }}</a> › 主题</div>
     <div class="grid">
       <div>
         <!-- 主楼：V2EX 结构 = 左 73px 大头像 + 标题/meta -->
-        <div class="box post">
+        <div v-if="detail" class="box post">
           <div class="p-head">
-            <img class="pava" :src="avatarOf(post.author, 73)" :alt="post.author">
+            <img class="pava" :src="avatarOf(detail.author, 73)" :alt="detail.author">
             <div class="ph-main">
-              <h1><span v-if="post.pinned" class="pin">置顶</span>{{ post.title }}</h1>
-              <div class="p-meta"><b>{{ post.author }}</b> · <span class="node">{{ post.board }}</span> · {{ post.publishAt }} · 阅读 {{ post.views }}</div>
+              <h1><span v-if="detail.pinned" class="pin">置顶</span>{{ detail.title }}</h1>
+              <div class="p-meta"><b>{{ detail.author }}</b> · <span class="node">{{ boardName(detail.board) }}</span> · {{ detail.publishAt }} · 阅读 {{ detail.viewCount }}</div>
             </div>
           </div>
           <div class="p-body">
-            <p v-for="(p, i) in post.body" :key="i">{{ p }}</p>
+            <p v-for="(p, i) in detail.body" :key="i">{{ p }}</p>
           </div>
-          <div class="attach">
-            <div v-for="a in post.attach" :key="a.name">
-              <a href="#" @click.prevent>{{ a.name }}</a>
+          <div v-if="detail.attach.length > 0" class="attach">
+            <div v-for="a in detail.attach" :key="a.name">
+              <a href="#" @click.prevent="attachTip">{{ a.name }}</a>
               <span class="gray">{{ a.size }} · 下载 {{ a.downloads }}</span>
             </div>
           </div>
           <div class="ops">
-            <button type="button">👍 已点赞 {{ post.likeCount }}</button>
-            <button type="button">⭐ 收藏 {{ post.collectCount }}</button>
-            <button type="button">回复</button>
+            <button type="button" :class="{ on: detail.liked }" @click="toggleLike">{{ detail.liked ? '👍 已点赞' : '👍 点赞' }} {{ detail.likeCount }}</button>
+            <button type="button" :class="{ on: detail.collected }" @click="toggleCollect">{{ detail.collected ? '⭐ 已收藏' : '⭐ 收藏' }}</button>
+            <button type="button" @click="scrollToReply">回复</button>
           </div>
         </div>
 
         <!-- 回复盒：灰底头行 + 楼层 -->
         <div class="box replies">
-          <div class="r-head">24 条回复 · 按时间正序 <a href="#reply">添加新回复 ↓</a></div>
-          <div v-for="f in floors" :key="f.no" class="floor">
+          <div class="r-head">{{ floors.length }} 条回复 · 按时间正序 <a href="#reply">添加新回复 ↓</a></div>
+          <div v-for="f in floors" :key="f.id" class="floor">
             <img class="fava" :src="avatarOf(f.author, 48)" :alt="f.author">
             <div class="f-main">
-              <div class="f-meta"><b>{{ f.author }}</b>{{ f.group }} · {{ f.time }}<span class="fno">#{{ f.no }}</span></div>
-              <div v-if="f.quote" class="quote">@{{ f.quote.to }} #{{ f.quote.floor }}：{{ f.quote.text }}</div>
+              <div class="f-meta"><b>{{ f.author }}</b>{{ f.authorGroup }} · {{ f.publishAt }}<span class="fno">#{{ f.floorNo }}</span></div>
+              <div v-if="f.quote" class="quote">@{{ f.quote.author }} #{{ f.quote.floorNo }}：{{ f.quote.text }}</div>
               <div class="f-text">{{ f.text }}</div>
-              <div class="f-ops"><a href="#" @click.prevent>♥ {{ f.like }}</a><a href="#reply">回复</a></div>
+              <div class="f-ops">
+                <a href="#" :class="{ on: f.liked }" @click.prevent="toggleFloorLike(f)">♥ {{ f.likeCount }}</a>
+                <a href="#reply" @click.prevent="quoteFloor(f)">回复</a>
+              </div>
             </div>
           </div>
         </div>
@@ -97,33 +186,39 @@ const boardHot = [
         <!-- 回复框沉底 -->
         <div class="box reply" id="reply">
           <h5>添加一条新回复</h5>
-          <textarea placeholder="支持 Markdown；回复即留痕，删除需管理员操作"></textarea>
+          <div v-if="quoteReply" class="q-tip">
+            引用 @{{ quoteReply.author }} #{{ quoteReply.floorNo }}
+            <a href="#" @click.prevent="quoteReply = null">取消</a>
+          </div>
+          <textarea ref="replyBox" v-model="replyText" :disabled="submitting" placeholder="支持 Markdown；回复即留痕，删除需管理员操作"></textarea>
           <div class="r-foot">
             <i>※ 文明发言，排障类回复请尽量附现象、配置与波形</i>
-            <button class="btn-post" type="button">回复</button>
+            <button class="btn-post" type="button" :disabled="submitting" @click="submitReply">
+              {{ submitting ? '回复中…' : '回复' }}
+            </button>
           </div>
         </div>
       </div>
 
       <div class="side">
-        <div class="box">
+        <div v-if="detail" class="box">
           <h5>关于作者</h5>
           <div class="author">
-            <img :src="avatarOf(post.author, 48)" :alt="post.author">
-            <div><b>{{ post.author }}</b><div class="gray">电控组 · 版主</div></div>
+            <img :src="avatarOf(detail.author, 48)" :alt="detail.author">
+            <div><b>{{ detail.author }}</b><div class="gray">{{ detail.authorGroup }}</div></div>
           </div>
           <div class="stat">
-            <div><b>47</b>发帖</div>
-            <div><b>812</b>获赞</div>
-            <div><b>26</b>被归档</div>
+            <div><b>{{ detail.authorStats.postCount }}</b>发帖</div>
+            <div><b>{{ detail.authorStats.likeTotal }}</b>获赞</div>
+            <div><b>{{ detail.authorStats.archivedCount }}</b>被归档</div>
           </div>
         </div>
         <div class="box">
-          <h5>本版热议主题</h5>
+          <h5>热议主题</h5>
           <ul class="hot">
-            <li v-for="h in boardHot" :key="h.title">
+            <li v-for="h in boardHot" :key="h.id">
               <img class="hava" :src="avatarOf(h.author, 24)" :alt="h.author">
-              <a href="#" @click.prevent>{{ h.title }}</a>
+              <router-link :to="`/topic/${h.id}`">{{ h.title }}</router-link>
             </li>
           </ul>
         </div>
@@ -157,6 +252,7 @@ const boardHot = [
 .ops { margin-top: 16px; display: flex; gap: 8px; }
 .ops button { background: #F5F5F5; border: 1px solid var(--line); color: var(--body); font-size: 12.5px; padding: 5px 14px; border-radius: var(--radius-box); cursor: pointer; }
 .ops button:hover { background: #EBEBEB; }
+.ops button.on { background: var(--pill); border-color: var(--pill); color: #FFF; }
 
 /* 楼层 */
 .replies { margin-bottom: 18px; }
@@ -174,17 +270,20 @@ const boardHot = [
 .f-text { font-size: 14px; color: var(--ink); line-height: 1.7; }
 .f-ops { margin-top: 5px; font-size: 12px; }
 .f-ops a { margin-right: 12px; color: #B0B0B0; }
-.f-ops a:hover { color: var(--ink); }
+.f-ops a:hover, .f-ops a.on { color: var(--pill); }
 
 /* 回复框 */
 .reply { padding: 14px 18px 16px; }
 .reply h5 { font-size: 13px; color: var(--body); margin-bottom: 10px; font-weight: 600; }
-.reply textarea { width: 100%; height: 110px; border: 1px solid var(--line); border-radius: var(--radius-box); padding: 10px; font-size: 13px; line-height: 1.7; font-family: inherit; resize: vertical; background: var(--box-soft); color: var(--ink); }
+.q-tip { font-size: 12px; color: var(--meta); background: var(--box-soft); border-left: 2px solid var(--pill); border-radius: 2px; padding: 5px 10px; margin-bottom: 8px; }
+.q-tip a { color: var(--fade); margin-left: 8px; }
+.reply textarea { width: 100%; height: 110px; border: 1px solid var(--line); border-radius: var(--radius-box); padding: 10px; font-size: 13px; line-height: 1.7; font-family: inherit; resize: vertical; background: var(--box-soft); color: var(--ink); box-sizing: border-box; }
 .reply textarea:focus { outline: none; border-color: #CCC; background: var(--box); }
 .r-foot { display: flex; align-items: center; margin-top: 10px; }
 .r-foot i { font-style: normal; font-size: 12px; color: var(--fade); flex: 1; }
 .btn-post { font-size: 13px; color: var(--ink); background: var(--box); border: 1px solid #CCC; border-radius: var(--radius-box); padding: 5px 14px; cursor: pointer; }
-.btn-post:hover { border-color: #999; }
+.btn-post:hover:not(:disabled) { border-color: #999; }
+.btn-post:disabled { opacity: 0.55; cursor: not-allowed; }
 
 /* 右栏 */
 .side .box { padding: 12px 14px; margin-bottom: 18px; }
