@@ -21,6 +21,9 @@ public class ApprovalQueryDTO {
     /** 业务类型筛选，可空 */
     private String bizType;
 
+    /** 标题关键词，模糊匹配 biz_title，可空 */
+    private String keyword;
+
     /** 页码，从 1 开始 */
     @Min(value = 1, message = "page 最小为 1")
     private long page = 1;

@@ -38,6 +38,13 @@ class ApprovalQueryTest extends ApprovalTestBase {
 
     private String superToken;
 
+    /** 库内既有单基线数（演示审批单等）：超管 TODO 无组织过滤全可见，计数断言按 基线+本测试新增 */
+    private int todoBaseline;
+
+    private int teamCreateBaseline;
+
+    private int applyBaseline;
+
     @BeforeEach
     void setUp() throws Exception {
         insertOrg(9301L, "软件学院", "/0/9301/");
@@ -47,6 +54,13 @@ class ApprovalQueryTest extends ApprovalTestBase {
         deptAToken = createUserAndLogin("query_dept_a", "DEPT_ADMIN", 9301L, null);
         deptBToken = createUserAndLogin("query_dept_b", "DEPT_ADMIN", 9302L, null);
         superToken = createUserAndLogin("query_super", "SUPER_ADMIN", null, null);
+        //基线：超管 TODO 全量可见库内既有单（演示单 801-807 等），断言 = 基线 + 本测试新增，
+        //演示数据以后增删不再破坏计数（2026-10-12 修红：此前写死 3 被演示单污染）
+        todoBaseline = countRows("SELECT COUNT(*) FROM approval WHERE deleted = 0");
+        teamCreateBaseline = countRows(
+                "SELECT COUNT(*) FROM approval WHERE deleted = 0 AND biz_type = 'TEAM_CREATE'");
+        applyBaseline = countRows(
+                "SELECT COUNT(*) FROM approval WHERE deleted = 0 AND biz_title LIKE ?", "%申请%");
         //3 张单：9301 两张（其一发给目标人 8812）、9302 一张
         createApproval("TEAM_CREATE", 8811L, "张三", null, null, 9301L);
         createApproval("TEAM_ADD_MEMBER", 8811L, "张三", 8812L, "李四", 9301L);
@@ -66,7 +80,7 @@ class ApprovalQueryTest extends ApprovalTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.list[0].targetMemberName").value("李四"));
-        //3.TODO：本部门管理员 → 2 张；别的部门管理员 → 1 张；超管 → 3 张
+        //3.TODO：本部门管理员 → 2 张；别的部门管理员 → 1 张；超管 → 库内全量（基线 + 本测试 3 张）
         mockMvc.perform(get("/api/approvals").param("view", "TODO")
                         .header("Authorization", "Bearer " + deptAToken))
                 .andExpect(status().isOk())
@@ -78,7 +92,7 @@ class ApprovalQueryTest extends ApprovalTestBase {
         mockMvc.perform(get("/api/approvals").param("view", "TODO")
                         .header("Authorization", "Bearer " + superToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(3));
+                .andExpect(jsonPath("$.data.total").value(todoBaseline + 3));
         //4.学生调 TODO → 403
         mockMvc.perform(get("/api/approvals").param("view", "TODO")
                         .header("Authorization", "Bearer " + applicantToken))
@@ -89,7 +103,7 @@ class ApprovalQueryTest extends ApprovalTestBase {
                         .param("bizType", "TEAM_CREATE")
                         .header("Authorization", "Bearer " + superToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(1));
+                .andExpect(jsonPath("$.data.total").value(teamCreateBaseline + 1));
         mockMvc.perform(get("/api/approvals").param("view", "MINE").param("page", "1").param("size", "1")
                         .header("Authorization", "Bearer " + applicantToken))
                 .andExpect(status().isOk())
@@ -97,6 +111,28 @@ class ApprovalQueryTest extends ApprovalTestBase {
                 .andExpect(jsonPath("$.data.list.length()").value(1))
                 .andExpect(jsonPath("$.data.page").value(1))
                 .andExpect(jsonPath("$.data.size").value(1));
+    }
+
+    @Test
+    void listFiltersByKeyword() throws Exception {
+        //1.标题关键词模糊搜：张三 → 命中张三发起的两张
+        mockMvc.perform(get("/api/approvals").param("view", "TODO")
+                        .param("keyword", "张三")
+                        .header("Authorization", "Bearer " + superToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2));
+        //2.三张单标题都含"申请" → 全命中（演示单标题含"申请"的一并可见，按 基线+3 断言）
+        mockMvc.perform(get("/api/approvals").param("view", "TODO")
+                        .param("keyword", "申请")
+                        .header("Authorization", "Bearer " + superToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(applyBaseline + 3));
+        //3.无命中关键词 → 0 张
+        mockMvc.perform(get("/api/approvals").param("view", "TODO")
+                        .param("keyword", "查无此队")
+                        .header("Authorization", "Bearer " + superToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
     }
 
     @Test
@@ -177,6 +213,12 @@ class ApprovalQueryTest extends ApprovalTestBase {
                 Integer.class);
         assertNotNull(stillPending);
         assertTrue(stillPending >= 2, "未到期的单不受影响");
+    }
+
+    /** 数一条 COUNT 查询（deleted=0 与实体 @TableLogic 口径一致），null 防御归零 */
+    private int countRows(String sql, Object... args) {
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, args);
+        return count == null ? 0 : count;
     }
 
     /** 调进程内契约造一张审批单 */
