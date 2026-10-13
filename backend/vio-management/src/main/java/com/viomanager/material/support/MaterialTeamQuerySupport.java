@@ -3,6 +3,8 @@ package com.viomanager.material.support;
 import jakarta.annotation.Resource;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -53,6 +55,50 @@ public class MaterialTeamQuerySupport {
     }
 
     /** 在册成员判定：team_member.status CONFIRMED / UNCONFIRMED 都算在队（MS02 第 6 步口径） */
+    /** 是否该队在册队长（team_member 有 is_leader=1 且状态在册的记录） */
+    // TODO(联调) B 线提供队伍查询服务后，改成调它的队长判定
+    public boolean isTeamLeader(Long teamId, Long memberId) {
+        String sql = "SELECT COUNT(*) FROM team_member "
+                + "WHERE team_id = :teamId AND member_id = :memberId AND is_leader = 1 "
+                + "AND status IN ('CONFIRMED', 'UNCONFIRMED') AND deleted = 0";
+        Long count = namedTemplate.queryForObject(
+                sql, Map.of("teamId", teamId, "memberId", memberId), Long.class);
+        return count != null && count > 0;
+    }
+
+    /** 我的在册队伍行（含队长标识与队伍状态；teamStatus 供调用方自行筛 ACTIVE） */
+    // TODO(联调) B 线提供队伍查询服务后，改成调它的"按成员查在册队伍（含队长标识）"
+    public List<TeamMembership> loadMyTeamMemberships(Long memberId) {
+        String sql = "SELECT t.id, t.name, t.status, tm.is_leader FROM team t "
+                + "INNER JOIN team_member tm ON tm.team_id = t.id "
+                + "WHERE tm.member_id = :memberId AND tm.status IN ('CONFIRMED', 'UNCONFIRMED') "
+                + "AND tm.deleted = 0 AND t.deleted = 0";
+        return namedTemplate.query(sql, Map.of("memberId", memberId), rs -> {
+            List<TeamMembership> list = new ArrayList<>();
+            while (rs.next()) {
+                list.add(new TeamMembership(rs.getObject("id", Long.class), rs.getString("name"),
+                        rs.getString("status"), rs.getInt("is_leader") == 1));
+            }
+            return list;
+        });
+    }
+
+    /** 批量查队名（列表渲染免 N+1）：teamId → name；空集直接返回空 Map，已删的队伍查不出来 */
+    // TODO(联调) B 线提供 ITeamService 后，改成批量调它的 getById
+    public Map<Long, String> loadTeamNames(Collection<Long> teamIds) {
+        if (teamIds == null || teamIds.isEmpty()) {
+            return Map.of();
+        }
+        String sql = "SELECT id, name FROM team WHERE id IN (:ids) AND deleted = 0";
+        return namedTemplate.query(sql, Map.of("ids", teamIds), rs -> {
+            Map<Long, String> map = new HashMap<>();
+            while (rs.next()) {
+                map.put(rs.getObject("id", Long.class), rs.getString("name"));
+            }
+            return map;
+        });
+    }
+
     // TODO(联调) B 线提供成员查询服务后替换
     public boolean isTeamMember(Long teamId, Long memberId) {
         String sql = "SELECT COUNT(*) FROM team_member "
@@ -90,5 +136,9 @@ public class MaterialTeamQuerySupport {
 
     /** 我在册且 ACTIVE 的队伍行（B 线实体未建前的过渡载体） */
     public record MyTeamRow(Long id, String name, Long contestId, BigDecimal completeRate) {
+    }
+
+    /** 我的在册队伍行（含队长标识与队伍状态；teamStatus 供调用方自行筛 ACTIVE） */
+    public record TeamMembership(Long teamId, String teamName, String teamStatus, boolean isLeader) {
     }
 }
