@@ -7,6 +7,7 @@ import com.viomanager.common.enums.MaterialErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.Result;
 import com.viomanager.file.config.FileProperties;
+import com.viomanager.material.dto.MaterialBatchUploadDTO;
 import com.viomanager.material.dto.MaterialSubmitDTO;
 import com.viomanager.material.entity.MaterialRequirement;
 import com.viomanager.material.entity.MaterialSubmission;
@@ -16,9 +17,12 @@ import com.viomanager.material.mapper.MaterialSubmissionMapper;
 import com.viomanager.material.mapper.MaterialTaskMapper;
 import com.viomanager.material.service.MaterialCompletionService;
 import com.viomanager.material.service.MaterialSubmissionService;
+import com.viomanager.material.support.MaterialTeamQuerySupport;
+import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
+import com.viomanager.material.support.MaterialZipBatchSupport;
+import com.viomanager.material.vo.BatchMatchResultVO;
 import com.viomanager.material.vo.MaterialSubmitVO;
 import jakarta.annotation.Resource;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -29,13 +33,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 材料提交服务实现（MS02）：8 步校验 → 同事务覆盖上传 → 触发齐全率重算。
+ * 材料提交服务实现（MS02 单份提交 / MS03 zip 批量上传）：校验 → 同事务落库 → 触发齐全率重算。
  * 校验顺序是产品口径（顺序错会误导用户，比如先报格式后报非队员），**不要调整顺序**；
  * 第 0 步的入参完整性拦截是空值防线——file_id / file_name / file_size 列 NOT NULL，
  * 空值放进 8 步链会在中途 NPE 或落库 500。
  *
  * 跨模块取数（B 线尚未建 team 包、CurrentUser 无 memberId）：
- *  - team / team_member 表 SQL 集中在 loadTeam / isTeamMember 私有方法，均带 TODO(联调) 注释；
+ *  - team / team_member 表 SQL 集中在 MaterialTeamQuerySupport（TODO(联调) 注释在该类逐方法标注）；
  *  - 当前用户的人员档案 ID 照骨架 ApprovalActionServiceImpl.currentMemberId 的写法查 sys_user。
  */
 @Service
@@ -55,6 +59,12 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
 
     @Resource
     private FileProperties fileProperties;
+
+    @Resource
+    private MaterialTeamQuerySupport teamQuery;
+
+    @Resource
+    private MaterialZipBatchSupport zipBatch;
 
     @Resource
     private NamedParameterJdbcTemplate namedTemplate;
@@ -81,7 +91,7 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
             throw new BizException(CommonErrorCode.NOT_FOUND, "材料要求不存在");
         }
         //2.赛队存在
-        TeamRow team = loadTeam(dto.getTeamId());
+        TeamRow team = teamQuery.loadTeam(dto.getTeamId());
         if (team == null) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "赛队不存在");
         }
@@ -101,7 +111,7 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         //6.在册成员：队长或队员均可（team_member.status CONFIRMED / UNCONFIRMED 都算在队）→ 5003
         CurrentUser user = UserHolder.getUser();
         Long memberId = currentMemberId(user);
-        if (memberId == null || !isTeamMember(dto.getTeamId(), memberId)) {
+        if (memberId == null || !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
             throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER);
         }
         //7.扩展名白名单：allowed_formats 为空表示不限 → 5001
@@ -146,6 +156,61 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         return Result.ok(new MaterialSubmitVO().setVersion(newVersion));
     }
 
+    /**
+     * zip 批量上传（MS03）：6 步校验（与单份提交同口径同顺序）→ 两层匹配与落库（MaterialZipBatchSupport，
+     * 同一事务）→ 齐全率重算。"真实解压未经实测、当前走兜底匹配"的说明见该 Support 类 Javadoc。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Result<BatchMatchResultVO> batchUpload(MaterialBatchUploadDTO dto) {
+        //0.入参完整性（空值防线，同单份提交第 0 步）
+        if (dto.getTeamId() == null) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "teamId 不能为空");
+        }
+        if (dto.getTaskId() == null) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "taskId 不能为空");
+        }
+        if (dto.getFileId() == null) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "fileId 不能为空");
+        }
+        if (dto.getFileName() == null || dto.getFileName().isBlank()) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "fileName 不能为空");
+        }
+        //1.任务存在
+        MaterialTask task = taskMapper.selectById(dto.getTaskId());
+        if (task == null) {
+            throw new BizException(CommonErrorCode.NOT_FOUND, "材料任务不存在");
+        }
+        //2.赛队存在
+        TeamRow team = teamQuery.loadTeam(dto.getTeamId());
+        if (team == null) {
+            throw new BizException(CommonErrorCode.NOT_FOUND, "赛队不存在");
+        }
+        //3.比赛匹配 → 5004
+        if (!Objects.equals(task.getContestId(), team.contestId())) {
+            throw new BizException(MaterialErrorCode.CONTEST_MISMATCH);
+        }
+        //4.未过截止（deadline 为 null = 不限期）→ 1006
+        if (task.getDeadline() != null && LocalDateTime.now().isAfter(task.getDeadline())) {
+            throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "已过截止时间，禁止提交");
+        }
+        //5.在册成员（队长或队员）→ 5003
+        CurrentUser user = UserHolder.getUser();
+        Long memberId = currentMemberId(user);
+        if (memberId == null || !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
+            throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER);
+        }
+        //6.仅支持 zip 压缩包（忽略大小写）→ 5001
+        if (!dto.getFileName().toLowerCase().endsWith(".zip")) {
+            throw new BizException(MaterialErrorCode.FILE_FORMAT_NOT_ALLOWED, "批量上传仅支持 zip 压缩包");
+        }
+        //两层匹配 + 未交要求落库（同一事务），随后重算齐全率
+        BatchMatchResultVO vo =
+                zipBatch.matchAndInsert(task, team, memberId, user.getRealName(), dto);
+        completionService.recompute(dto.getTeamId());
+        return Result.ok(vo);
+    }
+
     /** 当前登录用户的人员档案 ID（sys_user.member_id；未绑定返回 null），照骨架 ApprovalActionServiceImpl 的写法 */
     private Long currentMemberId(CurrentUser user) {
         if (user == null || user.getUserId() == null) {
@@ -158,37 +223,6 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
             return null;
         }
         return ids.get(0);
-    }
-
-    // TODO(联调) B 线提供 ITeamService 后，改成调它的 getById(teamId)
-    private TeamRow loadTeam(Long teamId) {
-        String sql = "SELECT id, contest_id, semester_id, org_id, leader_member_id, status, "
-                + "material_status, material_complete_rate "
-                + "FROM team WHERE id = :teamId AND deleted = 0";
-        return namedTemplate.query(sql, Map.of("teamId", teamId), rs -> {
-            if (!rs.next()) {
-                return null;
-            }
-            return new TeamRow(
-                    rs.getObject("id", Long.class),
-                    rs.getObject("contest_id", Long.class),
-                    rs.getObject("semester_id", Long.class),
-                    rs.getObject("org_id", Long.class),
-                    rs.getObject("leader_member_id", Long.class),
-                    rs.getString("status"),
-                    rs.getString("material_status"),
-                    rs.getBigDecimal("material_complete_rate"));
-        });
-    }
-
-    // TODO(联调) B 线提供成员查询服务后替换
-    private boolean isTeamMember(Long teamId, Long memberId) {
-        String sql = "SELECT COUNT(*) FROM team_member "
-                + "WHERE team_id = :teamId AND member_id = :memberId "
-                + "AND status IN ('CONFIRMED', 'UNCONFIRMED') AND deleted = 0";
-        Long count = namedTemplate.queryForObject(
-                sql, Map.of("teamId", teamId, "memberId", memberId), Long.class);
-        return count != null && count > 0;
     }
 
     /** 从文件名提扩展名：小写、不含点；没有扩展名返回空串（与文件服务 FileServiceImpl 同款写法） */
@@ -207,10 +241,5 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
                 .map(String::toLowerCase)
                 .filter(f -> !f.isEmpty())
                 .toList();
-    }
-
-    /** team 行只读快照（B 线实体未建前的过渡载体；MS02 只消费 contestId / semesterId / orgId） */
-    private record TeamRow(Long id, Long contestId, Long semesterId, Long orgId, Long leaderMemberId,
-                           String status, String materialStatus, BigDecimal completeRate) {
     }
 }

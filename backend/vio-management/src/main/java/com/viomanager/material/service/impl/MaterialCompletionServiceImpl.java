@@ -15,12 +15,14 @@ import com.viomanager.material.mapper.MaterialSubmissionMapper;
 import com.viomanager.material.mapper.MaterialTaskMapper;
 import com.viomanager.material.service.MaterialCompletionService;
 import com.viomanager.material.service.MaterialRequirementService;
+import com.viomanager.material.support.MaterialTeamQuerySupport;
+import com.viomanager.material.support.MaterialTeamQuerySupport.MyTeamRow;
+import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
 import com.viomanager.material.vo.MaterialRequirementVO;
 import com.viomanager.material.vo.MaterialSubmitInfoVO;
 import com.viomanager.material.vo.MyTeamMaterialVO;
 import com.viomanager.material.vo.TeamMaterialRowVO;
 import jakarta.annotation.Resource;
-import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,7 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 队伍材料完成度实现：齐全率重算（recompute）+ MS01 管理端队伍概览 + MS06 学生端我的材料。
  * 重算口径（C 线接口清单 §3 MS02）：分母为任务下全部未删要求（含选传），分子为有 is_current=1 提交的
- * 要求数，completeRate 取 0–100 整数。team 表读写集中在四个带 TODO(联调) 注释的私有方法里。
+ * 要求数，completeRate 取 0–100 整数。team / team_member 表的跨线 SQL 全部集中在
+ * MaterialTeamQuerySupport（B 线过渡方案，TODO(联调) 注释在该类逐方法标注）。
  */
 @Service
 public class MaterialCompletionServiceImpl implements MaterialCompletionService {
@@ -56,13 +59,16 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
     private MaterialRequirementService requirementService;
 
     @Resource
+    private MaterialTeamQuerySupport teamQuery;
+
+    @Resource
     private NamedParameterJdbcTemplate namedTemplate;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void recompute(Long teamId) {
         //1.队伍不存在直接返回（重算是幂等收敛动作，不抛错）
-        TeamRow team = loadTeam(teamId);
+        TeamRow team = teamQuery.loadTeam(teamId);
         if (team == null) {
             return;
         }
@@ -97,13 +103,13 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         String materialStatus = submitted == 0 ? "NOT_STARTED"
                 : requiredMissing > 0 ? "PENDING" : "SUBMITTED";
         //7.回写 team 两列
-        updateTeamMaterial(teamId, materialStatus, completeRate);
+        teamQuery.updateTeamMaterial(teamId, materialStatus, completeRate);
     }
 
     @Override
     public Result<TeamMaterialRowVO> teamOverview(Long teamId) {
         //1.队伍必须存在
-        TeamRow team = loadTeam(teamId);
+        TeamRow team = teamQuery.loadTeam(teamId);
         if (team == null) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "赛队不存在");
         }
@@ -142,7 +148,7 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         TeamMaterialRowVO vo = new TeamMaterialRowVO();
         vo.setTeamId(teamId);
         vo.setTeamName(team.name());
-        vo.setLeaderName(loadLeaderName(teamId, team.leaderMemberId()));
+        vo.setLeaderName(teamQuery.loadLeaderName(teamId, team.leaderMemberId()));
         vo.setCompleteRate(team.completeRate() == null ? 0 : team.completeRate().intValue());
         vo.setStatusText(requiredMissing > 0 ? "待补 " + requiredMissing + " 项" : "齐全");
         vo.setItems(items);
@@ -158,7 +164,7 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         }
         //2.我在册（CONFIRMED/UNCONFIRMED）且 ACTIVE 的队伍
         List<MyTeamMaterialVO> voList = new ArrayList<>();
-        for (MyTeamRow team : loadMyTeams(memberId)) {
+        for (MyTeamRow team : teamQuery.loadMyTeams(memberId)) {
             //3.该队所在比赛没配材料任务 → 跳过这支队伍（不报错、不出现在数组里）
             List<MaterialTask> tasks = taskMapper.selectList(
                     new QueryWrapper<MaterialTask>().eq("contest_id", team.contestId()));
@@ -221,67 +227,6 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
                 "SELECT member_id FROM sys_user WHERE id = :userId AND deleted = 0",
                 Map.of("userId", user.getUserId()), Long.class);
         return ids.isEmpty() || ids.get(0) == null ? null : ids.get(0);
-    }
-
-    // TODO(联调) B 线提供 ITeamService 后，改成调它的 getById(teamId)
-    private TeamRow loadTeam(Long teamId) {
-        String sql = "SELECT id, name, contest_id, semester_id, org_id, leader_member_id, status, "
-                + "material_status, material_complete_rate FROM team WHERE id = :teamId AND deleted = 0";
-        return namedTemplate.query(sql, Map.of("teamId", teamId), rs -> {
-            if (!rs.next()) {
-                return null;
-            }
-            return new TeamRow(rs.getObject("id", Long.class), rs.getString("name"),
-                    rs.getObject("contest_id", Long.class), rs.getObject("semester_id", Long.class),
-                    rs.getObject("org_id", Long.class), rs.getObject("leader_member_id", Long.class),
-                    rs.getString("status"), rs.getString("material_status"),
-                    rs.getBigDecimal("material_complete_rate"));
-        });
-    }
-
-    // TODO(联调) B 线提供队伍查询服务后，改成调它的"按成员查在册队伍"
-    private List<MyTeamRow> loadMyTeams(Long memberId) {
-        String sql = "SELECT id, name, contest_id, material_complete_rate FROM team WHERE id IN "
-                + "(SELECT team_id FROM team_member WHERE member_id = :memberId "
-                + "AND status IN ('CONFIRMED', 'UNCONFIRMED') AND deleted = 0) AND status = 'ACTIVE' AND deleted = 0";
-        return namedTemplate.query(sql, Map.of("memberId", memberId), rs -> {
-            List<MyTeamRow> list = new ArrayList<>();
-            while (rs.next()) {
-                list.add(new MyTeamRow(rs.getObject("id", Long.class), rs.getString("name"),
-                        rs.getObject("contest_id", Long.class),
-                        rs.getBigDecimal("material_complete_rate")));
-            }
-            return list;
-        });
-    }
-
-    // TODO(联调) B 线提供 ITeamService 后，队长名随 getById 一并带出（现为按 leader_member_id 查 team_member 冗余名）
-    private String loadLeaderName(Long teamId, Long leaderMemberId) {
-        if (leaderMemberId == null) {
-            return null;
-        }
-        List<String> names = namedTemplate.queryForList(
-                "SELECT member_name FROM team_member WHERE team_id = :teamId AND member_id = :memberId AND deleted = 0",
-                Map.of("teamId", teamId, "memberId", leaderMemberId), String.class);
-        return names.isEmpty() ? null : names.get(0);
-    }
-
-    // TODO(联调) B 线提供 ITeamService 后，改成调它的更新接口
-    private void updateTeamMaterial(Long teamId, String materialStatus, int completeRate) {
-        String sql = "UPDATE team SET material_status = :status, material_complete_rate = :rate "
-                + "WHERE id = :teamId AND deleted = 0";
-        namedTemplate.update(sql,
-                Map.of("status", materialStatus, "rate", completeRate, "teamId", teamId));
-    }
-
-    /** team 行只读快照（B 线实体未建前的过渡载体，本类消费 name / contestId / leaderMemberId / completeRate） */
-    private record TeamRow(Long id, String name, Long contestId, Long semesterId, Long orgId,
-                           Long leaderMemberId, String status, String materialStatus,
-                           BigDecimal completeRate) {
-    }
-
-    /** 我在册且 ACTIVE 的队伍行（B 线实体未建前的过渡载体） */
-    private record MyTeamRow(Long id, String name, Long contestId, BigDecimal completeRate) {
     }
 
     /** 提交状态四元组（MS01 / MS06 共用口径）：未提交时 version=0、fileName / uploadedAt 为空串 */
