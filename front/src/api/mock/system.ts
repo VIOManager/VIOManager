@@ -8,9 +8,10 @@
 import { fail, ok, registerMock } from './registry'
 import { findMockUserByToken } from './auth'
 import { usedIdemKeys } from './approval-data'
-import { skillItems } from './dict'
+import { DICTS, skillItems } from './dict'
 import { MATERIAL_TYPES } from '@/config/labels'
 import type { DictItemAdmin, SysConfig } from '@/api/system'
+import type { DictItem } from '@/api/dict'
 
 interface MockDictType {
   id: string
@@ -45,56 +46,84 @@ const materialItems: MockItem[] = MATERIAL_TYPES.map((t, i) => ({
   sortNo: i + 1, source: 'PRESET', status: 'ENABLED', auditStatus: 'APPROVED', createdByName: ''
 }))
 
-const kbItems: MockItem[] = [
-  { id: 'kbi1', dictCode: 'KB_CATEGORY', itemValue: 'TRAINING', itemLabel: '培训笔记', sortNo: 1, source: 'PRESET', status: 'ENABLED', auditStatus: 'APPROVED', createdByName: '' },
-  { id: 'kbi2', dictCode: 'KB_CATEGORY', itemValue: 'TROUBLESHOOT', itemLabel: '排障记录', sortNo: 2, source: 'PRESET', status: 'ENABLED', auditStatus: 'APPROVED', createdByName: '' },
-  { id: 'kbi3', dictCode: 'KB_CATEGORY', itemValue: 'RETRO', itemLabel: '复盘总结', sortNo: 3, source: 'PRESET', status: 'ENABLED', auditStatus: 'APPROVED', createdByName: '' },
-  { id: 'kbi4', dictCode: 'KB_CATEGORY', itemValue: 'RULES', itemLabel: '规章制度', sortNo: 4, source: 'PRESET', status: 'ENABLED', auditStatus: 'APPROVED', createdByName: '' }
-]
-
-/** SKILL 条目适配为管理视图（itemValue=label 小写化，status 默认启用；旧结构无 status 视为 ENABLED） */
-function skillAdminView(): MockItem[] {
-  return skillItems.map((s, i) => ({
-    id: s.id, dictCode: 'SKILL', itemValue: s.label, itemLabel: s.label, sortNo: i + 1,
+/** 旧式字典数组（DictItem 形状）适配为管理视图 */
+function dictAdminView(code: string, arr: DictItem[]): MockItem[] {
+  return arr.map((s, i) => ({
+    id: s.id, dictCode: code, itemValue: s.label, itemLabel: s.label, sortNo: i + 1,
     source: s.source, status: (s as { status?: 'ENABLED' | 'DISABLED' }).status ?? 'ENABLED',
     auditStatus: s.auditStatus, createdByName: s.createdByName ?? ''
   }))
 }
 
-/** 按类型取条目数组（SKILL 返回适配视图，其余返回原数组） */
+/** 字典原始数组（写操作直接改源，DR01 同源生效）；MATERIAL_TYPE 为 MockItem 形状单独处理 */
+function rawDictArray(code: string): DictItem[] | null {
+  if (code === 'SKILL') return skillItems
+  if (code === 'KB_CATEGORY') return DICTS.KB_CATEGORY ?? null
+  return null
+}
+
+/** 按类型取条目（管理视图） */
 function itemsOf(dictCode: string): MockItem[] {
-  if (dictCode === 'SKILL') return skillAdminView()
   if (dictCode === 'MATERIAL_TYPE') return materialItems
-  if (dictCode === 'KB_CATEGORY') return kbItems
+  const raw = rawDictArray(dictCode)
+  if (raw) return dictAdminView(dictCode, raw)
   return []
 }
 
-/** 任意类型下按 id 找条目（返回可写引用；SKILL 回源 skillItems） */
-function findItemAnywhere(id: string): MockItem | null {
-  for (const s of skillItems) {
-    if (s.id === id) {
-      const ext = s as { status?: 'ENABLED' | 'DISABLED' }
-      return {
-        id: s.id, dictCode: 'SKILL', itemValue: s.label, itemLabel: s.label, sortNo: 0,
-        source: s.source, status: ext.status ?? 'ENABLED', auditStatus: s.auditStatus, createdByName: s.createdByName ?? ''
+/** 条目写回（改名/启停/审核按类型落到源数组） */
+function writeItem(dictCode: string, id: string, patch: Partial<{ itemLabel: string; status: 'ENABLED' | 'DISABLED'; auditStatus: 'APPROVED' | 'REJECTED'; sortNo: number }>): boolean {
+  if (dictCode === 'MATERIAL_TYPE') {
+    for (const it of materialItems) {
+      if (it.id === id) {
+        if (patch.itemLabel) it.itemLabel = patch.itemLabel
+        if (patch.status) it.status = patch.status
+        if (patch.auditStatus) it.auditStatus = patch.auditStatus
+        if (patch.sortNo !== undefined) it.sortNo = patch.sortNo
+        return true
       }
     }
+    return false
   }
-  for (const it of materialItems) {
-    if (it.id === id) return it
+  const raw = rawDictArray(dictCode)
+  if (!raw) return false
+  for (const it of raw) {
+    if (it.id === id) {
+      if (patch.itemLabel) it.label = patch.itemLabel
+      if (patch.status) (it as { status?: string }).status = patch.status
+      if (patch.auditStatus) it.auditStatus = patch.auditStatus
+      return true
+    }
   }
-  for (const it of kbItems) {
-    if (it.id === id) return it
+  return false
+}
+
+/** 按条目 id 定位所属类型编码 */
+function locateItemType(id: string): string | null {
+  for (const t of dictTypes) {
+    const items = itemsOf(t.dictCode)
+    for (const it of items) {
+      if (it.id === id) return t.dictCode
+    }
   }
   return null
 }
 
-/** SKILL 条目写回（审核/启停直接改 skillItems 原对象） */
-function writeSkill(id: string, patch: Partial<{ auditStatus: 'PENDING' | 'APPROVED' | 'REJECTED'; status: 'ENABLED' | 'DISABLED' }>): boolean {
-  for (const s of skillItems) {
-    if (s.id === id) {
-      if (patch.auditStatus) s.auditStatus = patch.auditStatus
-      if (patch.status) (s as { status?: string }).status = patch.status
+/** 删除条目（源数组 splice，DR01 同源生效） */
+function removeItem(dictCode: string, id: string): boolean {
+  if (dictCode === 'MATERIAL_TYPE') {
+    for (let i = materialItems.length - 1; i >= 0; i--) {
+      if (materialItems[i].id === id) {
+        materialItems.splice(i, 1)
+        return true
+      }
+    }
+    return false
+  }
+  const raw = rawDictArray(dictCode)
+  if (!raw) return false
+  for (let i = raw.length - 1; i >= 0; i--) {
+    if (raw[i].id === id) {
+      raw.splice(i, 1)
       return true
     }
   }
@@ -220,23 +249,10 @@ registerMock({
     if (!superOnly(ctx.token)) return fail(1003, '仅超管可管理字典')
     const label = String(ctx.body.itemLabel ?? '').trim()
     if (!label) return fail(1001, '名称不能为空')
-    // SKILL 回源改 label；其余改数组项
-    for (const s of skillItems) {
-      if (s.id === ctx.params.id) {
-        s.label = label
-        return ok(null)
-      }
-    }
-    for (const arr of [materialItems, kbItems]) {
-      for (const it of arr) {
-        if (it.id === ctx.params.id) {
-          it.itemLabel = label
-          if (ctx.body.sortNo !== undefined) it.sortNo = Number(ctx.body.sortNo)
-          return ok(null)
-        }
-      }
-    }
-    return fail(1004, '条目不存在')
+    const code = locateItemType(ctx.params.id)
+    if (!code) return fail(1004, '条目不存在')
+    writeItem(code, ctx.params.id, { itemLabel: label, sortNo: ctx.body.sortNo !== undefined ? Number(ctx.body.sortNo) : undefined })
+    return ok(null)
   }
 })
 
@@ -245,21 +261,10 @@ registerMock({
   path: '/api/dicts/items/:id',
   reply: (ctx) => {
     if (!superOnly(ctx.token)) return fail(1003, '仅超管可管理字典')
-    for (let i = skillItems.length - 1; i >= 0; i--) {
-      if (skillItems[i].id === ctx.params.id) {
-        skillItems.splice(i, 1)
-        return ok(null)
-      }
-    }
-    for (const arr of [materialItems, kbItems]) {
-      for (let i = arr.length - 1; i >= 0; i--) {
-        if (arr[i].id === ctx.params.id) {
-          arr.splice(i, 1)
-          return ok(null)
-        }
-      }
-    }
-    return fail(1004, '条目不存在')
+    const code = locateItemType(ctx.params.id)
+    if (!code) return fail(1004, '条目不存在')
+    removeItem(code, ctx.params.id)
+    return ok(null)
   }
 })
 
@@ -269,16 +274,10 @@ registerMock({
   reply: (ctx) => {
     if (!superOnly(ctx.token)) return fail(1003, '仅超管可管理字典')
     const enabled = String(ctx.body.status ?? '') === 'ENABLED'
-    if (writeSkill(ctx.params.id, { status: enabled ? 'ENABLED' : 'DISABLED' })) return ok(null)
-    for (const arr of [materialItems, kbItems]) {
-      for (const it of arr) {
-        if (it.id === ctx.params.id) {
-          it.status = enabled ? 'ENABLED' : 'DISABLED'
-          return ok(null)
-        }
-      }
-    }
-    return fail(1004, '条目不存在')
+    const code = locateItemType(ctx.params.id)
+    if (!code) return fail(1004, '条目不存在')
+    writeItem(code, ctx.params.id, { status: enabled ? 'ENABLED' : 'DISABLED' })
+    return ok(null)
   }
 })
 
@@ -289,11 +288,16 @@ registerMock({
     if (!superOnly(ctx.token)) return fail(1003, '仅超管可审核')
     const auditStatus = String(ctx.body.auditStatus ?? '')
     if (auditStatus !== 'APPROVED' && auditStatus !== 'REJECTED') return fail(1001, '审核结论不合法')
-    const item = findItemAnywhere(ctx.params.id)
-    if (!item) return fail(1004, '条目不存在')
-    if (item.source !== 'USER' || item.auditStatus !== 'PENDING') return fail(1006, '该词条不在待审核状态')
-    writeSkill(ctx.params.id, { auditStatus: auditStatus as 'APPROVED' })
-    return ok(null)
+    const code = locateItemType(ctx.params.id)
+    if (!code) return fail(1004, '条目不存在')
+    const items = itemsOf(code)
+    for (const it of items) {
+      if (it.id !== ctx.params.id) continue
+      if (it.source !== 'USER' || it.auditStatus !== 'PENDING') return fail(1006, '该词条不在待审核状态')
+      writeItem(code, it.id, { auditStatus: auditStatus as 'APPROVED' | 'REJECTED' })
+      return ok(null)
+    }
+    return fail(1004, '条目不存在')
   }
 })
 

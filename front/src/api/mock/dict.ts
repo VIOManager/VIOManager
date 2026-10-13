@@ -25,8 +25,18 @@ export const skillItems: DictItem[] = [
   { id: 'd11', label: '摄影', source: 'USER', auditStatus: 'REJECTED', createdByName: '陈子昂' }
 ]
 
-/** 字典登记表：type → 词条数组（目前仅 SKILL，后续类型在此追加） */
-const DICTS: Record<string, DictItem[]> = { SKILL: skillItems }
+/** 字典登记表：type → 词条数组（SKILL 技能标签；KB_CATEGORY 知识库分类——知识库迁回主站后 DR01 直接可用）
+ *  导出供 mock/system.ts 管理侧共享同一份数据 */
+export const DICTS: Record<string, DictItem[]> = {
+  SKILL: skillItems,
+  KB_CATEGORY: [
+    { id: 'kbi1', label: 'Python 教程', source: 'PRESET', auditStatus: 'APPROVED' },
+    { id: 'kbi2', label: '机械设计规范', source: 'PRESET', auditStatus: 'APPROVED' },
+    { id: 'kbi3', label: '三维建模教程', source: 'PRESET', auditStatus: 'APPROVED' },
+    { id: 'kbi4', label: 'AI 提示词库', source: 'PRESET', auditStatus: 'APPROVED' },
+    { id: 'kbi5', label: '其他', source: 'PRESET', auditStatus: 'APPROVED' }
+  ]
+}
 
 registerMock({
   method: 'get',

@@ -27,7 +27,6 @@ const year = new Date().getFullYear()
         <nav class="topnav">
           <router-link to="/" exact-active-class="on">首页</router-link>
           <router-link to="/feed" active-class="on">技术交流</router-link>
-          <router-link to="/kb" active-class="on">知识库</router-link>
         </nav>
         <button class="btn-post" type="button">创作新主题</button>
         <span class="who"><img :src="avatarOf(user.realName, 26)" alt="">{{ user.realName }}</span>
@@ -43,7 +42,6 @@ const year = new Date().getFullYear()
       <div>
         <a href="#" @click.prevent>关于</a>
         <a :href="mainSite">主站</a>
-        <router-link to="/kb">知识库</router-link>
       </div>
       VIO Manager · 团队论坛 · 内部站点 · {{ year }} 秋
     </footer>
