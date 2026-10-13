@@ -1,5 +1,6 @@
 package com.viomanager.material.support;
 
+import com.viomanager.team.service.TeamMaterialStatusService;
 import jakarta.annotation.Resource;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -11,9 +12,10 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * 材料模块的 team / team_member 表跨线访问支撑（B 线未建 team 包前的过渡方案）。
+ * 材料模块的 team / team_member 表跨线访问支撑（查询侧为过渡方案）。
  * ⚠️ 规矩：本模块打向 team / team_member 两表的全部 SQL 集中在本类，各 Service Impl 不得散写；
- * B 线 Service 就绪后按逐方法上的 TODO(联调) 注释替换成对它的调用。
+ * 查询方法按逐条 TODO(联调) 注释在联调时替换成 B 线服务调用。
+ * 写侧（队伍材料两列）按 B/C 清单 §6 契约走 TeamMaterialStatusService 口子，禁止直写 team 表。
  * （sys_user 的 member_id 反查属骨架认证域，不归本类，见各 Impl 的 currentMemberId。）
  */
 @Component
@@ -21,6 +23,9 @@ public class MaterialTeamQuerySupport {
 
     @Resource
     private NamedParameterJdbcTemplate namedTemplate;
+
+    @Resource
+    private TeamMaterialStatusService teamMaterialStatusService;
 
     // TODO(联调) B 线提供 ITeamService 后，改成调它的 getById(teamId)
     public TeamRow loadTeam(Long teamId) {
@@ -120,12 +125,13 @@ public class MaterialTeamQuerySupport {
         return names.isEmpty() ? null : names.get(0);
     }
 
-    // TODO(联调) B 线提供 ITeamService 后，改成调它的更新接口
+    /**
+     * 写队伍材料两列：B/C 清单 §6 契约——走 B 线 TeamMaterialStatusService 口子，禁止直写 team 表。
+     * 本类入参 completeRate 是 int 百分比，口子契约收 BigDecimal（0-100），此处换算。
+     */
     public void updateTeamMaterial(Long teamId, String materialStatus, int completeRate) {
-        String sql = "UPDATE team SET material_status = :status, material_complete_rate = :rate "
-                + "WHERE id = :teamId AND deleted = 0";
-        namedTemplate.update(sql,
-                Map.of("status", materialStatus, "rate", completeRate, "teamId", teamId));
+        teamMaterialStatusService.updateMaterialStatus(teamId, materialStatus,
+                BigDecimal.valueOf(completeRate));
     }
 
     /** team 行只读快照（B 线实体未建前的过渡载体） */

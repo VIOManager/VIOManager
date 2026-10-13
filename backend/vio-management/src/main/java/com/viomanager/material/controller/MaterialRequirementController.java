@@ -1,5 +1,6 @@
 package com.viomanager.material.controller;
 
+import com.viomanager.common.audit.AuditLog;
 import com.viomanager.common.auth.RequireRole;
 import com.viomanager.common.result.Result;
 import com.viomanager.material.dto.MaterialRequirementCreateDTO;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 管理端配置入口，口径以 C 线接口清单 §2 为准。
  * 三个接口全部仅限管理员（@RequireRole 挡学生，规范 §5.4 权限第二道关口）；
  * 入参校验文案由 service 层手写（见 MaterialRequirementServiceImpl），
- * 故本层不挂 @Valid；@Idempotent / @AuditLog 待 bizType 词表登记后再补。
+ * 故本层不挂 @Valid；@Idempotent 暂不挂（前端未带 X-Idempotency-Key 头）；三个写接口已挂 @AuditLog 留痕。
  */
 @RestController
 @RequestMapping("/api/materials")
@@ -40,6 +41,8 @@ public class MaterialRequirementController {
 
     /** MR01 添加要求：taskId 走路径；contestId 随任务带出，systemGenerated 恒 0 */
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
+    @AuditLog(bizType = "MATERIAL_REQUIREMENT_CREATE", label = "添加材料要求",
+            summary = "'添加材料要求：任务' + #taskId")
     @PostMapping("/tasks/{taskId}/requirements")
     public Result<MaterialRequirementVO> create(@PathVariable("taskId") Long taskId,
                                                 @RequestBody MaterialRequirementCreateDTO dto) {
@@ -48,6 +51,8 @@ public class MaterialRequirementController {
 
     /** MR02 编辑要求：系统生成的佐证要求 403 拒绝；taskId / contestId 不参与修改 */
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
+    @AuditLog(bizType = "MATERIAL_REQUIREMENT_UPDATE", label = "编辑材料要求",
+            summary = "'编辑材料要求：' + #id")
     @PutMapping("/requirements/{id}")
     public Result<Void> update(@PathVariable("id") Long id,
                                @RequestBody MaterialRequirementUpdateDTO dto) {
@@ -57,6 +62,8 @@ public class MaterialRequirementController {
 
     /** MR03 删除要求：已有提交记录 5005 拒绝；系统生成项 403 拒绝；逻辑删除 */
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
+    @AuditLog(bizType = "MATERIAL_REQUIREMENT_DELETE", label = "删除材料要求",
+            summary = "'删除材料要求：' + #id")
     @DeleteMapping("/requirements/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
         requirementService.delete(id);

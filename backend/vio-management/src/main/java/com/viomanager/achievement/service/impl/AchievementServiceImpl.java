@@ -21,21 +21,22 @@ import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.enums.MaterialErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.Result;
+import com.viomanager.file.service.IFileService;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamMembership;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
+import com.viomanager.material.support.MemberIdSupport;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 成果服务实现（A01–A06 + A08）：本类只做 DTO 转换、查询与编排调度，
  * A03 的"学生走审批 / 管理员直录"分支在 AchievementApprovalSupport；
- * team / team_member 访问一律走 MaterialTeamQuerySupport（sys_user 反查 memberId 为本类私有方法）。
+ * team / team_member 访问一律走 MaterialTeamQuerySupport（sys_user 反查 memberId 走 MemberIdSupport）。
  */
 @Service
 public class AchievementServiceImpl implements AchievementService {
@@ -53,7 +54,10 @@ public class AchievementServiceImpl implements AchievementService {
     private AchievementApprovalSupport approvalSupport;
 
     @Resource
-    private NamedParameterJdbcTemplate namedTemplate;
+    private IFileService fileService;
+
+    @Resource
+    private MemberIdSupport memberIdSupport;
 
     @Override
     public Result<List<AchievementVO>> list(AchievementQueryDTO dto) {
@@ -61,7 +65,7 @@ public class AchievementServiceImpl implements AchievementService {
         List<Long> visibleTeamIds = null;
         CurrentUser user = UserHolder.getUser();
         if (user != null && "STUDENT".equals(user.getRole())) {
-            Long memberId = currentMemberId(user);
+            Long memberId = memberIdSupport.currentMemberId(user);
             visibleTeamIds = memberId == null ? List.of()
                     : teamQuery.loadMyTeamMemberships(memberId).stream()
                             .map(TeamMembership::teamId).toList();
@@ -104,7 +108,7 @@ public class AchievementServiceImpl implements AchievementService {
         }
         //权限：管理端或本队在册成员
         CurrentUser user = UserHolder.getUser();
-        Long memberId = currentMemberId(user);
+        Long memberId = memberIdSupport.currentMemberId(user);
         if (!isAdmin(user) && (memberId == null || achievement.getTeamId() == null
                 || !teamQuery.isTeamMember(achievement.getTeamId(), memberId))) {
             throw new BizException(CommonErrorCode.FORBIDDEN, "仅本队成员与管理端可查看");
@@ -144,7 +148,12 @@ public class AchievementServiceImpl implements AchievementService {
         }
         //2.DTO → 实体（归属人为当前登录人；队长资格与角色分支由 Support 编排）
         CurrentUser user = UserHolder.getUser();
-        Long memberId = currentMemberId(user);
+        Long memberId = memberIdSupport.currentMemberId(user);
+        //佐证文件归属（可选字段带了才查）：fileId 必须为当前用户上传，文件名以文件表权威值为准
+        if (dto.getEvidenceFileId() != null) {
+            dto.setEvidenceFileName(fileService.loadOwnedFile(
+                    dto.getEvidenceFileId(), user.getUserId()).getOriginalName());
+        }
         Achievement achievement = new Achievement();
         achievement.setTeamId(dto.getTeamId());
         achievement.setContestId(team.contestId());
@@ -209,11 +218,14 @@ public class AchievementServiceImpl implements AchievementService {
             throw new BizException(CommonErrorCode.NOT_FOUND, "成果不存在");
         }
         //仅当前队长可上传/覆盖佐证（A06，5007）
-        Long memberId = currentMemberId(UserHolder.getUser());
+        Long memberId = memberIdSupport.currentMemberId(UserHolder.getUser());
         if (memberId == null || achievement.getTeamId() == null
                 || !teamQuery.isTeamLeader(achievement.getTeamId(), memberId)) {
             throw new BizException(MaterialErrorCode.EVIDENCE_LEADER_ONLY);
         }
+        //文件归属：fileId 必须为当前队长本人上传，文件名以文件表权威值覆盖自报（防伪造 fileId 与假名落库）
+        dto.setFileName(fileService.loadOwnedFile(
+                dto.getFileId(), UserHolder.getUser().getUserId()).getOriginalName());
         //单文件覆盖式：失效旧版 → 插新版本（uploadedAt 手工赋值，业务时间列不归审计填充器）
         achievementFileMapper.invalidateCurrent(id, "EVIDENCE");
         Integer maxVersion = achievementFileMapper.selectMaxVersionNo(id, "EVIDENCE");
@@ -237,7 +249,7 @@ public class AchievementServiceImpl implements AchievementService {
     @Override
     public Result<MyAchievementVO> myContributions() {
         MyAchievementVO vo = new MyAchievementVO();
-        Long memberId = currentMemberId(UserHolder.getUser());
+        Long memberId = memberIdSupport.currentMemberId(UserHolder.getUser());
         if (memberId == null) {
             return Result.ok(vo);
         }
@@ -283,16 +295,5 @@ public class AchievementServiceImpl implements AchievementService {
     /** 是否管理端角色（SUPER_ADMIN / DEPT_ADMIN） */
     private boolean isAdmin(CurrentUser user) {
         return user != null && ("SUPER_ADMIN".equals(user.getRole()) || "DEPT_ADMIN".equals(user.getRole()));
-    }
-
-    /** 当前登录用户的人员档案 ID（sys_user.member_id；未绑定返回 null），照骨架 ApprovalActionServiceImpl 的写法 */
-    private Long currentMemberId(CurrentUser user) {
-        if (user == null || user.getUserId() == null) {
-            return null;
-        }
-        List<Long> ids = namedTemplate.queryForList(
-                "SELECT member_id FROM sys_user WHERE id = :userId AND deleted = 0",
-                Map.of("userId", user.getUserId()), Long.class);
-        return ids.isEmpty() || ids.get(0) == null ? null : ids.get(0);
     }
 }

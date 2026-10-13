@@ -178,6 +178,20 @@ public class FileServiceImpl implements IFileService {
         fileObjectMapper.increaseDownloadCount(fileId);
     }
 
+    @Override
+    public FileObject loadOwnedFile(Long fileId, Long userId) {
+        //1.查记录：不存在或已删，与"非本人上传"统一 1001 同文案，不给探测空间
+        FileObject record = fileObjectMapper.selectById(fileId);
+        if (record == null) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "fileId 无效或非当前用户上传");
+        }
+        //2.归属：upload 落库时 createdBy 写的是上传人 userId，这里必须对得上
+        if (userId == null || !userId.equals(record.getCreatedBy())) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "fileId 无效或非当前用户上传");
+        }
+        return record;
+    }
+
     /**
      * 下载权限矩阵（骨架口径，材料细则由 C 线在业务层叠加）：
      * 超管全放行；部门管理员 = 文件所属组织在自己子树内；学生 = 仅本人上传。

@@ -45,8 +45,8 @@
 | 编号 | 接口 | 说明 |
 |------|------|------|
 | MS01 | GET /api/materials/teams/{teamId}/overview | 管理端队伍提交概览（SUPER_ADMIN / DEPT_ADMIN，**仅管理端**；学生走 MS06）。出参单对象（非数组）：teamId teamName leaderName completeRate（读 team 表，0–100 整数）statusText（"齐全" / "待补 N 项"，只数必传项缺口）items[{requirementId requirementName materialType materialTypeLabel status version fileName uploadedAt}]（未交项 status=NOT_SUBMITTED、version=0、fileName/uploadedAt 为空串）。队伍或任务不存在 1004 |
-| MS02 | POST /api/materials/requirements/{requirementId}/submit | 上传单份材料，**队长或队员均可**（PRD §3.7）。body：teamId fileId fileName fileSize。8 步校验序：要求/赛队/任务不存在（1004）→ 比赛匹配（5004）→ 未过截止（🔴 **1006**，deadline 为空=不限期，见 §7 待确认）→ 在册成员（5003，admin 账号 member_id 为 NULL 也会被拦，见 §7）→ 扩展名白名单（5001，allowedFormats 空=不限）→ 大小（5002，maxSizeMb 空=全局 20MB）。覆盖上传：旧版本 is_current=0、versionNo+1；**提交后触发齐全率与队伍 material_status 重算**（必交项全齐→SUBMITTED，有缺→PENDING，无提交→NOT_STARTED） |
-| MS03 | POST /api/materials/submissions/batch | zip 批量上传（🔴 **路径已变**，原 /requirements/{requirementId}/submit-zip 作废）。body：teamId taskId fileId fileName（须 .zip 结尾，否则 5001"批量上传仅支持 zip 压缩包"）。校验序同 MS02 前 5 步（任务→赛队→比赛匹配 5004→截止 1006→在队 5003）。两层匹配：第一层经文件服务真实解压读条目名（对象存储不可用时降级，见 §7），第二层拿压缩包名做"包含类型中文名"匹配（如"报名表+项目书.zip"）；已交过的要求跳过不重复覆盖；返回 {matched:[{requirementId materialType requirementName}]（含已交跳过的）, unmatched:[文件名]}；提交后重算齐全率 |
+| MS02 | POST /api/materials/requirements/{requirementId}/submit | 上传单份材料，**队长或队员均可**（PRD §3.7）。body：teamId fileId fileName fileSize。9 步校验序：要求/赛队/任务不存在（1004）→ 比赛匹配（5004）→ 未过截止（🔴 **1006**，deadline 为空=不限期，见 §7 待确认）→ 在册成员（5003，admin 账号 member_id 为 NULL 也会被拦，见 §7）→ **文件归属（1001：fileId 须为当前用户上传，fileName/fileSize 以文件表权威值覆盖自报值，2026-10-13 组长侧加固）**→ 扩展名白名单（5001，allowedFormats 空=不限）→ 大小（5002，maxSizeMb 空=全局 20MB）。覆盖上传：旧版本 is_current=0、versionNo+1；**提交后触发齐全率与队伍 material_status 重算**（必交项全齐→SUBMITTED，有缺→PENDING，无提交→NOT_STARTED） |
+| MS03 | POST /api/materials/submissions/batch | zip 批量上传（🔴 **路径已变**，原 /requirements/{requirementId}/submit-zip 作废）。body：teamId taskId fileId fileName（须 .zip 结尾，否则 5001"批量上传仅支持 zip 压缩包"）。校验序同 MS02 口径（任务→赛队→比赛匹配 5004→截止 1006→在队 5003→**文件归属 1001，fileName 以文件表权威值为准**）。两层匹配：第一层经文件服务真实解压读条目名（对象存储不可用时降级，见 §7），第二层拿压缩包名做"包含类型中文名"匹配（如"报名表+项目书.zip"）；已交过的要求跳过不重复覆盖；返回 {matched:[{requirementId materialType requirementName}]（含已交跳过的）, unmatched:[文件名]}；提交后重算齐全率 |
 | MS04 | GET /api/materials/submissions/{submissionId}/download | （**待开发**）下载单个文件。本队成员或管理端（5009）；走鉴权流式下载，不暴露存储地址 |
 | MS05 | GET /api/materials/teams/{teamId}/package | （**待开发**）打包下载全队材料（zip 流）；管理端或本队成员 |
 | MS06 | GET /api/materials/my | 学生视角我的材料。出参数组（每支我所在的队伍一项）：teamId teamName task{id title deadline} completeRate requiredMissing items[{requirement（完整要求对象，含 allowedFormats 数组与 materialTypeLabel）requirementId status version fileName uploadedAt}]。🔴 比赛未配材料任务的队伍跳过不出现在数组；无队伍返回空数组 |
@@ -60,7 +60,7 @@
 | A03 | POST /api/achievements | 提交成果。body：teamId type name level **achievedAt** description evidenceFileId? evidenceFileName?（🔴 字段名 achievedAt，映射表列 award_date；类型 AWARD/RATING/QUALIFICATION/ACTIVITY/OTHER）。学生队长：PENDING + submitChannel=USER 走 ACHIEVEMENT_SUBMIT 审批（payloadJson 含 achievementId；非队长 403）；管理员录入：APPROVED + submitChannel=ADMIN + approvedAt/approvedBy，并**立即触发 §5 联动**。出参为完整成果对象（含 id 与 status） |
 | A04 | PUT /api/achievements/{id} | 管理员编辑 name level achievedAt description 四字段（PUT 全量替换，未传即置空）；成果不存在 1004 |
 | A05 | DELETE /api/achievements/{id} | 管理员删除。🔴 已通过（APPROVED）的成果不可删（1001）；级联**逻辑删除** achievement_file 全部附件；成果本身同为逻辑删除 |
-| A06 | POST /api/achievements/{id}/evidence | 佐证上传/覆盖，**仅当前队长**（5007）。body：fileId fileName。单文件覆盖式：旧版 is_current=0、版本号+1、uploadedAt 手工落值；🔴 同步更新 achievement.evidence_file_id / evidence_file_name（前端与 hasEvidence 只看这两列） |
+| A06 | POST /api/achievements/{id}/evidence | 佐证上传/覆盖，**仅当前队长**（5007）。body：fileId fileName（**fileId 须为当前队长本人上传，1001 拦截；fileName 以文件表权威值为准，2026-10-13 组长侧加固**）。单文件覆盖式：旧版 is_current=0、版本号+1、uploadedAt 手工落值；🔴 同步更新 achievement.evidence_file_id / evidence_file_name（前端与 hasEvidence 只看这两列） |
 | A07 | GET /api/achievements/export | （**待开发**）获奖导出。仅本人或管理员；仅导出 APPROVED 成果（5008）；默认 Excel |
 | A08 | GET /api/achievements/my/contributions | 学生端我的成果。出参 {teams:[{teamId teamName isLeader}], items:[列表项]}：teams = 当前用户在册且 ACTIVE 的队伍（含队长标识），items = 这些队伍的成果。🔴 参赛记录 + 获奖记录从赛队成员关系与成果**动态聚合**，不读冗余表 |
 
@@ -95,5 +95,5 @@ flowchart LR
 - [ ] (需组长确认) 幂等键策略：后端写接口强制校验 X-Idempotency-Key，但前端 post/put/del 封装不发这个头，需确认是前端补发还是后端放宽；另需明确幂等的 bizType 词表在哪登记
 - [ ] (需组长确认) 对象存储方案：MinIO 社区版已停止分发（官网 410 Gone / Docker Hub denied / quay.io 401），需重新决策（候选：PGSTY Silo / SeaweedFS / RustFS）；存储不可用期间 MS03 走兜底匹配（压缩包名），真实解压路径待存储恢复后回归验证
 - [ ] (需组长确认) 管理员能否提交材料：admin 账号的 sys_user.member_id 为 NULL，会被 MS02 的"在册成员"校验拦（5003），需确认是否符合预期
-- [ ] (需组长确认) 跨线对接方式：齐全率回写已定改为调 B 线 TeamMaterialStatusService.updateMaterialStatus()（待 B 线 feature/b-line-team 合入 main 后执行切换）
+- [x] 跨线对接方式：齐全率回写已切换为调 B 线 `TeamMaterialStatusService.updateMaterialStatus()`（B 线代码已随 PR#9 合入 main，2026-10-13 组长侧执行切换，`MaterialTeamQuerySupport.updateTeamMaterial` 不再直写 team 表）
 - [ ] (需组长确认) A07 导出格式默认 Excel（xlsx），是否需要追加 PDF（A07 待开发）
