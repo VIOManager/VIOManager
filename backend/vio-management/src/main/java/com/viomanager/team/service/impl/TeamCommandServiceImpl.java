@@ -25,6 +25,7 @@ import com.viomanager.team.support.TeamCommandSupport;
 import com.viomanager.team.support.TeamQuerySupport;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,8 +67,15 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
             throw new BizException(TeamErrorCode.CONTEST_STATE_NOT_ALLOWED);
         }
         cmdSupport.ensureNameUnique(dto.getContestId(), dto.getName(), null);
-        List<Long> prefill = dto.getPrefillMemberIds() == null ? List.of()
-                : dto.getPrefillMemberIds().stream().filter(id -> id != null && !id.equals(leaderId)).toList();
+        List<Long> prefill = new ArrayList<>();
+        if (dto.getPrefillMemberIds() != null) {
+            //1.空值与队长本人不算预填名单
+            for (Long id : dto.getPrefillMemberIds()) {
+                if (id != null && !id.equals(leaderId)) {
+                    prefill.add(id);
+                }
+            }
+        }
         if (prefill.size() > ctx.ruleInt("prefillLimit", 2)) {
             throw new BizException(TeamErrorCode.MEMBER_LIMIT_EXCEEDED);
         }
@@ -107,7 +115,7 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
     public void addMember(Long teamId, TeamMemberAddDTO dto) {
         Team team = loadActiveTeam(teamId);
         CurrentUser user = UserHolder.getUser();
-        ensureLeaderOrAdmin(team, user);
+        cmdSupport.ensureLeaderOrAdmin(team, user);
         Long targetId = dto.getMemberId();
         ContestContext ctx = contestQueryService.loadContext(team.getContestId(), team.getTrackId());
         if (cmdSupport.countActiveMembers(teamId) >= ctx.ruleInt("memberLimit", 5)) {
@@ -155,7 +163,7 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
     public void removeMember(Long teamId, Long memberId) {
         Team team = loadActiveTeam(teamId);
         CurrentUser user = UserHolder.getUser();
-        ensureLeaderOrAdmin(team, user);
+        cmdSupport.ensureLeaderOrAdmin(team, user);
         if (memberId.equals(team.getLeaderMemberId())) {
             throw new BizException(TeamErrorCode.LEADER_NOT_REMOVABLE);
         }
@@ -191,7 +199,7 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
     public void addAdvisor(Long teamId, TeamAdvisorAddDTO dto) {
         Team team = loadActiveTeam(teamId);
         CurrentUser user = UserHolder.getUser();
-        ensureLeaderOrAdmin(team, user);
+        cmdSupport.ensureLeaderOrAdmin(team, user);
         Long targetId = dto.getMemberId();
         if (!"TEACHER".equals(cmdSupport.memberType(targetId))) {
             throw new BizException(TeamErrorCode.TARGET_NOT_TEACHER);
@@ -214,7 +222,7 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
     @Transactional
     public void removeAdvisor(Long teamId, Long advisorMemberId) {
         Team team = loadActiveTeam(teamId);
-        ensureLeaderOrAdmin(team, UserHolder.getUser());
+        cmdSupport.ensureLeaderOrAdmin(team, UserHolder.getUser());
         UpdateWrapper<TeamAdvisor> uw = new UpdateWrapper<>();
         uw.eq("team_id", teamId).eq("member_id", advisorMemberId).eq("status", "ACTIVE").eq("deleted", 0)
                 .set("status", "REMOVED").set("removed_at", LocalDateTime.now());
@@ -225,7 +233,7 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
     @Transactional
     public void dissolve(Long teamId, TeamDissolveDTO dto) {
         Team team = loadActiveTeam(teamId);
-        ensureLeaderOrAdmin(team, UserHolder.getUser());
+        cmdSupport.ensureLeaderOrAdmin(team, UserHolder.getUser());
         if (cmdSupport.countMaterials(teamId) > 0 || cmdSupport.countAchievements(teamId) > 0
                 || cmdSupport.countPendingTeamApprovals(teamId) > 0) {
             throw new BizException(TeamErrorCode.DISSOLVE_BLOCKED);
@@ -246,7 +254,7 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
     @Transactional
     public void updateTeam(Long teamId, TeamUpdateDTO dto) {
         Team team = loadActiveTeam(teamId);
-        ensureLeaderOrAdmin(team, UserHolder.getUser());
+        cmdSupport.ensureLeaderOrAdmin(team, UserHolder.getUser());
         cmdSupport.ensureNameUnique(team.getContestId(), dto.getName(), teamId);
         UpdateWrapper<Team> uw = new UpdateWrapper<>();
         uw.eq("id", teamId).eq("deleted", 0)
@@ -262,19 +270,6 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
             throw new BizException(CommonErrorCode.NOT_FOUND, "赛队不存在或已解散");
         }
         return team;
-    }
-
-    private void ensureLeaderOrAdmin(Team team, CurrentUser user) {
-        String role = user.getRole();
-        if ("SUPER_ADMIN".equals(role)) return;
-        if ("DEPT_ADMIN".equals(role)) {
-            if (support.isOrgInSubtree(user.getOrgId(), team.getOrgId())) return;
-            throw new BizException(CommonErrorCode.FORBIDDEN);
-        }
-        Long mid = support.currentMemberId(user);
-        if (mid == null || !mid.equals(team.getLeaderMemberId())) {
-            throw new BizException(CommonErrorCode.FORBIDDEN, "仅队长可操作");
-        }
     }
 
     private Long approvalApplicantId(CurrentUser user, Team team) {

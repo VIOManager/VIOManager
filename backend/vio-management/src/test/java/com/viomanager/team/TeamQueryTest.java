@@ -60,17 +60,19 @@ class TeamQueryTest extends ApprovalTestBase {
 
     @Test
     void listScoped() throws Exception {
-        mockMvc.perform(get("/api/teams").header("Authorization", "Bearer " + superToken))
+        //1.带 contestId 过滤只数本测试造的队——库里演示赛队 501/502 属别的比赛，超管不带过滤会被污染
+        String scoped = "/api/teams?contestId=" + CONTEST_ID;
+        mockMvc.perform(get(scoped).header("Authorization", "Bearer " + superToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].name").value("梦之队"));
-        mockMvc.perform(get("/api/teams").header("Authorization", "Bearer " + deptAToken))
+        mockMvc.perform(get(scoped).header("Authorization", "Bearer " + deptAToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1));
-        mockMvc.perform(get("/api/teams").header("Authorization", "Bearer " + deptBToken))
+        mockMvc.perform(get(scoped).header("Authorization", "Bearer " + deptBToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(0));
-        mockMvc.perform(get("/api/teams").header("Authorization", "Bearer " + leaderToken))
+        mockMvc.perform(get(scoped).header("Authorization", "Bearer " + leaderToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(1));
     }

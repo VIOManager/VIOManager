@@ -10,9 +10,9 @@ import com.viomanager.team.dto.TeamMemberAddDTO;
 import com.viomanager.team.dto.TeamMemberConfirmDTO;
 import com.viomanager.team.dto.TeamUpdateDTO;
 import com.viomanager.team.service.ITeamCommandService;
+import com.viomanager.team.vo.TeamCreateVO;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
-import java.util.Map;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,9 +38,12 @@ public class TeamCommandController {
     @Idempotent(bizType = "TEAM_CREATE")
     @AuditLog(bizType = "TEAM_CREATE", label = "组队申请", summary = "'组队申请：' + #dto.name")
     @PostMapping
-    public Result<Map<String, Long>> create(@Valid @RequestBody TeamCreateDTO dto) {
+    public Result<TeamCreateVO> create(@Valid @RequestBody TeamCreateDTO dto) {
         Long approvalId = commandService.createTeam(dto);
-        return Result.ok(Map.of("approvalId", approvalId));
+        //1.单字段返回走 VO 不用 Map.of，与全仓风格一致
+        TeamCreateVO vo = new TeamCreateVO();
+        vo.setApprovalId(approvalId);
+        return Result.ok(vo);
     }
 
     /** TE04 队长加人：校验后生成 TEAM_ADD_MEMBER 审批单 */

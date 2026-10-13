@@ -110,8 +110,9 @@ class TeamCommandTest extends ApprovalTestBase {
         // 插一条材料 → 解散应 4009
         jdbcTemplate.update(
                 "INSERT INTO material_submission (id, requirement_id, task_id, contest_id, team_id, "
-                        + "semester_id, org_id, file_id, file_name) VALUES (?, ?, ?, ?, ?, 999, ?, ?, ?)",
-                System.nanoTime(), 50001L, 51001L, CONTEST_ID, TEAM_ID, 9301L, 60001L, "报告.pdf");
+                        + "semester_id, org_id, file_id, file_name, submitted_by) "
+                        + "VALUES (?, ?, ?, ?, ?, 999, ?, ?, ?, ?)",
+                System.nanoTime(), 50001L, 51001L, CONTEST_ID, TEAM_ID, 9301L, 60001L, "报告.pdf", 8811L);
         mockMvc.perform(post("/api/teams/" + TEAM_ID + "/dissolve")
                         .header("Authorization", "Bearer " + leaderToken)
                         .header("X-Idempotency-Key", "tc-dissolve-blocked-1")

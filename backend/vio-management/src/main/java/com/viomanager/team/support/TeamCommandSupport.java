@@ -2,10 +2,12 @@ package com.viomanager.team.support;
 
 import com.viomanager.approval.dto.ApprovalCreateDTO;
 import com.viomanager.approval.service.ApprovalClient;
+import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.enums.TeamErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.util.ParamsJsonUtil;
 import com.viomanager.common.enums.CommonErrorCode;
+import com.viomanager.team.entity.Team;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -22,10 +24,13 @@ public class TeamCommandSupport {
 
     private final JdbcTemplate jdbcTemplate;
     private final ApprovalClient approvalClient;
+    private final TeamQuerySupport querySupport;
 
-    public TeamCommandSupport(JdbcTemplate jdbcTemplate, ApprovalClient approvalClient) {
+    public TeamCommandSupport(JdbcTemplate jdbcTemplate, ApprovalClient approvalClient,
+            TeamQuerySupport querySupport) {
         this.jdbcTemplate = jdbcTemplate;
         this.approvalClient = approvalClient;
+        this.querySupport = querySupport;
     }
 
     /** 提交审批单（封装 DTO 构造） */
@@ -151,6 +156,20 @@ public class TeamCommandSupport {
                     "SELECT member_type FROM member WHERE id = ? AND deleted = 0", String.class, memberId);
         } catch (EmptyResultDataAccessException e) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "人员档案不存在：" + memberId);
+        }
+    }
+
+    /** 写操作权限判定：超管放行，部门管理员限本组织子树，学生仅队长本人 */
+    public void ensureLeaderOrAdmin(Team team, CurrentUser user) {
+        String role = user.getRole();
+        if ("SUPER_ADMIN".equals(role)) return;
+        if ("DEPT_ADMIN".equals(role)) {
+            if (querySupport.isOrgInSubtree(user.getOrgId(), team.getOrgId())) return;
+            throw new BizException(CommonErrorCode.FORBIDDEN);
+        }
+        Long mid = querySupport.currentMemberId(user);
+        if (mid == null || !mid.equals(team.getLeaderMemberId())) {
+            throw new BizException(CommonErrorCode.FORBIDDEN, "仅队长可操作");
         }
     }
 }
