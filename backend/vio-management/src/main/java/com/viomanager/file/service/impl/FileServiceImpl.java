@@ -11,10 +11,9 @@ import com.viomanager.file.entity.FileObject;
 import com.viomanager.file.mapper.FileObjectMapper;
 import com.viomanager.file.service.ClamAvScanner;
 import com.viomanager.file.service.IFileService;
+import com.viomanager.file.support.MinioStreamSupport;
 import com.viomanager.file.vo.FileUploadVO;
 import io.minio.BucketExistsArgs;
-import io.minio.GetObjectArgs;
-import io.minio.GetObjectResponse;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -22,8 +21,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
@@ -37,6 +35,7 @@ import org.springframework.web.multipart.MultipartFile;
  * 文件服务实现。
  * ⚠️ upload 刻意不加 @Transactional：病毒命中（INFECTED）与扫描不可用（UNAVAILABLE）的
  * 记录必须在拒绝后仍然留库当证据——加事务的话抛异常会把记录一起回滚掉。
+ * 下载侧的查记录 / 病毒闸门 / MinIO 流式回写在 MinioStreamSupport（单文件行数规矩拆出）。
  */
 @Slf4j
 @Service
@@ -56,6 +55,9 @@ public class FileServiceImpl implements IFileService {
 
     @Resource
     private JdbcTemplate jdbcTemplate;
+
+    @Resource
+    private MinioStreamSupport streamSupport;
 
     @Override
     public Result<FileUploadVO> upload(MultipartFile file, String bizType, Long bizId) {
@@ -139,57 +141,42 @@ public class FileServiceImpl implements IFileService {
 
     @Override
     public void download(Long fileId, HttpServletResponse response) {
-        //1.查记录：不存在或已删一律 1004，不区分"删了"和"没有"（不给人试探空间）
-        FileObject record = fileObjectMapper.selectById(fileId);
-        if (record == null) {
-            throw new BizException(CommonErrorCode.NOT_FOUND, "文件不存在");
-        }
+        //1.查记录（不存在或已删一律 1004，不给人试探空间）
+        FileObject record = streamSupport.requireFile(fileId);
         //2.权限：超管全放行；部门管理员限本部门子树；学生仅本人上传
         checkDownloadPermission(record);
-        //3.染毒文件不放行下载；UNAVAILABLE（上传时扫描服务不可用）按组长拍板照常放行
-        if ("INFECTED".equals(record.getScanStatus())) {
-            throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "文件未通过病毒检测，暂不可下载");
-        }
-        //4.MinIO 流式回写：客户端只见文件流，永远见不到对象存储地址
-        try (GetObjectResponse objectStream = minioClient.getObject(GetObjectArgs.builder()
-                .bucket(fileProperties.getBucket())
-                .object(record.getObjectKey())
-                .build())) {
-            String contentType = record.getContentType() == null
-                    ? "application/octet-stream" : record.getContentType();
-            response.setContentType(contentType);
-            // 双写法兼容中文文件名：filename 给老客户端的 ASCII 回退（百分号编码），
-            // filename* 是标准 UTF-8 写法（浏览器优先认它，URLEncoder 后空格变 %20）
-            String encodedName = URLEncoder.encode(record.getOriginalName(), StandardCharsets.UTF_8)
-                    .replace("+", "%20");
-            response.setHeader("Content-Disposition",
-                    "attachment; filename=\"" + encodedName + "\"; filename*=UTF-8''" + encodedName);
-            byte[] buffer = new byte[8192];
-            int len = objectStream.read(buffer);
-            while (len != -1) {
-                response.getOutputStream().write(buffer, 0, len);
-                len = objectStream.read(buffer);
-            }
-        } catch (Exception e) {
-            log.error("文件读取失败，fileId={}：{}", fileId, e.getMessage());
-            throw new BizException(CommonErrorCode.INTERNAL_ERROR, "文件读取失败");
-        }
-        //5.计数 +1（原子自增，并发不丢）
-        fileObjectMapper.increaseDownloadCount(fileId);
+        //3.病毒闸门 + MinIO 流式回写 + 计数（业务侧口子 streamFile 复用同一段）
+        streamSupport.requireNotInfected(record);
+        streamSupport.streamOut(record, response);
     }
 
     @Override
     public FileObject loadOwnedFile(Long fileId, Long userId) {
-        //1.查记录：不存在或已删，与"非本人上传"统一 1001 同文案，不给探测空间
-        FileObject record = fileObjectMapper.selectById(fileId);
-        if (record == null) {
-            throw new BizException(CommonErrorCode.PARAM_INVALID, "fileId 无效或非当前用户上传");
-        }
-        //2.归属：upload 落库时 createdBy 写的是上传人 userId，这里必须对得上
+        //1.查记录（1004 口径同 download）
+        FileObject record = streamSupport.requireFile(fileId);
+        //2.归属：upload 落库时 createdBy 写的是上传人 userId，这里必须对得上；
+        //   不存在与不是本人上传统一 1001 同文案，不给探测空间
         if (userId == null || !userId.equals(record.getCreatedBy())) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "fileId 无效或非当前用户上传");
         }
         return record;
+    }
+
+    @Override
+    public void streamFile(Long fileId, HttpServletResponse response) {
+        //业务层已做完自身权限判定（如 MS04 的本队成员校验），这里只保留病毒闸门与计数
+        FileObject record = streamSupport.requireFile(fileId);
+        streamSupport.requireNotInfected(record);
+        streamSupport.streamOut(record, response);
+    }
+
+    @Override
+    public InputStream openCheckedStream(Long fileId) {
+        //1.记录 + 病毒闸门（染毒 1006 由调用方决定跳过还是整包失败）
+        FileObject record = streamSupport.requireFile(fileId);
+        streamSupport.requireNotInfected(record);
+        //2.打开对象流：关闭责任在调用方（try-with-resources）
+        return streamSupport.openStream(record);
     }
 
     /**

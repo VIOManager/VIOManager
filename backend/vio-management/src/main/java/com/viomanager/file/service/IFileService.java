@@ -4,6 +4,7 @@ import com.viomanager.common.result.Result;
 import com.viomanager.file.entity.FileObject;
 import com.viomanager.file.vo.FileUploadVO;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.InputStream;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -29,4 +30,17 @@ public interface IFileService {
      * 调用方应以 originalName / fileSize 覆盖客户端自报值，防止假文件名/假大小绕过校验落库。
      */
     FileObject loadOwnedFile(Long fileId, Long userId);
+
+    /**
+     * 业务层已自行完成权限校验后的流式下载（MS04 单文件下载等场景）：
+     * 保留病毒闸门（INFECTED 拒绝）与下载计数，不做角色矩阵——
+     * 调用方必须先做完自己的业务权限判定（如本队成员校验）再调这里。
+     */
+    void streamFile(Long fileId, HttpServletResponse response);
+
+    /**
+     * 打开已过病毒闸门的对象流（MS05 全队打包等场景）：返回 MinIO 对象流，调用方负责 close。
+     * 文件不存在抛 1004；染毒抛 1006（调用方决定跳过还是整包失败）。
+     */
+    InputStream openCheckedStream(Long fileId);
 }

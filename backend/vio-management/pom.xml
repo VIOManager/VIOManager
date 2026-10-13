@@ -92,6 +92,21 @@
             <artifactId>hutool-core</artifactId>
         </dependency>
 
+        <!-- A07 获奖导出用（xlsx）；只引主包，xmlbeans 等传递依赖随包带入 -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.4.1</version>
+        </dependency>
+
+        <!-- 显式顶高 commons-compress：Spring Boot 3.5 管理的 1.24.0 会让 POI 5.4 在写 xlsx 时
+             NoSuchMethodError（ZipArchiveOutputStream.putArchiveEntry），直依赖显式版本优先级最高 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.27.1</version>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
