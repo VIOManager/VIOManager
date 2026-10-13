@@ -14,15 +14,18 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 审批测试公共基类：容器装配 + 造人 / 建组织 / 登录的通用辅助。
  * 子类按需补 @TestPropertySource（涉及审计断言或审批动作的加 vio.audit.async=false）。
+ * 禁用正式 TeamCreateHandler，让测试用 RecordingTeamHandler 顶位（避免 contest 不存在导致回调抛异常）。
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@TestPropertySource(properties = "vio.team.create-handler.enabled=false")
 public abstract class ApprovalTestBase {
 
     @Autowired
