@@ -76,6 +76,7 @@ flowchart LR
 - 组长审批中心：A03 队长提交产生 ACHIEVEMENT_SUBMIT；审批通过后进程内回调 C 线 Service（成果置 APPROVED + 触发 §5 联动）
 - 组长文件服务：MS02/MS03/A06 上传均先走 /api/files 拿 fileId 再建关联记录
 - B 线：MS02 校验"必须在队 + 材料任务属于赛队所在比赛"时读 B 的 team 数据
+- B 线（team 包口子）：MS02/MS03/A06 提交后重算齐全率与 material_status，**进程内调 B 线 `TeamMaterialStatusService.updateMaterialStatus(teamId, materialStatus, completeRate)` 写回，禁止 C 线直接 UPDATE team 表**（口子已随 B 线赛队代码进 main，C 线拉取后调用）
 - A 线：A07 导出按成员聚合时读 member 基础信息
 
 ## 7. 待确认事项

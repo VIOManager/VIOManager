@@ -74,7 +74,7 @@
 
 | 编号 | 接口 | 说明 |
 |------|------|------|
-| TE01 | GET /api/teams | 列表。超管全部；部门管理员本部门；**学生仅自己所在的队伍**。含 materialStatus、materialCompleteRate |
+| TE01 | GET /api/teams | 列表。超管全部；部门管理员本部门；**学生仅自己所在的队伍**。含 materialStatus、materialCompleteRate；支持 contestId 与 keyword（队名模糊）过滤 |
 | TE02 | GET /api/teams/{id} | 详情。仅本队成员、管理端、指导教师可见；其他人 4008（封堵按 ID 枚举越权） |
 | TE03 | POST /api/teams | 发起组队申请。body：contestId trackId name projectName prefillMemberIds。校验：比赛处于 REGISTERING、队名同比赛唯一（4002）、allowRepeatJoin、crossTeamLeader、prefillMemberIds 不超 prefillLimit；通过校验后生成 TEAM_CREATE 审批单（走组长审批中心），**不直接建队** |
 | TE04 | POST /api/teams/{id}/members | 队长加人申请。body：memberId。校验人数上限（4003）、重复参赛（4004）、目标人身份、同队待审批（4005/4007）；生成 TEAM_ADD_MEMBER 审批；**审批时按最新成员关系复核**（封堵两队同时邀请同一人的时序漏洞）；通过后成员状态 UNCONFIRMED |
@@ -104,6 +104,7 @@ stateDiagram-v2
 - B 线产生审批单 biz_type：TEAM_CREATE、TEAM_ADD_MEMBER、TEAM_REMOVE_MEMBER、TEAM_ADD_ADVISOR（payload 为申请快照）
 - 组长审批通过后**进程内调用** B 线 Service 执行建队/加人/移除（不走 HTTP）；B 线按 biz_id 唯一约束保证幂等
 - 审批被拒/取消时 B 线无需动作（正式数据从未创建）
+- C 线材料回写：team 包对外提供 `TeamMaterialStatusService`（`updateMaterialStatus(teamId, materialStatus, completeRate)`，只写 material_status / material_complete_rate 两列），C 线材料重算后进程内调用，不得绕过口子直接改 team 表
 
 ## 7. 待确认事项
 
