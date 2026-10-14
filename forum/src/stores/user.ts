@@ -21,11 +21,19 @@ interface ForumUserState {
 }
 
 /** 尝试解析 JWT 载荷取 realName/role；桩 token 或解析失败返回 null */
+
+/** base64url 安全解码：JWT 载荷是 url 变体（-_ 字符、无补位），需转标准 base64 再 atob */
+function b64urlDecode(s: string): string {
+  let b = s.replace(/-/g, "+").replace(/_/g, "/")
+  while (b.length % 4 !== 0) b += "="
+  return atob(b)
+}
+
 function claimsFromJwt(token: string): { realName: string | null; role: string | null } {
   const parts = token.split('.')
   if (parts.length !== 3) return { realName: null, role: null }
   try {
-    const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1]))))
+    const payload = JSON.parse(decodeURIComponent(escape(b64urlDecode(parts[1]))))
     return {
       realName: typeof payload.realName === 'string' ? payload.realName : null,
       role: typeof payload.role === 'string' ? payload.role : null

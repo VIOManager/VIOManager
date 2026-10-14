@@ -21,11 +21,19 @@ interface UserState {
 }
 
 /** 解析 JWT 载荷（token 本身自带 role/realName，恢复身份不必调接口——骨架暂无 /api/auth/me） */
+
+/** base64url 安全解码：JWT 载荷是 url 变体（-_ 字符、无补位），需转标准 base64 再 atob */
+function b64urlDecode(s: string): string {
+  let b = s.replace(/-/g, "+").replace(/_/g, "/")
+  while (b.length % 4 !== 0) b += "="
+  return atob(b)
+}
+
 function claimsFromJwt(token: string): { role: Role | null; realName: string | null } {
   const parts = token.split('.')
   if (parts.length !== 3) return { role: null, realName: null }
   try {
-    const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1]))))
+    const payload = JSON.parse(decodeURIComponent(escape(b64urlDecode(parts[1]))))
     return {
       role: typeof payload.role === 'string' ? (payload.role as Role) : null,
       realName: typeof payload.realName === 'string' ? payload.realName : null

@@ -8,7 +8,7 @@
 import { onMounted, ref } from 'vue'
 import { apiContests } from '@/api/contest'
 import type { ContestListItem, PoolItem } from '@/api/contest'
-import { apiSemesters } from '@/api/semester'
+import { apiSemestersSafe } from '@/api/semester'
 import type { Semester } from '@/api/semester'
 import { CONTEST_STATUS_LABEL } from '@/config/labels'
 import ContestFormDialog from './ContestFormDialog.vue'
@@ -84,12 +84,7 @@ function statusStamp(s: string): string {
 
 onMounted(async () => {
   void load()
-  try {
-    semesters.value = await apiSemesters()
-  } catch {
-    // 联调兜底：A 线学期接口后端未实现（404），用后端库已知学期占位，接口上线自动替换
-    semesters.value = [{ id: '301', name: '2026-2027学年第一学期', startDate: '', endDate: '', weekCount: 20, status: 'ACTIVE' }]
-  }
+  semesters.value = await apiSemestersSafe()
 })
 </script>
 

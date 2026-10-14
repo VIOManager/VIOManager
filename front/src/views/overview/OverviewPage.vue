@@ -15,7 +15,7 @@ import { apiApprovalList } from '@/api/approval'
 import { apiTeams } from '@/api/team'
 import { apiMyAchievements } from '@/api/achievement'
 import { apiMyMaterials } from '@/api/material'
-import { apiSemesters } from '@/api/semester'
+import { apiSemestersSafe } from '@/api/semester'
 import { APPROVAL_TYPE_LABEL } from '@/config/labels'
 
 const user = useUserStore()
@@ -114,7 +114,7 @@ const semPct = ref(37.5)
 
 async function loadSemester() {
   try {
-    const list = await apiSemesters()
+    const list = await apiSemestersSafe()
     for (const s of list) {
       if (s.status !== 'ACTIVE') continue
       semName.value = s.name

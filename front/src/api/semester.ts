@@ -38,6 +38,14 @@ export interface SemesterForm {
   weekCount: number
 }
 
+/**
+ * 联调兜底学期：A 线学期接口后端未实现（404）时，跨模块借用学期的展示场景
+ * （概览刻度尺/排班课表/比赛表单）用后端库已知学期占位；学期管理页不兜底（见各自调用处）
+ */
+export const FALLBACK_SEMESTERS: Semester[] = [
+  { id: '301', name: '2026-2027学年第一学期', startDate: '', endDate: '', weekCount: 20, status: 'ACTIVE' }
+]
+
 export function apiSemesters(): Promise<Semester[]> {
   return get('/api/semesters')
 }
@@ -65,4 +73,16 @@ export function apiCancelSwitchTask(id: string): Promise<null> {
 /** 执行：携带 version 乐观锁（版本不符 3011） */
 export function apiExecuteSwitchTask(id: string, version: number): Promise<null> {
   return post('/api/semesters/switch-tasks/' + id + '/execute', { version })
+}
+
+/**
+ * 学期列表（静默兜底版）：跨模块借用学期的展示场景专用（概览刻度尺/排班课表/比赛表单）——
+ * A 线接口未实现时不弹错误，返回 FALLBACK_SEMESTERS 占位；学期管理页请用直通版 apiSemesters
+ */
+export async function apiSemestersSafe(): Promise<Semester[]> {
+  try {
+    return await get<Semester[]>('/api/semesters', undefined, { silent: true })
+  } catch {
+    return FALLBACK_SEMESTERS
+  }
 }

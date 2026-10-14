@@ -56,22 +56,31 @@ http.interceptors.response.use(
       window.location.assign('/login')
       return Promise.reject(new BizError(body.code, body.message))
     }
+    // 静默请求（silent 标记）不弹统一提示，交调用方自行兜底
+    const silent = (resp.config as unknown as { silent?: boolean }).silent === true
     if (body.code === 1005) {
-      ElMessage.warning('请勿重复提交')
+      if (!silent) ElMessage.warning('请勿重复提交')
       return Promise.reject(new BizError(body.code, body.message))
     }
-    ElMessage.error(body.message || '操作失败')
+    if (!silent) ElMessage.error(body.message || '操作失败')
     return Promise.reject(new BizError(body.code, body.message))
   },
   (err) => {
-    ElMessage.error('网络异常，请稍后重试')
+    const silent = ((err.config ?? {}) as unknown as { silent?: boolean }).silent === true
+    if (!silent) ElMessage.error('网络异常，请稍后重试')
     return Promise.reject(err)
   }
 )
 
-// 页面侧一律用这四个薄封装（直接返回 data 类型，不写 resp.data.data 链）
-export async function get<T>(url: string, params?: Record<string, unknown>): Promise<T> {
-  return (await http.get(url, { params })) as unknown as T
+/**
+ * 页面侧一律用这几个薄封装（直接返回 data 类型，不写 resp.data.data 链）
+ * opts.silent=true：失败不弹统一错误提示（联调期"接口后端未实现"的降级场景专用，
+ * 调用方自行 catch 兜底——如学期接口未实现时展示兜底数据）
+ */
+export async function get<T>(url: string, params?: Record<string, unknown>, opts?: { silent?: boolean }): Promise<T> {
+  const cfg = { params } as Record<string, unknown>
+  if (opts?.silent) cfg.silent = true
+  return (await http.get(url, cfg as never)) as unknown as T
 }
 export async function post<T>(url: string, data?: unknown): Promise<T> {
   return (await http.post(url, data)) as unknown as T
