@@ -29,8 +29,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
-        // 测试库 = 业务库名 + _test；端口/口令可用环境变量覆盖（本机原生 MySQL 用 MYSQL_PORT=3306）
-        "spring.datasource.url=jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}"
+        // 测试库 = 业务库名 + _test；默认对齐本机原生 MySQL（3306，root/root），可用环境变量覆盖
+        "spring.datasource.url=jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}"
                 + "/${KB_DATABASE:viomanager_kb}_test?useUnicode=true"
                 + "&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true",
         "vio.audit.async=false"
