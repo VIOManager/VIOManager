@@ -20,6 +20,21 @@ interface UserState {
   defaultPassword: 0 | 1
 }
 
+/** 解析 JWT 载荷（token 本身自带 role/realName，恢复身份不必调接口——骨架暂无 /api/auth/me） */
+function claimsFromJwt(token: string): { role: Role | null; realName: string | null } {
+  const parts = token.split('.')
+  if (parts.length !== 3) return { role: null, realName: null }
+  try {
+    const payload = JSON.parse(decodeURIComponent(escape(atob(parts[1]))))
+    return {
+      role: typeof payload.role === 'string' ? (payload.role as Role) : null,
+      realName: typeof payload.realName === 'string' ? payload.realName : null
+    }
+  } catch {
+    return { role: null, realName: null }
+  }
+}
+
 export const useUserStore = defineStore('user', {
   state: (): UserState => ({
     token: localStorage.getItem(TOKEN_KEY) ?? '',
@@ -38,9 +53,17 @@ export const useUserStore = defineStore('user', {
       localStorage.setItem(TOKEN_KEY, resp.token)
       return resp
     },
-    /** 刷新后凭 token 恢复身份；token 已失效时由 http 拦截器统一踢回登录页 */
+    /** 刷新后凭 token 恢复身份：真 JWT 直接解析载荷（零请求）；mock 桩 token 走 /api/auth/me */
     async restore(): Promise<void> {
       if (!this.token) return
+      const claims = claimsFromJwt(this.token)
+      if (claims.role || claims.realName) {
+        if (claims.role) this.role = claims.role
+        if (claims.realName) this.realName = claims.realName
+        // JWT 载荷无 defaultPassword 标记；改密引导待骨架补 /api/auth/me 后恢复
+        this.defaultPassword = 0
+        return
+      }
       const resp = await apiMe()
       this.role = resp.role
       this.realName = resp.realName

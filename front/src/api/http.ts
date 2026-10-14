@@ -43,6 +43,8 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 http.interceptors.response.use(
   (resp: AxiosResponse<Result>) => {
+    // 文件流响应（导出/打包下载）没有统一响应体外壳，直接放行给 download() 处理
+    if (resp.config.responseType === 'blob') return resp as never
     const body = resp.data
     if (body.code === 0) return body.data as never
     if (body.code === 1002) {
@@ -79,9 +81,36 @@ export async function del<T>(url: string): Promise<T> {
   return (await http.delete(url)) as unknown as T
 }
 
-/** 带幂等键的 POST（规范 §6：审批中心等写操作要求 X-Idempotency-Key 头，键由调用方生成） */
+/**
+ * 带幂等键的 POST（规范 §6：写操作要求 X-Idempotency-Key 头，键由调用方生成）
+ * ⚠️ 键的语义是"一张表单一个键"（失败重试复用同键防断网重复提交）；
+ *    api 层内部生成键的用法（B/C 线联调临时口径）只保证请求能过幂等拦截，
+ *    防断网重复创建要靠页面级 formKey——各弹窗组件标注 TODO(联调) 逐步补
+ */
 export async function postIdem<T>(url: string, data: unknown, idempotencyKey: string): Promise<T> {
   return (await http.post(url, data, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
+}
+
+/** 带幂等键的 PUT / DELETE（后端 @Idempotent 对编辑删除同样要求请求头） */
+export async function putIdem<T>(url: string, data: unknown, idempotencyKey: string): Promise<T> {
+  return (await http.put(url, data, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
+}
+export async function delIdem<T>(url: string, idempotencyKey: string): Promise<T> {
+  return (await http.delete(url, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
+}
+
+/** 文件流下载（导出/打包）：blob 拉取后触发浏览器保存，文件名优先取响应头 */
+export async function download(url: string, fallbackName: string): Promise<void> {
+  const resp = (await http.get(url, { responseType: 'blob' })) as unknown as AxiosResponse<Blob>
+  const cd = String(resp.headers?.['content-disposition'] ?? '')
+  const m = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(cd)
+  const name = m ? decodeURIComponent(m[1].replace(/"/g, '')) : fallbackName
+  const href = URL.createObjectURL(resp.data)
+  const a = document.createElement('a')
+  a.href = href
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(href)
 }
 
 /** 文件上传专用：multipart 表单 + X-Idempotency-Key 幂等键（规范 §6，键由调用方生成） */
@@ -94,5 +123,5 @@ export async function upload<T>(url: string, file: File, idempotencyKey: string)
 // ⚠️ 开发自验件：浏览器控制台 __http.get('/api/_probe/1002') 可验证三种拦截分支；
 // import.meta.env.DEV 在构建期为 false，会被整段摇掉，不进生产包
 if (import.meta.env.DEV) {
-  ;(window as unknown as Record<string, unknown>).__http = { get, post, put, del, upload, postIdem }
+  ;(window as unknown as Record<string, unknown>).__http = { get, post, put, del, upload, postIdem, putIdem, delIdem }
 }

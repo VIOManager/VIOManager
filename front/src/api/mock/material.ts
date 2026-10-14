@@ -49,13 +49,13 @@ export function toTaskView(t: MockTask): MaterialTask {
     if (tm.materialCompleteRate >= 100) teamComplete += 1
   }
   return {
-    id: t.id, contestId: t.contestId, contestName: contestName, title: t.title, deadline: t.deadline,
+    id: t.id, contestId: t.contestId, contestName: contestName, name: t.name, deadline: t.deadline,
     requirementCount: reqCount, teamTotal: teamTotal, teamComplete: teamComplete, createdAt: t.createdAt
   }
 }
 
 export function toReqView(r: MaterialRequirement): MaterialRequirement {
-  return { id: r.id, taskId: r.taskId, type: r.type, required: r.required, formats: r.formats.slice(), namingRule: r.namingRule, maxSizeMb: r.maxSizeMb }
+  return { id: r.id, taskId: r.taskId, materialType: r.materialType, requiredFlag: r.requiredFlag, allowedFormats: r.allowedFormats.slice(), namingRule: r.namingRule, maxSizeMb: r.maxSizeMb }
 }
 
 /** 要求表单校验（PC1 验收：要求表单校验） */
@@ -66,7 +66,7 @@ function validateRequirement(body: Record<string, unknown>): string | null {
     if (t.value === type) typeOk = true
   }
   if (!typeOk) return '材料类型必须是 12 种预设之一'
-  const formats = Array.isArray(body.formats) ? (body.formats as string[]) : []
+  const formats = Array.isArray(body.allowedFormats) ? (body.allowedFormats as string[]) : []
   if (formats.length === 0) return '至少允许一种文件格式'
   const maxMb = Number(body.maxSizeMb)
   if (!maxMb || maxMb < 1 || maxMb > 200) return '单文件大小限制须在 1–200MB 之间'
@@ -93,7 +93,7 @@ registerMock({
   path: '/api/material-tasks',
   reply: (ctx) => {
     const contestId = String(ctx.body.contestId ?? '')
-    const title = String(ctx.body.title ?? '').trim()
+    const title = String(ctx.body.name ?? '').trim()
     const deadline = String(ctx.body.deadline ?? '').trim()
     if (!title || !deadline) return fail(1001, '任务名与截止时间不能为空')
     let contestExists = false
@@ -104,7 +104,7 @@ registerMock({
     for (const t of allTasks()) {
       if (t.contestId === contestId) return fail(5001, '该比赛已配置材料任务，请直接维护其要求')
     }
-    const task: MockTask = { id: nextTaskId(), contestId, title, deadline, createdAt: '2026-10-10 10:00:00' }
+    const task: MockTask = { id: nextTaskId(), contestId, name: title, deadline, createdAt: '2026-10-10 10:00:00' }
     tasks.push(task)
     return ok(toTaskView(task))
   }
@@ -116,10 +116,10 @@ registerMock({
   reply: (ctx) => {
     const t = findTask(ctx.params.id)
     if (!t) return fail(5001, '材料任务不存在')
-    const title = String(ctx.body.title ?? '').trim()
+    const title = String(ctx.body.name ?? '').trim()
     const deadline = String(ctx.body.deadline ?? '').trim()
     if (!title || !deadline) return fail(1001, '任务名与截止时间不能为空')
-    t.title = title
+    t.name = title
     t.deadline = deadline
     return ok(null)
   }
@@ -175,8 +175,8 @@ registerMock({
     if (err) return fail(1001, err)
     const created = {
       id: nextReqId(), taskId: t.id,
-      type: String(ctx.body.type), required: ctx.body.required === true,
-      formats: (ctx.body.formats as string[]).map((f) => f.toLowerCase()),
+      materialType: String(ctx.body.materialType), requiredFlag: Number(ctx.body.requiredFlag) === 1 ? 1 : 0,
+      allowedFormats: (ctx.body.allowedFormats as string[]).map((f) => f.toLowerCase()),
       namingRule: String(ctx.body.namingRule ?? ''), maxSizeMb: Number(ctx.body.maxSizeMb)
     }
     requirements.push(created)
@@ -192,9 +192,9 @@ registerMock({
     if (!r) return fail(5001, '材料要求不存在')
     const err = validateRequirement(ctx.body)
     if (err) return fail(1001, err)
-    r.type = String(ctx.body.type)
-    r.required = ctx.body.required === true
-    r.formats = (ctx.body.formats as string[]).map((f) => f.toLowerCase())
+    r.materialType = String(ctx.body.type)
+    r.requiredFlag = Number(ctx.body.requiredFlag) === 1 ? 1 : 0
+    r.allowedFormats = (ctx.body.allowedFormats as string[]).map((f) => f.toLowerCase())
     r.namingRule = String(ctx.body.namingRule ?? '')
     r.maxSizeMb = Number(ctx.body.maxSizeMb)
     return ok(null)

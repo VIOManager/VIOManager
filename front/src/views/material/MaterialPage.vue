@@ -65,7 +65,7 @@ async function onTaskSaved() {
 
 async function onDeleteTask(t: MaterialTask) {
   try {
-    await ElMessageBox.confirm('删除任务「' + t.title + '」？其下未交过的要求将一并移除', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm('删除任务「' + t.name + '」？其下未交过的要求将一并移除', '删除确认', { type: 'warning' })
   } catch {
     return
   }
@@ -98,7 +98,7 @@ async function onReqSaved() {
 }
 async function onDeleteReq(r: MaterialRequirement) {
   try {
-    await ElMessageBox.confirm('删除要求「' + (MATERIAL_TYPE_LABEL[r.type] ?? r.type) + '」？', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm('删除要求「' + (MATERIAL_TYPE_LABEL[r.materialType] ?? r.materialType) + '」？', '删除确认', { type: 'warning' })
   } catch {
     return
   }
@@ -140,7 +140,7 @@ onMounted(async () => {
             </thead>
             <tbody>
               <tr v-for="t in tasks" :key="t.id" :class="{ cur: currentTask && currentTask.id === t.id }">
-                <td style="color: var(--vio-ink); font-weight: 600">{{ t.title }}</td>
+                <td style="color: var(--vio-ink); font-weight: 600">{{ t.name }}</td>
                 <td class="fs" style="font-size: 12px">{{ t.contestName }}</td>
                 <td class="num mono">{{ t.requirementCount }}</td>
                 <td class="num mono">{{ t.teamComplete }} / {{ t.teamTotal }}</td>
@@ -159,7 +159,7 @@ onMounted(async () => {
         <!-- 要求配置区：点"要求"展开 -->
         <template v-if="currentTask">
           <div class="dossier-head" style="margin-top: 18px">
-            <h5>「{{ currentTask.title }}」要求配置</h5>
+            <h5>「{{ currentTask.name }}」要求配置</h5>
             <button class="btn-ink" @click="openReqCreate">添加要求</button>
           </div>
           <div class="panel">
@@ -169,9 +169,9 @@ onMounted(async () => {
               </thead>
               <tbody>
                 <tr v-for="r in currentReqs" :key="r.id">
-                  <td style="color: var(--vio-ink); font-weight: 600">{{ MATERIAL_TYPE_LABEL[r.type] ?? r.type }}</td>
-                  <td><span class="stamp" :class="r.required ? 'warn' : 'ok'">{{ r.required ? '必传' : '选传' }}</span></td>
-                  <td class="mono" style="font-size: 12px">{{ r.formats.join(' / ') }}</td>
+                  <td style="color: var(--vio-ink); font-weight: 600">{{ MATERIAL_TYPE_LABEL[r.materialType] ?? r.materialType }}</td>
+                  <td><span class="stamp" :class="r.requiredFlag === 1 ? 'warn' : 'ok'">{{ r.requiredFlag === 1 ? '必传' : '选传' }}</span></td>
+                  <td class="mono" style="font-size: 12px">{{ r.allowedFormats.join(' / ') }}</td>
                   <td class="fs">{{ r.namingRule || '—' }}</td>
                   <td class="num mono">{{ r.maxSizeMb }} MB</td>
                   <td>

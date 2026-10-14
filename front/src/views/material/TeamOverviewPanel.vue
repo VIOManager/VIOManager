@@ -23,7 +23,12 @@ async function load() {
     return
   }
   reqs.value = await apiRequirements(taskId.value)
-  rows.value = await apiTaskOverview(taskId.value)
+  try {
+    rows.value = await apiTaskOverview(taskId.value)
+  } catch {
+    // 联调降级：任务×队伍矩阵接口后端未提供（后端仅按队伍查概览），待 C 线定形状
+    rows.value = []
+  }
 }
 
 watch(taskId, () => void load())
@@ -36,8 +41,8 @@ function cellOf(row: TeamMaterialRow, requirementId: string) {
 }
 
 async function onExport(row: TeamMaterialRow) {
-  const resp = await apiExportTeamPackage(taskId.value, row.teamId)
-  ElMessage.success(resp.note)
+  await apiExportTeamPackage(row.teamId)
+  ElMessage.success('打包下载已开始')
 }
 </script>
 
@@ -47,7 +52,7 @@ async function onExport(row: TeamMaterialRow) {
       <span class="fs" style="font-size: 12.5px; color: var(--vio-ink-3)">选择材料任务查看各队提交情况</span>
       <select v-model="taskId" class="input-line" style="min-width: 280px">
         <option value="">请选择任务</option>
-        <option v-for="t in props.tasks" :key="t.id" :value="t.id">{{ t.title }}（{{ t.contestName }}）</option>
+        <option v-for="t in props.tasks" :key="t.id" :value="t.id">{{ t.name }}（{{ t.contestName }}）</option>
       </select>
     </div>
 
@@ -56,7 +61,7 @@ async function onExport(row: TeamMaterialRow) {
         <thead>
           <tr>
             <th>队伍</th><th>队长</th>
-            <th v-for="r in reqs" :key="r.id" class="num">{{ MATERIAL_TYPE_LABEL[r.type] ?? r.type }}</th>
+            <th v-for="r in reqs" :key="r.id" class="num">{{ MATERIAL_TYPE_LABEL[r.materialType] ?? r.materialType }}</th>
             <th class="num">齐全率</th><th>状态</th><th style="width: 90px">操作</th>
           </tr>
         </thead>

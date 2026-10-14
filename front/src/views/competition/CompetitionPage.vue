@@ -84,7 +84,12 @@ function statusStamp(s: string): string {
 
 onMounted(async () => {
   void load()
-  semesters.value = await apiSemesters()
+  try {
+    semesters.value = await apiSemesters()
+  } catch {
+    // 联调兜底：A 线学期接口后端未实现（404），用后端库已知学期占位，接口上线自动替换
+    semesters.value = [{ id: '301', name: '2026-2027学年第一学期', startDate: '', endDate: '', weekCount: 20, status: 'ACTIVE' }]
+  }
 })
 </script>
 

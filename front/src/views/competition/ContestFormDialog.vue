@@ -38,7 +38,14 @@ watch(visible, async (v) => {
   if (!v) return
   Object.assign(form, empty())
   if (templates.value.length === 0) templates.value = await apiTemplates()
-  if (semesters.value.length === 0) semesters.value = await apiSemesters()
+  if (semesters.value.length === 0) {
+    try {
+      semesters.value = await apiSemesters()
+    } catch {
+      // 联调兜底：A 线学期接口未实现，占位当前学期（后端库 301）
+      semesters.value = [{ id: '301', name: '2026-2027学年第一学期', startDate: '', endDate: '', weekCount: 20, status: 'ACTIVE' }]
+    }
+  }
   if (props.contestId) {
     const d = await apiContestDetail(props.contestId)
     Object.assign(form, {

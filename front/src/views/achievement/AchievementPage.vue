@@ -38,8 +38,8 @@ async function onExport() {
     ElMessage.warning('请选择要导出的队伍')
     return
   }
-  const r = await apiExportAwards(exportTeamId.value)
-  ElMessage.success(r.note)
+  await apiExportAwards(exportTeamId.value)
+  ElMessage.success('导出下载已开始')
 }
 
 onMounted(async () => {
