@@ -64,29 +64,50 @@ async function loadBoardHot() {
   boardHot.value = list.slice(0, 4)
 }
 
+/** 操作锁：点赞/收藏是天然幂等操作，锁只为防连点白发一堆请求 */
+const likePending = ref(false)
+const collectPending = ref(false)
+const floorLikeLocks = ref<Record<string, boolean>>({})
+
 /** 主楼点赞/取消（状态型：重复点无副作用） */
 async function toggleLike() {
-  if (!detail.value) return
-  const target = !detail.value.liked
-  const res = await apiLikeTopic(detail.value.id, target)
-  detail.value.liked = res.liked
-  detail.value.likeCount += res.liked ? 1 : -1
+  if (likePending.value || !detail.value) return
+  likePending.value = true
+  try {
+    const target = !detail.value.liked
+    const res = await apiLikeTopic(detail.value.id, target)
+    detail.value.liked = res.liked
+    detail.value.likeCount += res.liked ? 1 : -1
+  } finally {
+    likePending.value = false
+  }
 }
 
 /** 主楼收藏/取消 */
 async function toggleCollect() {
-  if (!detail.value) return
-  const target = !detail.value.collected
-  const res = await apiCollectTopic(detail.value.id, target)
-  detail.value.collected = res.collected
+  if (collectPending.value || !detail.value) return
+  collectPending.value = true
+  try {
+    const target = !detail.value.collected
+    const res = await apiCollectTopic(detail.value.id, target)
+    detail.value.collected = res.collected
+  } finally {
+    collectPending.value = false
+  }
 }
 
-/** 楼层点赞/取消 */
+/** 楼层点赞/取消（按楼层粒度加锁） */
 async function toggleFloorLike(f: ReplyItem) {
-  const target = !f.liked
-  const res = await apiLikeReply(f.id, target)
-  f.liked = res.liked
-  f.likeCount += res.liked ? 1 : -1
+  if (floorLikeLocks.value[f.id]) return
+  floorLikeLocks.value[f.id] = true
+  try {
+    const target = !f.liked
+    const res = await apiLikeReply(f.id, target)
+    f.liked = res.liked
+    f.likeCount += res.liked ? 1 : -1
+  } finally {
+    floorLikeLocks.value[f.id] = false
+  }
 }
 
 /** 楼层"回复"：带上引用并聚焦回复框 */
@@ -190,7 +211,7 @@ function attachTip() {
             引用 @{{ quoteReply.author }} #{{ quoteReply.floorNo }}
             <a href="#" @click.prevent="quoteReply = null">取消</a>
           </div>
-          <textarea ref="replyBox" v-model="replyText" :disabled="submitting" placeholder="支持 Markdown；回复即留痕，删除需管理员操作"></textarea>
+          <textarea ref="replyBox" v-model="replyText" :disabled="submitting" placeholder="回复即留痕，删除需管理员操作"></textarea>
           <div class="r-foot">
             <i>※ 文明发言，排障类回复请尽量附现象、配置与波形</i>
             <button class="btn-post" type="button" :disabled="submitting" @click="submitReply">

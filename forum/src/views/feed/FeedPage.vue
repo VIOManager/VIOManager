@@ -77,7 +77,10 @@ const maxCollect = computed(() => {
   return m
 })
 
+/** 拉列表（切分类触发）；序号守卫防连点翻分类时旧响应覆盖新结果（同 HomePage） */
+let loadSeq = 0
 async function load() {
+  const seq = ++loadSeq
   loading.value = true
   try {
     const res = await apiTechList({
@@ -85,10 +88,11 @@ async function load() {
       page: 1,
       size: 50
     })
+    if (seq !== loadSeq) return
     feeds.value = res.list
     total.value = res.total
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -97,21 +101,37 @@ function switchCat(code: string) {
   load()
 }
 
+/** 操作锁（按条目粒度）：收藏/置顶是天然幂等操作，锁只为防连点白发一堆请求 */
+const collectLocks = ref<Record<string, boolean>>({})
+const pinLocks = ref<Record<string, boolean>>({})
+
 /** 收藏/取消（T03 天然幂等：收藏关系唯一约束，重复点无副作用） */
 async function toggleCollect(f: TechPostItem) {
-  const target = !f.collected
-  const res = await apiCollectTechPost(f.id, target)
-  f.collected = res.collected
-  f.collectCount += res.collected ? 1 : -1
+  if (collectLocks.value[f.id]) return
+  collectLocks.value[f.id] = true
+  try {
+    const target = !f.collected
+    const res = await apiCollectTechPost(f.id, target)
+    f.collected = res.collected
+    f.collectCount += res.collected ? 1 : -1
+  } finally {
+    collectLocks.value[f.id] = false
+  }
 }
 
 /** 置顶/撤顶（T11 天然幂等：body 带目标态） */
 async function togglePin(f: TechPostItem) {
-  const target = !f.pinned
-  const res = await apiPinTechPost(f.id, target)
-  f.pinned = res.pinned
-  ElMessage.success(res.pinned ? '已置顶' : '已取消置顶')
-  load()
+  if (pinLocks.value[f.id]) return
+  pinLocks.value[f.id] = true
+  try {
+    const target = !f.pinned
+    const res = await apiPinTechPost(f.id, target)
+    f.pinned = res.pinned
+    ElMessage.success(res.pinned ? '已置顶' : '已取消置顶')
+    load()
+  } finally {
+    pinLocks.value[f.id] = false
+  }
 }
 
 /** 撤回（T12 幂等键：单次确认动作，键随本次点击生成；已撤回的重试会被 9001 挡住） */

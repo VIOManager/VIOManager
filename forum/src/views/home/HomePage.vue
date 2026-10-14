@@ -36,8 +36,14 @@ const loading = ref(false)
 const hotRank = ref<HotTopicItem[]>([])
 const stats = ref({ memberCount: 0, topicCount: 0, replyCount: 0 })
 
-/** 拉帖子列表（切版块/排序/翻页/搜索词变化都走这里） */
+/**
+ * 拉帖子列表（切版块/排序/翻页/搜索词变化都走这里）
+ * ⚠️ 响应竞态守卫：快速连点翻页/切版块会并发多个请求，晚到的旧响应
+ *    会覆盖新结果（显示错页）——序号对不上的响应直接丢弃，只认最后一次
+ */
+let loadSeq = 0
 async function load() {
+  const seq = ++loadSeq
   loading.value = true
   try {
     const res = await apiTopicList({
@@ -47,10 +53,11 @@ async function load() {
       page: page.value,
       size: PAGE_SIZE
     })
+    if (seq !== loadSeq) return
     topics.value = res.list
     total.value = res.total
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
