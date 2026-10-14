@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -125,6 +126,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public Result<Void> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return Result.fail(CommonErrorCode.PARAM_INVALID, "参数校验失败：参数 " + e.getName() + " 类型不正确");
+    }
+
+    /**
+     * 请求体解析失败（JSON 语法错 / 字段类型不对 / 时间格式不合规）：收敛为 1001。
+     * 立此存照：2026-10-14 创建比赛时前端按规范发空格格式日期，落 1000"系统繁忙"
+     * 误导排查半小时——解析类失败必须说人话，不能进兜底。
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public Result<Void> handleNotReadable(HttpMessageNotReadableException e) {
+        log.warn("请求体解析失败：{}", e.getMessage());
+        return Result.fail(CommonErrorCode.PARAM_INVALID,
+                "请求体格式不正确（检查字段类型与时间格式 yyyy-MM-dd HH:mm:ss）");
     }
 
     /** 路由未命中：统一收敛为 1004，避免 Spring 默认错误体破坏响应契约。 */

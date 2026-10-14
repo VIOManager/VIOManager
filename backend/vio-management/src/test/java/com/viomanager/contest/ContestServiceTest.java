@@ -153,10 +153,10 @@ class ContestServiceTest extends ApprovalTestBase {
                         .header("X-Idempotency-Key", "cs-sm-fill")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"状态机赛\",\"semesterId\":\"" + SEMESTER_ID + "\","
-                                + "\"signupStart\":\"2026-11-01T00:00:00\","
-                                + "\"signupEnd\":\"2026-11-30T23:59:59\","
-                                + "\"contestStart\":\"2026-12-01T00:00:00\","
-                                + "\"contestEnd\":\"2026-12-31T23:59:59\","
+                                + "\"signupStart\":\"2026-11-01 00:00:00\","
+                                + "\"signupEnd\":\"2026-11-30 23:59:59\","
+                                + "\"contestStart\":\"2026-12-01 00:00:00\","
+                                + "\"contestEnd\":\"2026-12-31 23:59:59\","
                                 + "\"overrideRules\":{\"memberLimit\":5}}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
