@@ -130,7 +130,7 @@ public class AchievementSubmitHandler implements ApprovalHandler {
         }
         //一赛一任务是建任务的强规则，selectList 容错取第一条
         List<MaterialTask> tasks = taskMapper.selectList(
-                new QueryWrapper<MaterialTask>().eq("contest_id", team.contestId()));
+                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
         if (tasks.isEmpty()) {
             log.warn("§5 联动：队伍 {} 所在比赛没有材料任务，跳过佐证必交项追加", teamId);
             return;

@@ -20,7 +20,9 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 材料任务服务实现（MT01–MT04），口径以 C 线接口清单 §2 为准。
  *
  * 跨模块取数约定：contest / team 是 B 线的表，本模块不建其实体与 Mapper，
- * 一律用 NamedParameterJdbcTemplate 手写 SQL（骨架 ApprovalActionServiceImpl 先例）；
+ * 一律用 JdbcTemplate 手写 SQL（对齐 B 线 TeamQuerySupport 写法）；
  * C 线自己的表走 MyBatis-Plus Mapper，其 @DataScope(SELF) 声明 = 放行不注入条件。
  * 手写 SQL 一律显式带 deleted = 0——@TableLogic 只对 mapper 自动方法生效（见 BaseEntity 注释）。
  *
@@ -48,7 +50,7 @@ public class MaterialTaskServiceImpl implements MaterialTaskService {
     private MaterialRequirementMapper requirementMapper;
 
     @Resource
-    private NamedParameterJdbcTemplate namedTemplate;
+    private JdbcTemplate jdbcTemplate;
 
     @Override
     public Result<List<MaterialTaskVO>> list(Long contestId) {
@@ -59,11 +61,19 @@ public class MaterialTaskServiceImpl implements MaterialTaskService {
         wrapper.orderByDesc("created_at");
         List<MaterialTask> tasks = taskMapper.selectList(wrapper);
         if (tasks.isEmpty()) {
-            return Result.ok(List.of());
+            return Result.ok(new ArrayList<>());
         }
         //三块关联数据各一次批量查，避免列表页 N+1
-        List<Long> contestIds = tasks.stream().map(MaterialTask::getContestId).distinct().toList();
-        List<Long> taskIds = tasks.stream().map(MaterialTask::getId).toList();
+        List<Long> contestIds = new ArrayList<>();
+        for (MaterialTask task : tasks) {
+            if (!contestIds.contains(task.getContestId())) {
+                contestIds.add(task.getContestId());
+            }
+        }
+        List<Long> taskIds = new ArrayList<>(tasks.size());
+        for (MaterialTask task : tasks) {
+            taskIds.add(task.getId());
+        }
         Map<Long, ContestRow> contests = loadContests(contestIds);
         Map<Long, Integer> requirementCounts = countRequirementsByTask(taskIds);
         Map<Long, TeamStat> teamStats = countTeamStats(contestIds);
@@ -84,7 +94,9 @@ public class MaterialTaskServiceImpl implements MaterialTaskService {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "该比赛已配置材料任务，请直接维护其要求");
         }
         //2.比赛必须存在，semesterId / orgId 从 contest 行带出（B 线表，手写 SQL）
-        Map<Long, ContestRow> contests = loadContests(List.of(dto.getContestId()));
+        List<Long> contestIdList = new ArrayList<>();
+        contestIdList.add(dto.getContestId());
+        Map<Long, ContestRow> contests = loadContests(contestIdList);
         ContestRow contest = contests.get(dto.getContestId());
         if (contest == null) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "所选比赛不存在");
@@ -92,16 +104,18 @@ public class MaterialTaskServiceImpl implements MaterialTaskService {
         //3.落库：status 默认 ACTIVE；审计四字段由 AuditMetaObjectHandler 自动填，不手工设置
         MaterialTask task = new MaterialTask();
         task.setContestId(dto.getContestId());
-        task.setSemesterId(contest.semesterId());
-        task.setOrgId(contest.orgId());
+        task.setSemesterId(contest.getSemesterId());
+        task.setOrgId(contest.getOrgId());
         task.setName(dto.getName());
         task.setDescription(dto.getDescription());
         task.setDeadline(dto.getDeadline());
         task.setStatus("ACTIVE");
         taskMapper.insert(task);
         //4.出参：新任务要求条数为 0；队伍两数按该比赛当前数据现算
-        Map<Long, TeamStat> teamStats = countTeamStats(List.of(task.getContestId()));
-        return Result.ok(toVO(task, contests, Map.of(), teamStats));
+        List<Long> newContestIdList = new ArrayList<>();
+        newContestIdList.add(task.getContestId());
+        Map<Long, TeamStat> teamStats = countTeamStats(newContestIdList);
+        return Result.ok(toVO(task, contests, new HashMap<>(), teamStats));
     }
 
     @Override
@@ -149,24 +163,24 @@ public class MaterialTaskServiceImpl implements MaterialTaskService {
         vo.setId(task.getId());
         vo.setContestId(task.getContestId());
         ContestRow contest = contests.get(task.getContestId());
-        vo.setContestName(contest == null ? null : contest.name());
+        vo.setContestName(contest == null ? null : contest.getName());
         vo.setName(task.getName());
         vo.setDescription(task.getDescription());
         vo.setDeadline(task.getDeadline());
         vo.setStatus(task.getStatus());
         vo.setRequirementCount(requirementCounts.getOrDefault(task.getId(), 0));
         TeamStat stat = teamStats.getOrDefault(task.getContestId(), TeamStat.EMPTY);
-        vo.setTeamTotal(stat.total());
-        vo.setTeamComplete(stat.complete());
+        vo.setTeamTotal(stat.getTotal());
+        vo.setTeamComplete(stat.getComplete());
         vo.setCreatedAt(task.getCreatedAt());
         return vo;
     }
 
     /** 批量查比赛（B 线表不建实体，只取本模块要用的三列）：contestId → 行快照 */
     private Map<Long, ContestRow> loadContests(Collection<Long> contestIds) {
-        String sql = "SELECT id, name, semester_id, org_id FROM contest "
-                + "WHERE id IN (:ids) AND deleted = 0";
-        return namedTemplate.query(sql, Map.of("ids", contestIds), rs -> {
+        String sql = "SELECT id, name, semester_id, org_id FROM contest WHERE id IN ("
+                + placeholders(contestIds.size()) + ") AND deleted = 0";
+        return jdbcTemplate.query(sql, rs -> {
             Map<Long, ContestRow> map = new HashMap<>();
             while (rs.next()) {
                 map.put(rs.getLong("id"), new ContestRow(rs.getString("name"),
@@ -174,20 +188,20 @@ public class MaterialTaskServiceImpl implements MaterialTaskService {
                         rs.getObject("org_id", Long.class)));
             }
             return map;
-        });
+        }, contestIds.toArray());
     }
 
     /** 批量统计各任务下未删的要求条数：taskId → count */
     private Map<Long, Integer> countRequirementsByTask(Collection<Long> taskIds) {
-        String sql = "SELECT task_id, COUNT(*) AS cnt FROM material_requirement "
-                + "WHERE task_id IN (:ids) AND deleted = 0 GROUP BY task_id";
-        return namedTemplate.query(sql, Map.of("ids", taskIds), rs -> {
+        String sql = "SELECT task_id, COUNT(*) AS cnt FROM material_requirement WHERE task_id IN ("
+                + placeholders(taskIds.size()) + ") AND deleted = 0 GROUP BY task_id";
+        return jdbcTemplate.query(sql, rs -> {
             Map<Long, Integer> map = new HashMap<>();
             while (rs.next()) {
                 map.put(rs.getLong("task_id"), (int) rs.getLong("cnt"));
             }
             return map;
-        });
+        }, taskIds.toArray());
     }
 
     /**
@@ -197,34 +211,55 @@ public class MaterialTaskServiceImpl implements MaterialTaskService {
     private Map<Long, TeamStat> countTeamStats(Collection<Long> contestIds) {
         String sql = "SELECT contest_id, COUNT(*) AS total, "
                 + "SUM(CASE WHEN material_complete_rate >= " + COMPLETE_RATE_FULL
-                + " THEN 1 ELSE 0 END) AS complete "
-                + "FROM team WHERE contest_id IN (:ids) AND status = 'ACTIVE' AND deleted = 0 "
+                + " THEN 1 ELSE 0 END) AS complete FROM team WHERE contest_id IN ("
+                + placeholders(contestIds.size()) + ") AND status = 'ACTIVE' AND deleted = 0 "
                 + "GROUP BY contest_id";
-        return namedTemplate.query(sql, Map.of("ids", contestIds), rs -> {
+        return jdbcTemplate.query(sql, rs -> {
             Map<Long, TeamStat> map = new HashMap<>();
             while (rs.next()) {
                 map.put(rs.getLong("contest_id"),
                         new TeamStat((int) rs.getLong("total"), (int) rs.getLong("complete")));
             }
             return map;
-        });
+        }, contestIds.toArray());
     }
 
     /** 该任务下任一未删要求是否存在未删提交记录（MT04 的 5006 前置检查） */
     private long countTaskSubmissions(Long taskId) {
-        String sql = "SELECT COUNT(*) FROM material_submission WHERE deleted = 0 "
-                + "AND requirement_id IN (SELECT id FROM material_requirement "
-                + "WHERE task_id = :taskId AND deleted = 0)";
-        Long count = namedTemplate.queryForObject(sql, Map.of("taskId", taskId), Long.class);
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM material_submission WHERE deleted = 0 AND requirement_id IN "
+                        + "(SELECT id FROM material_requirement WHERE task_id = ? AND deleted = 0)",
+                Long.class, taskId);
         return count == null ? 0L : count;
     }
 
+    /** IN 占位符：n 个问号逗号相连（位置参数风格的批量查询辅助） */
+    private String placeholders(int count) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            sb.append("?");
+        }
+        return sb.toString();
+    }
+
     /** contest 行的最小快照：name 比赛名 / semesterId 建任务带出 / orgId 同步归属组织 */
-    private record ContestRow(String name, Long semesterId, Long orgId) {
+    @Data
+    @AllArgsConstructor
+    private static class ContestRow {
+        private String name;
+        private Long semesterId;
+        private Long orgId;
     }
 
     /** 比赛维度的队伍统计：total = ACTIVE 队伍数，complete = 齐全率达标数 */
-    private record TeamStat(int total, int complete) {
+    @Data
+    @AllArgsConstructor
+    private static class TeamStat {
+        private int total;
+        private int complete;
 
         static final TeamStat EMPTY = new TeamStat(0, 0);
     }

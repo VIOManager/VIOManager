@@ -45,10 +45,10 @@
 | 编号 | 接口 | 说明 |
 |------|------|------|
 | MS01 | GET /api/materials/teams/{teamId}/overview | 管理端队伍提交概览（SUPER_ADMIN / DEPT_ADMIN，**仅管理端**；学生走 MS06）。出参单对象（非数组）：teamId teamName leaderName completeRate（读 team 表，0–100 整数）statusText（"齐全" / "待补 N 项"，只数必传项缺口）items[{requirementId requirementName materialType materialTypeLabel status version fileName uploadedAt}]（未交项 status=NOT_SUBMITTED、version=0、fileName/uploadedAt 为空串）。队伍或任务不存在 1004 |
-| MS02 | POST /api/materials/requirements/{requirementId}/submit | 上传单份材料，**队长或队员均可**（PRD §3.7）。body：teamId fileId fileName fileSize。8 步校验序：要求/赛队/任务不存在（1004）→ 比赛匹配（5004）→ 未过截止（🔴 **1006**，deadline 为空=不限期，见 §7 待确认）→ 在册成员（5003，admin 账号 member_id 为 NULL 也会被拦，见 §7）→ 扩展名白名单（5001，allowedFormats 空=不限）→ 大小（5002，maxSizeMb 空=全局 20MB）。覆盖上传：旧版本 is_current=0、versionNo+1；**提交后触发齐全率与队伍 material_status 重算**（必交项全齐→SUBMITTED，有缺→PENDING，无提交→NOT_STARTED） |
-| MS03 | POST /api/materials/submissions/batch | zip 批量上传（🔴 **路径已变**，原 /requirements/{requirementId}/submit-zip 作废）。body：teamId taskId fileId fileName（须 .zip 结尾，否则 5001"批量上传仅支持 zip 压缩包"）。校验序同 MS02 前 5 步（任务→赛队→比赛匹配 5004→截止 1006→在队 5003）。两层匹配：第一层经文件服务真实解压读条目名（对象存储不可用时降级，见 §7），第二层拿压缩包名做"包含类型中文名"匹配（如"报名表+项目书.zip"）；已交过的要求跳过不重复覆盖；返回 {matched:[{requirementId materialType requirementName}]（含已交跳过的）, unmatched:[文件名]}；提交后重算齐全率 |
-| MS04 | GET /api/materials/submissions/{submissionId}/download | （**待开发**）下载单个文件。本队成员或管理端（5009）；走鉴权流式下载，不暴露存储地址 |
-| MS05 | GET /api/materials/teams/{teamId}/package | （**待开发**）打包下载全队材料（zip 流）；管理端或本队成员 |
+| MS02 | POST /api/materials/requirements/{requirementId}/submit | 上传单份材料，**队长或队员均可**（PRD §3.7）。body：teamId fileId fileName fileSize。9 步校验序：要求/赛队/任务不存在（1004）→ 比赛匹配（5004）→ 未过截止（🔴 **1006**，deadline 为空=不限期，见 §7 待确认）→ 在册成员（5003，admin 账号 member_id 为 NULL 也会被拦，见 §7）→ **文件归属（1001：fileId 须为当前用户上传，fileName/fileSize 以文件表权威值覆盖自报值，2026-10-13 组长侧加固）**→ 扩展名白名单（5001，allowedFormats 空=不限）→ 大小（5002，maxSizeMb 空=全局 20MB）。覆盖上传：旧版本 is_current=0、versionNo+1；**提交后触发齐全率与队伍 material_status 重算**（必交项全齐→SUBMITTED，有缺→PENDING，无提交→NOT_STARTED） |
+| MS03 | POST /api/materials/submissions/batch | zip 批量上传（🔴 **路径已变**，原 /requirements/{requirementId}/submit-zip 作废）。body：teamId taskId fileId fileName（须 .zip 结尾，否则 5001"批量上传仅支持 zip 压缩包"）。校验序同 MS02 口径（任务→赛队→比赛匹配 5004→截止 1006→在队 5003→**文件归属 1001，fileName 以文件表权威值为准**）。两层匹配：第一层经文件服务真实解压读条目名（对象存储不可用时降级，见 §7），第二层拿压缩包名做"包含类型中文名"匹配（如"报名表+项目书.zip"）；已交过的要求跳过不重复覆盖；返回 {matched:[{requirementId materialType requirementName}]（含已交跳过的）, unmatched:[文件名]}；提交后重算齐全率 |
+| MS04 | GET /api/materials/submissions/{submissionId}/download | 下载单个文件（**2026-10-13 组长侧交付**）。本队成员或管理端（5009）；提交记录不存在 1004；经骨架 IFileService.streamFile 口子流式下载（保留病毒闸门与下载计数，不做 F02 角色矩阵——本队成员可下队友提交的文件）；不暴露存储地址 |
+| MS05 | GET /api/materials/teams/{teamId}/package | 打包下载全队材料（zip 流，**2026-10-13 组长侧交付**）。管理端或本队成员（5009）；队伍不存在或无当前版本提交 1004；entry 按"要求名/文件名"分目录（重名追加序号），染毒文件跳过并 warn 留痕，存储故障整包 500 |
 | MS06 | GET /api/materials/my | 学生视角我的材料。出参数组（每支我所在的队伍一项）：teamId teamName task{id title deadline} completeRate requiredMissing items[{requirement（完整要求对象，含 allowedFormats 数组与 materialTypeLabel）requirementId status version fileName uploadedAt}]。🔴 比赛未配材料任务的队伍跳过不出现在数组；无队伍返回空数组 |
 
 ## 4. 成果（/api/achievements）
@@ -60,8 +60,8 @@
 | A03 | POST /api/achievements | 提交成果。body：teamId type name level **achievedAt** description evidenceFileId? evidenceFileName?（🔴 字段名 achievedAt，映射表列 award_date；类型 AWARD/RATING/QUALIFICATION/ACTIVITY/OTHER）。学生队长：PENDING + submitChannel=USER 走 ACHIEVEMENT_SUBMIT 审批（payloadJson 含 achievementId；非队长 403）；管理员录入：APPROVED + submitChannel=ADMIN + approvedAt/approvedBy，并**立即触发 §5 联动**。出参为完整成果对象（含 id 与 status） |
 | A04 | PUT /api/achievements/{id} | 管理员编辑 name level achievedAt description 四字段（PUT 全量替换，未传即置空）；成果不存在 1004 |
 | A05 | DELETE /api/achievements/{id} | 管理员删除。🔴 已通过（APPROVED）的成果不可删（1001）；级联**逻辑删除** achievement_file 全部附件；成果本身同为逻辑删除 |
-| A06 | POST /api/achievements/{id}/evidence | 佐证上传/覆盖，**仅当前队长**（5007）。body：fileId fileName。单文件覆盖式：旧版 is_current=0、版本号+1、uploadedAt 手工落值；🔴 同步更新 achievement.evidence_file_id / evidence_file_name（前端与 hasEvidence 只看这两列） |
-| A07 | GET /api/achievements/export | （**待开发**）获奖导出。仅本人或管理员；仅导出 APPROVED 成果（5008）；默认 Excel |
+| A06 | POST /api/achievements/{id}/evidence | 佐证上传/覆盖，**仅当前队长**（5007）。body：fileId fileName（**fileId 须为当前队长本人上传，1001 拦截；fileName 以文件表权威值为准，2026-10-13 组长侧加固**）。单文件覆盖式：旧版 is_current=0、版本号+1、uploadedAt 手工落值；🔴 同步更新 achievement.evidence_file_id / evidence_file_name（前端与 hasEvidence 只看这两列） |
+| A07 | GET /api/achievements/export?teamId= | 获奖导出（xlsx，**2026-10-13 组长侧交付**，POI）。学生只导本人（按 owner 归属人），管理员全量或按 teamId 筛；范围内存在待审批/已驳回成果 → 5008（宁拒不漏）；无可导出成果 1004；列：成果名称/类型/等级/获奖日期/归属人/队伍 |
 | A08 | GET /api/achievements/my/contributions | 学生端我的成果。出参 {teams:[{teamId teamName isLeader}], items:[列表项]}：teams = 当前用户在册且 ACTIVE 的队伍（含队长标识），items = 这些队伍的成果。🔴 参赛记录 + 获奖记录从赛队成员关系与成果**动态聚合**，不读冗余表 |
 
 ## 5. 成果与材料的联动（本线核心规则）
@@ -85,7 +85,7 @@ flowchart LR
 - B 线（team 包口子）：MS02/MS03/A06 提交后重算齐全率与 `material_status`，**进程内调 B 线 `TeamMaterialStatusService.updateMaterialStatus(teamId, materialStatus, completeRate)` 写回，禁止 C 线直接 UPDATE team 表**（口子已随 B 线赛队代码进 main，C 线拉取后调用；`completeRate` 按 B 线契约 0-100 保留 1 位小数）
 - B 线：`team` / `team_member` 表查询集中在 `material/support/MaterialTeamQuerySupport`（方法级 `TODO(联调)` 标注，待切换调 B 线 `TeamQuerySupport.loadTeam()`；B 线暂无"按成员查所在队伍"口子，该段查询保留 C 线自研）
 - 骨架认证域：当前登录人 → 人员档案 ID（`sys_user.member_id`）由各 Service 自行反查（`CurrentUser` 不携带 `memberId`）
-- A 线：A07 导出按成员聚合时读 `member` 基础信息（待开发）
+- A 线：A07 导出归属人读 achievement.owner_name 冗余列（2026-10-13 交付），暂无按成员聚合场景，未读 member 表
 
 ## 7. 待确认事项
 
@@ -95,5 +95,5 @@ flowchart LR
 - [ ] (需组长确认) 幂等键策略：后端写接口强制校验 X-Idempotency-Key，但前端 post/put/del 封装不发这个头，需确认是前端补发还是后端放宽；另需明确幂等的 bizType 词表在哪登记
 - [ ] (需组长确认) 对象存储方案：MinIO 社区版已停止分发（官网 410 Gone / Docker Hub denied / quay.io 401），需重新决策（候选：PGSTY Silo / SeaweedFS / RustFS）；存储不可用期间 MS03 走兜底匹配（压缩包名），真实解压路径待存储恢复后回归验证
 - [ ] (需组长确认) 管理员能否提交材料：admin 账号的 sys_user.member_id 为 NULL，会被 MS02 的"在册成员"校验拦（5003），需确认是否符合预期
-- [ ] (需组长确认) 跨线对接方式：齐全率回写已定改为调 B 线 TeamMaterialStatusService.updateMaterialStatus()（待 B 线 feature/b-line-team 合入 main 后执行切换）
-- [ ] (需组长确认) A07 导出格式默认 Excel（xlsx），是否需要追加 PDF（A07 待开发）
+- [x] 跨线对接方式：齐全率回写已切换为调 B 线 `TeamMaterialStatusService.updateMaterialStatus()`（B 线代码已随 PR#9 合入 main，2026-10-13 组长侧执行切换，`MaterialTeamQuerySupport.updateTeamMaterial` 不再直写 team 表）
+- [x] A07 导出格式默认 Excel（xlsx）已实现（2026-10-13 组长侧交付，POI）；是否追加 PDF 仍待定，需要时另开

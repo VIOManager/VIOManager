@@ -1,7 +1,6 @@
 package com.viomanager.material.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.enums.MaterialTypeEnum;
@@ -18,6 +17,7 @@ import com.viomanager.material.service.MaterialRequirementService;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.MyTeamRow;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
+import com.viomanager.material.support.MemberIdSupport;
 import com.viomanager.material.vo.MaterialRequirementVO;
 import com.viomanager.material.vo.MaterialSubmitInfoVO;
 import com.viomanager.material.vo.MyTeamMaterialVO;
@@ -30,7 +30,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 队伍材料完成度实现：齐全率重算（recompute）+ MS01 管理端队伍概览 + MS06 学生端我的材料。
  * 重算口径（C 线接口清单 §3 MS02）：分母为任务下全部未删要求（含选传），分子为有 is_current=1 提交的
  * 要求数，completeRate 取 0–100 整数。team / team_member 表的跨线 SQL 全部集中在
- * MaterialTeamQuerySupport（B 线过渡方案，TODO(联调) 注释在该类逐方法标注）。
+ * MaterialTeamQuerySupport（B 线过渡方案，TODO(联调) 注释在该类逐方法标注）；
+ * 当前人 → 人员档案 ID 反查走 MemberIdSupport（material / achievement 两包共用）。
  */
 @Service
 public class MaterialCompletionServiceImpl implements MaterialCompletionService {
@@ -62,7 +64,7 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
     private MaterialTeamQuerySupport teamQuery;
 
     @Resource
-    private NamedParameterJdbcTemplate namedTemplate;
+    private MemberIdSupport memberIdSupport;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -74,7 +76,7 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         }
         //2.该比赛的材料任务：一赛一任务是建任务的强规则，selectList 容错取第一条
         List<MaterialTask> tasks = taskMapper.selectList(
-                new QueryWrapper<MaterialTask>().eq("contest_id", team.contestId()));
+                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
         if (tasks.isEmpty()) {
             return;
         }
@@ -102,7 +104,7 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         //6.队伍材料状态
         String materialStatus = submitted == 0 ? "NOT_STARTED"
                 : requiredMissing > 0 ? "PENDING" : "SUBMITTED";
-        //7.回写 team 两列
+        //7.回写 team 两列（经 MaterialTeamQuerySupport 走 B 线口子）
         teamQuery.updateTeamMaterial(teamId, materialStatus, completeRate);
     }
 
@@ -115,7 +117,7 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         }
         //2.该比赛的材料任务：没配任务按 404 拒绝（与 MS02 校验链同口径）
         List<MaterialTask> tasks = taskMapper.selectList(
-                new QueryWrapper<MaterialTask>().eq("contest_id", team.contestId()));
+                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
         if (tasks.isEmpty()) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "材料任务不存在");
         }
@@ -134,11 +136,11 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
             item.setMaterialType(req.getMaterialType());
             item.setMaterialTypeLabel(MaterialTypeEnum.labelOf(req.getMaterialType()));
             SubmitState state = SubmitState.of(currents.get(req.getId()));
-            item.setStatus(state.status());
-            item.setVersion(state.version());
-            item.setFileName(state.fileName());
-            item.setUploadedAt(state.uploadedAt());
-            if ("NOT_SUBMITTED".equals(state.status())
+            item.setStatus(state.getStatus());
+            item.setVersion(state.getVersion());
+            item.setFileName(state.getFileName());
+            item.setUploadedAt(state.getUploadedAt());
+            if ("NOT_SUBMITTED".equals(state.getStatus())
                     && req.getRequiredFlag() != null && req.getRequiredFlag() == 1) {
                 requiredMissing++;
             }
@@ -147,9 +149,9 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         //5.组装概览行（completeRate 读 team 表现值，不现算）
         TeamMaterialRowVO vo = new TeamMaterialRowVO();
         vo.setTeamId(teamId);
-        vo.setTeamName(team.name());
-        vo.setLeaderName(teamQuery.loadLeaderName(teamId, team.leaderMemberId()));
-        vo.setCompleteRate(team.completeRate() == null ? 0 : team.completeRate().intValue());
+        vo.setTeamName(team.getName());
+        vo.setLeaderName(teamQuery.loadLeaderName(teamId, team.getLeaderMemberId()));
+        vo.setCompleteRate(team.getCompleteRate() == null ? 0 : team.getCompleteRate().intValue());
         vo.setStatusText(requiredMissing > 0 ? "待补 " + requiredMissing + " 项" : "齐全");
         vo.setItems(items);
         return Result.ok(vo);
@@ -158,16 +160,16 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
     @Override
     public Result<List<MyTeamMaterialVO>> myMaterials() {
         //1.当前学生的人员档案 ID（sys_user.member_id；没绑定直接空数组）
-        Long memberId = currentMemberId(UserHolder.getUser());
+        Long memberId = memberIdSupport.currentMemberId(UserHolder.getUser());
         if (memberId == null) {
-            return Result.ok(List.of());
+            return Result.ok(new ArrayList<>());
         }
         //2.我在册（CONFIRMED/UNCONFIRMED）且 ACTIVE 的队伍
         List<MyTeamMaterialVO> voList = new ArrayList<>();
         for (MyTeamRow team : teamQuery.loadMyTeams(memberId)) {
             //3.该队所在比赛没配材料任务 → 跳过这支队伍（不报错、不出现在数组里）
             List<MaterialTask> tasks = taskMapper.selectList(
-                    new QueryWrapper<MaterialTask>().eq("contest_id", team.contestId()));
+                    new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
             if (tasks.isEmpty()) {
                 continue;
             }
@@ -176,7 +178,7 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
             //   任务已在上面确认存在，listByTask 恒返回 ok 且 data 非空）
             List<MaterialRequirementVO> reqVos = requirementService.listByTask(task.getId()).getData();
             //5.逐要求组装提交状态，统计必传缺口，随后组装这支队伍
-            Map<Long, MaterialSubmission> currents = currentSubmissionsByTeam(team.id());
+            Map<Long, MaterialSubmission> currents = currentSubmissionsByTeam(team.getId());
             List<MyTeamMaterialVO.Item> items = new ArrayList<>(reqVos.size());
             int requiredMissing = 0;
             for (MaterialRequirementVO reqVo : reqVos) {
@@ -184,22 +186,22 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
                 item.setRequirement(reqVo);
                 item.setRequirementId(reqVo.getId());
                 SubmitState state = SubmitState.of(currents.get(reqVo.getId()));
-                item.setStatus(state.status());
-                item.setVersion(state.version());
-                item.setFileName(state.fileName());
-                item.setUploadedAt(state.uploadedAt());
-                if ("NOT_SUBMITTED".equals(state.status()) && reqVo.getRequiredFlag() != null
+                item.setStatus(state.getStatus());
+                item.setVersion(state.getVersion());
+                item.setFileName(state.getFileName());
+                item.setUploadedAt(state.getUploadedAt());
+                if ("NOT_SUBMITTED".equals(state.getStatus()) && reqVo.getRequiredFlag() != null
                         && reqVo.getRequiredFlag() == 1) {
                     requiredMissing++;
                 }
                 items.add(item);
             }
             MyTeamMaterialVO vo = new MyTeamMaterialVO();
-            vo.setTeamId(team.id());
-            vo.setTeamName(team.name());
+            vo.setTeamId(team.getId());
+            vo.setTeamName(team.getName());
             vo.setTask(new MyTeamMaterialVO.TaskBrief()
                     .setId(task.getId()).setTitle(task.getName()).setDeadline(task.getDeadline()));
-            vo.setCompleteRate(team.completeRate() == null ? 0 : team.completeRate().intValue());
+            vo.setCompleteRate(team.getCompleteRate() == null ? 0 : team.getCompleteRate().intValue());
             vo.setRequiredMissing(requiredMissing);
             vo.setItems(items);
             voList.add(vo);
@@ -218,19 +220,14 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         return map;
     }
 
-    /** 当前登录用户的人员档案 ID（sys_user.member_id；未绑定返回 null），照 MaterialSubmissionServiceImpl 的写法 */
-    private Long currentMemberId(CurrentUser user) {
-        if (user == null || user.getUserId() == null) {
-            return null;
-        }
-        List<Long> ids = namedTemplate.queryForList(
-                "SELECT member_id FROM sys_user WHERE id = :userId AND deleted = 0",
-                Map.of("userId", user.getUserId()), Long.class);
-        return ids.isEmpty() || ids.get(0) == null ? null : ids.get(0);
-    }
-
     /** 提交状态四元组（MS01 / MS06 共用口径）：未提交时 version=0、fileName / uploadedAt 为空串 */
-    private record SubmitState(String status, int version, String fileName, String uploadedAt) {
+    @Data
+    @AllArgsConstructor
+    private static class SubmitState {
+        private String status;
+        private int version;
+        private String fileName;
+        private String uploadedAt;
 
         static SubmitState of(MaterialSubmission current) {
             if (current == null) {

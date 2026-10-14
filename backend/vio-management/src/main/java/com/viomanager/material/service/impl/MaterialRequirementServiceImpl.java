@@ -19,8 +19,11 @@ import com.viomanager.material.service.MaterialRequirementService;
 import com.viomanager.material.vo.MaterialRequirementVO;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,11 +91,11 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
         MaterialRequirement requirement = new MaterialRequirement();
         requirement.setTaskId(taskId);
         requirement.setContestId(task.getContestId());
-        requirement.setMaterialType(fields.materialType());
-        requirement.setName(fields.name());
-        requirement.setRequiredFlag(fields.requiredFlag());
-        requirement.setFormats(fields.formatsJoined());
-        requirement.setMaxSizeMb(fields.maxSizeMb());
+        requirement.setMaterialType(fields.getMaterialType());
+        requirement.setName(fields.getName());
+        requirement.setRequiredFlag(fields.getRequiredFlag());
+        requirement.setFormats(fields.getFormatsJoined());
+        requirement.setMaxSizeMb(fields.getMaxSizeMb());
         requirement.setNamingRule(dto.getNamingRule());
         requirement.setSystemGenerated(0);
         requirementMapper.insert(requirement);
@@ -115,11 +118,11 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
         //4.只更新六个业务字段；maxSizeMb / namingRule 允许置 null（恢复全局默认 / 清空）
         UpdateWrapper<MaterialRequirement> wrapper = new UpdateWrapper<>();
         wrapper.eq("id", id)
-                .set("material_type", fields.materialType())
-                .set("name", fields.name())
-                .set("required_flag", fields.requiredFlag())
-                .set("allowed_formats", fields.formatsJoined())
-                .set("max_size_mb", fields.maxSizeMb())
+                .set("material_type", fields.getMaterialType())
+                .set("name", fields.getName())
+                .set("required_flag", fields.getRequiredFlag())
+                .set("allowed_formats", fields.getFormatsJoined())
+                .set("max_size_mb", fields.getMaxSizeMb())
                 .set("naming_rule", dto.getNamingRule());
         if (requirementMapper.update(null, wrapper) == 0) {
             //并发兜底：查出后要求恰好被他人删除
@@ -167,8 +170,17 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
         if (name == null || name.isBlank()) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "要求名称不能为空");
         }
-        List<String> formats = allowedFormats == null ? List.of()
-                : allowedFormats.stream().map(String::trim).filter(f -> !f.isEmpty()).distinct().toList();
+        //格式列表逐个 trim、滤空、去重（LinkedHashSet 保序去重）
+        Set<String> seenFormats = new LinkedHashSet<>();
+        if (allowedFormats != null) {
+            for (String format : allowedFormats) {
+                String trimmed = format == null ? "" : format.trim();
+                if (!trimmed.isEmpty()) {
+                    seenFormats.add(trimmed);
+                }
+            }
+        }
+        List<String> formats = new ArrayList<>(seenFormats);
         if (formats.isEmpty()) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "至少允许一种文件格式");
         }
@@ -205,13 +217,26 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
     /** 逗号分隔串拆 List：null / 空白 → 空 List；元素逐个 trim 并滤掉空段（防历史脏数据） */
     private List<String> splitFormats(String joined) {
         if (joined == null || joined.isBlank()) {
-            return List.of();
+            return new ArrayList<>();
         }
-        return Arrays.stream(joined.split(",")).map(String::trim).filter(f -> !f.isEmpty()).toList();
+        List<String> formats = new ArrayList<>();
+        for (String part : joined.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                formats.add(trimmed);
+            }
+        }
+        return formats;
     }
 
     /** 校验通过后的归一值：formatsJoined 为落库的逗号串形态 */
-    private record ValidatedFields(String materialType, String name, int requiredFlag,
-                                   String formatsJoined, Integer maxSizeMb) {
+    @Data
+    @AllArgsConstructor
+    private static class ValidatedFields {
+        private String materialType;
+        private String name;
+        private int requiredFlag;
+        private String formatsJoined;
+        private Integer maxSizeMb;
     }
 }

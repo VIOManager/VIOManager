@@ -7,6 +7,8 @@ import com.viomanager.common.enums.MaterialErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.Result;
 import com.viomanager.file.config.FileProperties;
+import com.viomanager.file.entity.FileObject;
+import com.viomanager.file.service.IFileService;
 import com.viomanager.material.dto.MaterialBatchUploadDTO;
 import com.viomanager.material.dto.MaterialSubmitDTO;
 import com.viomanager.material.entity.MaterialRequirement;
@@ -19,16 +21,15 @@ import com.viomanager.material.service.MaterialCompletionService;
 import com.viomanager.material.service.MaterialSubmissionService;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
+import com.viomanager.material.support.MemberIdSupport;
 import com.viomanager.material.support.MaterialZipBatchSupport;
 import com.viomanager.material.vo.BatchMatchResultVO;
 import com.viomanager.material.vo.MaterialSubmitVO;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +37,11 @@ import org.springframework.transaction.annotation.Transactional;
  * 材料提交服务实现（MS02 单份提交 / MS03 zip 批量上传）：校验 → 同事务落库 → 触发齐全率重算。
  * 校验顺序是产品口径（顺序错会误导用户，比如先报格式后报非队员），**不要调整顺序**；
  * 第 0 步的入参完整性拦截是空值防线——file_id / file_name / file_size 列 NOT NULL，
- * 空值放进 8 步链会在中途 NPE 或落库 500。
+ * 空值放进 9 步链会在中途 NPE 或落库 500。
  *
  * 跨模块取数（B 线尚未建 team 包、CurrentUser 无 memberId）：
  *  - team / team_member 表 SQL 集中在 MaterialTeamQuerySupport（TODO(联调) 注释在该类逐方法标注）；
- *  - 当前用户的人员档案 ID 照骨架 ApprovalActionServiceImpl.currentMemberId 的写法查 sys_user。
+ *  - 当前用户的人员档案 ID 反查抽在 MemberIdSupport（material / achievement 两包共用）。
  */
 @Service
 public class MaterialSubmissionServiceImpl implements MaterialSubmissionService {
@@ -61,13 +62,16 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
     private FileProperties fileProperties;
 
     @Resource
+    private IFileService fileService;
+
+    @Resource
     private MaterialTeamQuerySupport teamQuery;
 
     @Resource
     private MaterialZipBatchSupport zipBatch;
 
     @Resource
-    private NamedParameterJdbcTemplate namedTemplate;
+    private MemberIdSupport memberIdSupport;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -101,7 +105,7 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
             throw new BizException(CommonErrorCode.NOT_FOUND, "材料任务不存在");
         }
         //4.比赛匹配：要求随任务、队伍随比赛，两边必须同一比赛 → 5004
-        if (!Objects.equals(task.getContestId(), team.contestId())) {
+        if (!Objects.equals(task.getContestId(), team.getContestId())) {
             throw new BizException(MaterialErrorCode.CONTEST_MISMATCH);
         }
         //5.未过截止：deadline 为 null 视为不限期；now == deadline 仍可提交
@@ -110,11 +114,16 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         }
         //6.在册成员：队长或队员均可（team_member.status CONFIRMED / UNCONFIRMED 都算在队）→ 5003
         CurrentUser user = UserHolder.getUser();
-        Long memberId = currentMemberId(user);
+        Long memberId = memberIdSupport.currentMemberId(user);
         if (memberId == null || !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
             throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER);
         }
-        //7.扩展名白名单：allowed_formats 为空表示不限 → 5001
+        //7.文件归属：fileId 必须为当前用户上传，fileName / fileSize 以文件表权威值覆盖客户端自报
+        //   （防拿别人的 fileId 挂名提交，也防假名假大小绕过白名单与上限）
+        FileObject ownedFile = fileService.loadOwnedFile(dto.getFileId(), user.getUserId());
+        dto.setFileName(ownedFile.getOriginalName());
+        dto.setFileSize(ownedFile.getFileSize());
+        //8.扩展名白名单：allowed_formats 为空表示不限 → 5001
         String formats = requirement.getFormats();
         if (formats != null && !formats.isBlank()) {
             List<String> allowed = splitFormats(formats);
@@ -124,7 +133,7 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
                         "文件格式不允许，允许的格式：" + String.join(",", allowed));
             }
         }
-        //8.大小上限：maxSizeMb 为空用全局配置 vio.file.max-size-mb（默认 20MB）→ 5002
+        //9.大小上限：maxSizeMb 为空用全局配置 vio.file.max-size-mb（默认 20MB）→ 5002
         int limitMb = requirement.getMaxSizeMb() == null
                 ? fileProperties.getMaxSizeMb() : requirement.getMaxSizeMb();
         if (dto.getFileSize() > limitMb * 1024L * 1024L) {
@@ -140,7 +149,7 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         submission.setTaskId(task.getId());
         submission.setContestId(task.getContestId());
         submission.setSemesterId(task.getSemesterId());
-        submission.setOrgId(team.orgId());
+        submission.setOrgId(team.getOrgId());
         submission.setFileId(dto.getFileId());
         submission.setFileName(dto.getFileName());
         submission.setFileSize(dto.getFileSize());
@@ -157,7 +166,7 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
     }
 
     /**
-     * zip 批量上传（MS03）：6 步校验（与单份提交同口径同顺序）→ 两层匹配与落库（MaterialZipBatchSupport，
+     * zip 批量上传（MS03）：7 步校验（与单份提交同口径同顺序）→ 两层匹配与落库（MaterialZipBatchSupport，
      * 同一事务）→ 齐全率重算。"真实解压未经实测、当前走兜底匹配"的说明见该 Support 类 Javadoc。
      */
     @Override
@@ -187,7 +196,7 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
             throw new BizException(CommonErrorCode.NOT_FOUND, "赛队不存在");
         }
         //3.比赛匹配 → 5004
-        if (!Objects.equals(task.getContestId(), team.contestId())) {
+        if (!Objects.equals(task.getContestId(), team.getContestId())) {
             throw new BizException(MaterialErrorCode.CONTEST_MISMATCH);
         }
         //4.未过截止（deadline 为 null = 不限期）→ 1006
@@ -196,11 +205,14 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         }
         //5.在册成员（队长或队员）→ 5003
         CurrentUser user = UserHolder.getUser();
-        Long memberId = currentMemberId(user);
+        Long memberId = memberIdSupport.currentMemberId(user);
         if (memberId == null || !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
             throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER);
         }
-        //6.仅支持 zip 压缩包（忽略大小写）→ 5001
+        //6.文件归属：fileId 必须为当前用户上传，fileName 以文件表权威值覆盖自报（zip 后缀判定用权威名）
+        dto.setFileName(fileService.loadOwnedFile(
+                dto.getFileId(), user.getUserId()).getOriginalName());
+        //7.仅支持 zip 压缩包（忽略大小写）→ 5001
         if (!dto.getFileName().toLowerCase().endsWith(".zip")) {
             throw new BizException(MaterialErrorCode.FILE_FORMAT_NOT_ALLOWED, "批量上传仅支持 zip 压缩包");
         }
@@ -209,20 +221,6 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
                 zipBatch.matchAndInsert(task, team, memberId, user.getRealName(), dto);
         completionService.recompute(dto.getTeamId());
         return Result.ok(vo);
-    }
-
-    /** 当前登录用户的人员档案 ID（sys_user.member_id；未绑定返回 null），照骨架 ApprovalActionServiceImpl 的写法 */
-    private Long currentMemberId(CurrentUser user) {
-        if (user == null || user.getUserId() == null) {
-            return null;
-        }
-        List<Long> ids = namedTemplate.queryForList(
-                "SELECT member_id FROM sys_user WHERE id = :userId AND deleted = 0",
-                Map.of("userId", user.getUserId()), Long.class);
-        if (ids.isEmpty() || ids.get(0) == null) {
-            return null;
-        }
-        return ids.get(0);
     }
 
     /** 从文件名提扩展名：小写、不含点；没有扩展名返回空串（与文件服务 FileServiceImpl 同款写法） */
@@ -236,10 +234,13 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
 
     /** 逗号分隔格式串拆成小写列表做白名单比对（管理员录入可能是大写，比对统一小写） */
     private List<String> splitFormats(String joined) {
-        return Arrays.stream(joined.split(","))
-                .map(String::trim)
-                .map(String::toLowerCase)
-                .filter(f -> !f.isEmpty())
-                .toList();
+        List<String> formats = new ArrayList<>();
+        for (String part : joined.split(",")) {
+            String trimmed = part.trim().toLowerCase();
+            if (!trimmed.isEmpty()) {
+                formats.add(trimmed);
+            }
+        }
+        return formats;
     }
 }
