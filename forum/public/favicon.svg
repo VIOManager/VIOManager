@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- VIO 论坛 favicon：V2EX 风——白底圆角方块 + 炭黑圆头 V -->
+  <rect width="64" height="64" rx="10" fill="#FFFFFF"/>
+  <path d="M17 17 L32 49 L47 17" fill="none" stroke="#333333" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
