@@ -134,7 +134,7 @@ async function loadAll() {
   await Promise.all([loadStudent(), loadTodos(), loadSemester(), approval.refresh()])
 }
 onMounted(loadAll)
-// 顶栏调试切换角色后按新角色口径重载
+// 身份（角色）变化时按新口径重载
 watch(() => user.role, loadAll)
 
 /** 部门数据表：超管看全平台四个子组织，部门管理员只看自己子树（数媒系） */

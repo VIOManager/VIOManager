@@ -90,10 +90,6 @@ export const useUserStore = defineStore('user', {
       this.realName = ''
       this.defaultPassword = 0
       sessionStorage.removeItem(TOKEN_KEY)
-    },
-    /** ⚠️ 开发调试件：顶栏角色切换器用，验证三端菜单显隐，联调后移除（角色实际来自登录响应） */
-    setRole(role: Role) {
-      this.role = role
     }
   }
 })
