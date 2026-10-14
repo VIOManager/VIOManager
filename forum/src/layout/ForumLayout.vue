@@ -4,13 +4,11 @@
  * 视觉基准：.agentdocs/design-preview/forum-v2ex/ 样张；《论坛V2EX风格重设计-优化方案》§3
  * ⚠️ 冲突：图签页脚已按 2026-10-09 lzh 拍板废弃（改居中灰字简版），图纸档案语汇禁止回潮论坛站
  * 搜索：回车跳首页带 q 关键词（F01 keyword 参数），首页读取 route.query.q
- * ⚠️ 角色调试下拉：开发演示件（联调后移除），切角色验证 9002 管理口径与 UI 显隐
  */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { avatarOf } from '@/config/avatars'
-import { ROLE_LABEL } from '@/config/labels'
 import PostDialog from '@/components/PostDialog.vue'
 
 const user = useUserStore()
@@ -31,18 +29,6 @@ function doSearch() {
 function onPosted() {
   router.push({ path: '/', query: { t: Date.now() } })
 }
-
-/** 演示角色切换（调试件）：三个预设身份对应主站演示账号 */
-const DEMO_ROLES = [
-  { name: '管理员', role: 'SUPER_ADMIN' },
-  { name: '部门管理员', role: 'DEPT_ADMIN' },
-  { name: '学生', role: 'STUDENT' }
-]
-const demoRole = ref(user.role)
-function switchRole() {
-  const found = DEMO_ROLES.find((x) => x.role === demoRole.value)
-  user.devSwitchRole(found ? found.name : '演示成员', demoRole.value)
-}
 </script>
 
 <template>
@@ -62,10 +48,6 @@ function switchRole() {
         </nav>
         <button class="btn-post" type="button" @click="postVisible = true">创作新主题</button>
         <span class="who"><img :src="avatarOf(user.realName, 26)" alt="">{{ user.realName }}</span>
-        <!-- 开发调试件：演示角色切换，联调后移除 -->
-        <select class="dev-role" v-model="demoRole" title="演示角色切换（调试件）" @change="switchRole">
-          <option v-for="(v, k) in ROLE_LABEL" :key="k" :value="k">{{ v }}</option>
-        </select>
       </div>
     </header>
 
@@ -105,8 +87,6 @@ function switchRole() {
 .btn-post:hover { border-color: #999; }
 .who { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--body); margin-left: 18px; }
 .who img { width: 26px; height: 26px; border-radius: var(--radius-ava); }
-.dev-role { border: 1px dashed #DDD; border-radius: 4px; font-size: 12px; color: var(--fade); background: transparent; padding: 2px 4px; margin-left: 10px; }
-.dev-role:focus { outline: none; }
 
 .content { flex: 1; padding-top: 18px; padding-bottom: 20px; }
 

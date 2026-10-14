@@ -16,10 +16,3 @@ export const CONTENT_TYPE_LABEL: Record<string, string> = {
   VIDEO: '视频',
   LINK: '外链'
 }
-
-/** 角色名（顶栏调试下拉用） */
-export const ROLE_LABEL: Record<string, string> = {
-  SUPER_ADMIN: '超级管理员',
-  DEPT_ADMIN: '部门管理员',
-  STUDENT: '学生'
-}

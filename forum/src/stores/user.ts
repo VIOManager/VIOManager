@@ -71,10 +71,6 @@ export const useUserStore = defineStore('forum-user', {
       sessionStorage.setItem(TOKEN_KEY, this.token)
       sessionStorage.setItem(DEV_NAME_KEY, n)
       sessionStorage.setItem(DEV_ROLE_KEY, r)
-    },
-    /** 切换演示角色（顶栏调试下拉用）：只换身份键 */
-    devSwitchRole(name: string, role: string) {
-      this.devStubLogin(name, role)
     }
   }
 })
