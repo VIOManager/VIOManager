@@ -1,22 +1,29 @@
 /**
  * 知识库接口（KB01–KB08 暂定）
- * 依据：PRD §3.14（分类浏览/收藏/评论；管理员发布/编辑/置顶/删除；内容来源=管理员上传/外部链接/AI 总结）
- * ⚠️ 暂定契约：知识库接口清单未出（9xxx 段预留给知识库与 AI），本文件按 PRD 先行约定，
+ * 依据：PRD §3.14；lzh 2026-10-14 拍板先行简化——条目 = 外部链接或上传文件二选一，
+ *    分类与正文暂不做，待正式需求加回
+ * ⚠️ 暂定契约：知识库接口清单未出（9xxx 段预留给知识库与 AI），本文件按前端先行口径约定，
  *    待后端清单入库后对齐；TODO(联调)：以正式清单为准
- * 分类走字典 DR01（KB_CATEGORY，系统配置里维护）；发布/编辑/置顶/删除仅管理员（1003）
+ * 权限：发布/编辑/置顶/删除仅管理员（1003）；浏览/收藏/评论登录即可
+ * 文件两段式：先走文件服务 apiUploadFile 拿 fileId/fileName，再带进本模块建条目（与佐证/材料同模式）
  */
-import { del, get, post, postIdem, put } from './http'
+import { del, download, get, post, postIdem, put } from './http'
 
-export type KbSourceType = 'ADMIN_UPLOAD' | 'LINK' | 'AI_SUMMARY'
+/** 条目形态：外部链接 / 上传文件 */
+export type KbSourceType = 'LINK' | 'FILE'
 
 export interface KbItem {
   id: string
   title: string
-  category: string
-  /** 摘要（列表卡片用） */
+  /** 一句话摘要（列表卡片展示，选填） */
   summary: string
   sourceType: KbSourceType
+  /** 外部链接地址（sourceType=LINK 时有值） */
   linkUrl: string
+  /** 文件服务 ID（sourceType=FILE 时有值） */
+  fileId: string
+  /** 原始文件名（FILE 时展示与下载兜底用） */
+  fileName: string
   pinned: boolean
   viewCount: number
   favoriteCount: number
@@ -26,7 +33,6 @@ export interface KbItem {
 }
 
 export interface KbDetail extends KbItem {
-  content: string
   /** 当前登录人是否已收藏 */
   favorited: boolean
 }
@@ -40,7 +46,7 @@ export interface KbComment {
   mine: boolean
 }
 
-export function apiKbItems(q?: { category?: string; keyword?: string }): Promise<KbItem[]> {
+export function apiKbItems(q?: { keyword?: string }): Promise<KbItem[]> {
   return get('/api/kb/items', (q ?? {}) as Record<string, unknown>)
 }
 
@@ -49,13 +55,29 @@ export function apiKbDetail(id: string): Promise<KbDetail> {
   return get('/api/kb/items/' + id)
 }
 
+export interface CreateKbBody {
+  title: string
+  summary: string
+  sourceType: KbSourceType
+  /** LINK 时必填 */
+  linkUrl?: string
+  /** FILE 时必填（文件服务上传返回值） */
+  fileId?: string
+  fileName?: string
+}
+
 /** KB02 发布（仅管理员；幂等头） */
-export function apiCreateKbItem(body: { title: string; category: string; summary: string; content: string; sourceType: string; linkUrl?: string }): Promise<{ id: string }> {
+export function apiCreateKbItem(body: CreateKbBody): Promise<{ id: string }> {
   return postIdem('/api/kb/items', body, crypto.randomUUID())
 }
 
-export function apiUpdateKbItem(id: string, body: { title?: string; category?: string; summary?: string; content?: string; linkUrl?: string }): Promise<null> {
+export function apiUpdateKbItem(id: string, body: { title?: string; summary?: string; linkUrl?: string }): Promise<null> {
   return put('/api/kb/items/' + id, body)
+}
+
+/** 附件下载：走文件服务流下载（后端已实现 GET /api/files/{fileId}/download） */
+export function apiDownloadKbFile(fileId: string, fileName: string): Promise<void> {
+  return download('/api/files/' + fileId + '/download', fileName)
 }
 
 export function apiDeleteKbItem(id: string): Promise<null> {

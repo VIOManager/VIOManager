@@ -1,24 +1,22 @@
 <script setup lang="ts">
 /**
  * 知识库页（/kb，三端，KB01–KB08 暂定接口）
- * 分类 tab 走字典 DR01（KB_CATEGORY，系统配置里维护）；置顶优先排序；管理员可发布
+ * lzh 2026-10-14 拍板先行简化：条目 = 外部链接或上传文件二选一，分类与正文暂不做
  * PRD §3.14：浏览/收藏/评论全角色；发布/编辑/置顶/删除仅管理员
  */
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiCreateKbItem, apiKbItems } from '@/api/kb'
-import type { KbItem } from '@/api/kb'
-import { apiDictItems } from '@/api/dict'
+import type { KbItem, KbSourceType } from '@/api/kb'
 import { KB_SOURCE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
+import UploadField from '@/components/UploadField.vue'
 import KbDetailDrawer from './KbDetailDrawer.vue'
 
 const user = useUserStore()
 const isAdmin = user.role !== 'STUDENT'
 
 const list = ref<KbItem[]>([])
-const categories = ref<string[]>([])
-const category = ref('')
 const keyword = ref('')
 const loading = ref(false)
 
@@ -28,7 +26,7 @@ const detailId = ref('')
 async function load() {
   loading.value = true
   try {
-    list.value = await apiKbItems({ category: category.value || undefined, keyword: keyword.value || undefined })
+    list.value = await apiKbItems({ keyword: keyword.value || undefined })
   } finally {
     loading.value = false
   }
@@ -39,34 +37,61 @@ function openDetail(id: string) {
   drawerVisible.value = true
 }
 
-// ── 发布（管理员）──
+// ── 发布（管理员）：链接 / 文件 二选一 ──
 const formVisible = ref(false)
-const form = ref({ title: '', category: '', summary: '', content: '', sourceType: 'ADMIN_UPLOAD', linkUrl: '' })
+/** 弹窗重开自增，用于强制重挂 UploadField 清空其内部已选状态 */
+const formSeq = ref(0)
+const form = ref({ title: '', summary: '', sourceType: 'LINK' as KbSourceType, linkUrl: '' })
+/** 文件形态：UploadField 上传成功后暂存文件服务返回值，发布时随条目提交 */
+const uploaded = ref<{ fileId: string; fileName: string } | null>(null)
 const submitting = ref(false)
+
+function openCreate() {
+  formSeq.value++
+  form.value = { title: '', summary: '', sourceType: 'LINK', linkUrl: '' }
+  uploaded.value = null
+  formVisible.value = true
+}
+
+function onUploaded(f: { fileId: string; fileName: string }) {
+  uploaded.value = { fileId: f.fileId, fileName: f.fileName }
+}
 
 async function submit() {
   if (submitting.value) return
-  if (!form.value.title.trim() || !form.value.category) {
-    ElMessage.warning('标题与分类不能为空')
+  const title = form.value.title.trim()
+  if (!title) {
+    ElMessage.warning('标题不能为空')
+    return
+  }
+  // 按形态校验：链接必填地址；文件必须先上传拿到 fileId
+  if (form.value.sourceType === 'LINK' && !form.value.linkUrl.trim()) {
+    ElMessage.warning('请填写外部链接地址')
+    return
+  }
+  if (form.value.sourceType === 'FILE' && !uploaded.value) {
+    ElMessage.warning('请先上传文件')
     return
   }
   submitting.value = true
   try {
-    await apiCreateKbItem(form.value)
+    await apiCreateKbItem({
+      title,
+      summary: form.value.summary.trim(),
+      sourceType: form.value.sourceType,
+      linkUrl: form.value.sourceType === 'LINK' ? form.value.linkUrl.trim() : undefined,
+      fileId: uploaded.value?.fileId,
+      fileName: uploaded.value?.fileName
+    })
     ElMessage.success('已发布')
     formVisible.value = false
-    form.value = { title: '', category: '', summary: '', content: '', sourceType: 'ADMIN_UPLOAD', linkUrl: '' }
     await load()
   } finally {
     submitting.value = false
   }
 }
 
-onMounted(async () => {
-  const dict = await apiDictItems('KB_CATEGORY')
-  categories.value = dict.map((d) => d.label)
-  await load()
-})
+onMounted(load)
 </script>
 
 <template>
@@ -74,58 +99,60 @@ onMounted(async () => {
     <div class="dossier-head">
       <h3>知识库</h3>
       <div class="dossier-meta mono">
-        <span>教程 · 规范 · AI 提示词沉淀区</span>
+        <span>教程 · 规范 · 资料沉淀区</span>
       </div>
-    </div>
-
-    <div class="vtabs">
-      <button class="vtab" :class="{ active: category === '' }" @click="category = ''; load()">全部</button>
-      <button v-for="c in categories" :key="c" class="vtab" :class="{ active: category === c }" @click="category = c; load()">{{ c }}</button>
     </div>
 
     <div class="fbar">
       <input v-model="keyword" class="input-line" style="width: 200px" placeholder="搜索标题 / 摘要" @keyup.enter="load" />
       <button class="btn-line" @click="load">查询</button>
       <span style="flex: 1"></span>
-      <button v-if="isAdmin" class="btn-ink" @click="formVisible = true">发布内容</button>
+      <button v-if="isAdmin" class="btn-ink" @click="openCreate">发布内容</button>
     </div>
 
     <div class="kb-grid">
       <div v-for="it in list" :key="it.id" class="kb-card" @click="openDetail(it.id)">
         <div class="kb-top">
-          <span class="kb-cat">{{ it.category }}</span>
+          <span class="kb-cat">{{ KB_SOURCE_LABEL[it.sourceType] }}</span>
           <span v-if="it.pinned" class="kb-pin mono">置顶</span>
         </div>
         <h4>{{ it.title }}</h4>
         <p>{{ it.summary }}</p>
+        <p v-if="it.sourceType === 'FILE'" class="kb-file mono">{{ it.fileName }}</p>
         <div class="kb-meta mono">
-          <span>{{ KB_SOURCE_LABEL[it.sourceType] }}</span>
+          <span>{{ it.publisherName }}</span>
           <span>阅 {{ it.viewCount }} · 藏 {{ it.favoriteCount }} · 评 {{ it.commentCount }}</span>
         </div>
       </div>
     </div>
-    <p v-if="!loading && list.length === 0" class="empty-note">该分类暂无内容</p>
+    <p v-if="!loading && list.length === 0" class="empty-note">暂无内容</p>
 
     <el-dialog v-model="formVisible" title="发布知识库内容" width="520px">
       <div class="form-col">
         <label>标题</label>
         <input v-model="form.title" class="input-line" />
-        <label>分类（系统配置字典维护）</label>
-        <select v-model="form.category" class="input-line">
-          <option value="">选择分类</option>
-          <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
-        </select>
-        <label>摘要（列表卡片展示）</label>
+        <label>摘要（选填，列表卡片展示）</label>
         <textarea v-model="form.summary" class="input-line" rows="2"></textarea>
-        <label>正文</label>
-        <textarea v-model="form.content" class="input-line" rows="6"></textarea>
-        <label>来源 / 外部链接（选填）</label>
-        <div style="display: flex; gap: 8px">
-          <select v-model="form.sourceType" class="input-line" style="width: 140px">
-            <option v-for="(label, v) in KB_SOURCE_LABEL" :key="v" :value="v">{{ label }}</option>
-          </select>
-          <input v-model="form.linkUrl" class="input-line" style="flex: 1" placeholder="https://…（来源为外部链接时填）" />
+        <label>内容形态（二选一）</label>
+        <div class="type-row">
+          <button type="button" class="type-btn" :class="{ active: form.sourceType === 'LINK' }" @click="form.sourceType = 'LINK'">外部链接</button>
+          <button type="button" class="type-btn" :class="{ active: form.sourceType === 'FILE' }" @click="form.sourceType = 'FILE'">上传文件</button>
         </div>
+        <template v-if="form.sourceType === 'LINK'">
+          <label>链接地址</label>
+          <input v-model="form.linkUrl" class="input-line" placeholder="https://…" />
+        </template>
+        <template v-else>
+          <label>文件（选择后立即上传并安全扫描）</label>
+          <UploadField
+            :key="formSeq"
+            accept=".pdf,.mp4,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.png,.jpg"
+            tip="支持 PDF / MP4 / Office 文档 / 压缩包 / 图片，单文件上限 25MB（与后端一致）"
+            :max-mb="25"
+            button-text="选择文件上传"
+            @uploaded="onUploaded"
+          />
+        </template>
       </div>
       <template #footer>
         <button class="btn-line" @click="formVisible = false">取消</button>
@@ -138,12 +165,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.vtabs { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-.vtab {
-  padding: 7px 18px; border: 1px solid var(--vio-rule); background: var(--vio-sheet);
-  color: var(--vio-ink-2); font-size: 13px; cursor: pointer; transition: all 0.2s var(--vio-ease);
-}
-.vtab.active { border-color: var(--vio-ink); color: var(--vio-ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--vio-ink); }
 .kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .kb-card { background: var(--vio-sheet); border: 1px solid var(--vio-rule); padding: 16px 18px; cursor: pointer; transition: border-color 0.2s var(--vio-ease); }
 .kb-card:hover { border-color: var(--vio-blue-ink); }
@@ -152,7 +173,14 @@ onMounted(async () => {
 .kb-pin { font-size: 10px; color: var(--vio-seal); border: 1px solid var(--vio-seal); padding: 1px 6px; }
 .kb-card h4 { font-size: 15px; color: var(--vio-ink); margin-bottom: 6px; font-weight: 700; }
 .kb-card p { font-size: 12.5px; color: var(--vio-ink-2); line-height: 1.7; margin-bottom: 10px; }
+.kb-file { font-size: 11.5px; color: var(--vio-ink-3); margin: -4px 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kb-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--vio-ink-3); }
 .form-col { display: flex; flex-direction: column; gap: 6px; }
 .form-col label { font-size: 12px; color: var(--vio-ink-3); margin-top: 6px; }
+.type-row { display: flex; gap: 8px; }
+.type-btn {
+  padding: 7px 20px; border: 1px solid var(--vio-rule); background: var(--vio-sheet);
+  color: var(--vio-ink-2); font-size: 13px; cursor: pointer; transition: all 0.2s var(--vio-ease);
+}
+.type-btn.active { border-color: var(--vio-ink); color: var(--vio-ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--vio-ink); }
 </style>

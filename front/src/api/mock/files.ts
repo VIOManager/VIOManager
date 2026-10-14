@@ -20,3 +20,10 @@ registerMock({
     return ok({ fileId: 'f' + seq++, fileName: name, scanStatus: 'CLEAN' })
   }
 })
+
+/** 文件下载（blob 请求由 mock 适配器统一包成演示文件流，真实文件名由前端兜底传入） */
+registerMock({
+  method: 'get',
+  path: '/api/files/:fileId/download',
+  reply: (ctx) => ok({ fileId: ctx.params.fileId, note: 'mock 演示文件内容' })
+})

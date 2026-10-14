@@ -1,5 +1,6 @@
 /**
  * 知识库 mock 接口层（KB01–KB08 暂定，数据在 ./kb-data）
+ * lzh 2026-10-14 拍板简化：条目 = 外部链接或上传文件二选一（分类/正文暂不做）
  * 权限：发布/编辑/置顶/删除仅管理员（1003）；浏览/收藏/评论登录即可；删评论=本人或管理员
  * 列表排序：置顶优先，其余按发布时间倒序
  * TODO(联调)：后端知识库清单（9xxx）就绪后删除本文件并对齐 api/kb.ts
@@ -36,8 +37,9 @@ function commentCount(itemId: string): number {
 
 function toListItem(it: MockKbItem) {
   return {
-    id: it.id, title: it.title, category: it.category, summary: it.summary,
-    sourceType: it.sourceType, linkUrl: it.linkUrl, pinned: it.pinned,
+    id: it.id, title: it.title, summary: it.summary,
+    sourceType: it.sourceType, linkUrl: it.linkUrl, fileId: it.fileId, fileName: it.fileName,
+    pinned: it.pinned,
     viewCount: it.viewCount, favoriteCount: favCount(it.id), commentCount: commentCount(it.id),
     publisherName: it.publisherName, createdAt: it.createdAt
   }
@@ -47,11 +49,9 @@ registerMock({
   method: 'get',
   path: '/api/kb/items',
   reply: (ctx) => {
-    const category = String(ctx.query.category ?? '')
     const keyword = String(ctx.query.keyword ?? '').trim()
     const out: MockKbItem[] = []
     for (const it of kbItems) {
-      if (category && it.category !== category) continue
       if (keyword && it.title.indexOf(keyword) < 0 && it.summary.indexOf(keyword) < 0) continue
       out.push(it)
     }
@@ -73,7 +73,7 @@ registerMock({
     it.viewCount++
     const u = findMockUserByToken(ctx.token)
     const favs = kbFavorites[it.id] ?? []
-    return ok({ ...toListItem(it), content: it.content, favorited: !!u && favs.indexOf(u.loginName) >= 0 })
+    return ok({ ...toListItem(it), favorited: !!u && favs.indexOf(u.loginName) >= 0 })
   }
 })
 
@@ -85,15 +85,21 @@ registerMock({
     if (!ctx.idemKey) return fail(1001, '缺少幂等键（X-Idempotency-Key）')
     if (usedIdemKeys.has(ctx.idemKey)) return fail(1005, '请勿重复提交')
     const title = String(ctx.body.title ?? '').trim()
-    const category = String(ctx.body.category ?? '')
-    if (!title || !category) return fail(1001, '标题与分类不能为空')
+    if (!title) return fail(1001, '标题不能为空')
+    const sourceType = String(ctx.body.sourceType ?? '') === 'FILE' ? 'FILE' : 'LINK'
+    const linkUrl = String(ctx.body.linkUrl ?? '').trim()
+    const fileId = String(ctx.body.fileId ?? '')
+    const fileName = String(ctx.body.fileName ?? '')
+    // 形态二选一：链接必填地址；文件必带文件服务上传返回的 fileId 与原始文件名
+    if (sourceType === 'LINK' && !linkUrl) return fail(1001, '外部链接地址不能为空')
+    if (sourceType === 'FILE' && (!fileId || !fileName)) return fail(1001, '文件条目缺少文件信息，请先上传文件')
     usedIdemKeys.add(ctx.idemKey)
     const u = findMockUserByToken(ctx.token)
     const it: MockKbItem = {
-      id: nextKbId(), title, category,
-      summary: String(ctx.body.summary ?? ''), content: String(ctx.body.content ?? ''),
-      sourceType: (String(ctx.body.sourceType ?? 'ADMIN_UPLOAD') as MockKbItem['sourceType']),
-      linkUrl: String(ctx.body.linkUrl ?? ''), pinned: false, viewCount: 0,
+      id: nextKbId(), title,
+      summary: String(ctx.body.summary ?? ''),
+      sourceType, linkUrl, fileId: sourceType === 'FILE' ? fileId : '', fileName: sourceType === 'FILE' ? fileName : '',
+      pinned: false, viewCount: 0,
       publisherName: u ? u.realName : '管理员', createdAt: nowText()
     }
     kbItems.unshift(it)
@@ -109,9 +115,7 @@ registerMock({
     const it = findItem(ctx.params.id)
     if (!it) return fail(1004, '内容不存在')
     if (ctx.body.title) it.title = String(ctx.body.title).trim()
-    if (ctx.body.category) it.category = String(ctx.body.category)
     if (ctx.body.summary !== undefined) it.summary = String(ctx.body.summary)
-    if (ctx.body.content !== undefined) it.content = String(ctx.body.content)
     if (ctx.body.linkUrl !== undefined) it.linkUrl = String(ctx.body.linkUrl)
     return ok(null)
   }
