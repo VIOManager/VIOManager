@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- VIOManager 主站 favicon：图纸档案风——冷白纸底 + 图纸边框 + 四角定位线 + 钢笔墨蓝 V + 印章红校核章 -->
+  <rect width="64" height="64" fill="#F9FAF7"/>
+  <rect x="3.5" y="3.5" width="57" height="57" fill="none" stroke="#C9CFD8" stroke-width="1.5"/>
+  <path d="M3.5 11 V3.5 H11 M53 3.5 H60.5 V11 M60.5 53 V60.5 H53 M11 60.5 H3.5 V53" fill="none" stroke="#8B95A5" stroke-width="1.5"/>
+  <path d="M19 19 L32 48 L45 19" fill="none" stroke="#1D3A8F" stroke-width="8" stroke-linecap="square"/>
+  <rect x="44" y="44" width="9" height="9" fill="#C0392B"/>
+</svg>
