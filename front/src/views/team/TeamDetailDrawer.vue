@@ -131,8 +131,14 @@ async function saveInfo() {
 
 async function openAdvisorPicker() {
   // 指导教师候选：教师类型成员
-  const resp = await apiMembers({ page: 1, size: 50, memberType: 'TEACHER' })
-  advisorCandidates.value = resp.list.map((m) => ({ id: m.id, name: m.name, college: m.college }))
+  try {
+    const resp = await apiMembers({ page: 1, size: 50, memberType: 'TEACHER' })
+    advisorCandidates.value = resp.list.map((m) => ({ id: m.id, name: m.name, college: m.college }))
+  } catch {
+    // 联调降级：A 线人员接口后端未实现，候选置空提示
+    advisorCandidates.value = []
+    ElMessage.info('教师候选列表依赖 A 线人员接口，后端就绪后可用')
+  }
   advisorPicker.value = true
 }
 
