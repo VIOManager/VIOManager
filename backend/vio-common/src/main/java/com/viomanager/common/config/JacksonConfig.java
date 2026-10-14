@@ -1,6 +1,11 @@
 package com.viomanager.common.config;
 
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateDeserializer;
+import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
+import java.time.format.DateTimeFormatter;
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,6 +29,24 @@ public class JacksonConfig {
         return builder -> {
             builder.serializerByType(Long.class, ToStringSerializer.instance);
             builder.serializerByType(Long.TYPE, ToStringSerializer.instance);
+        };
+    }
+
+    /**
+     * 时间格式全局对齐规范 §2.1：LocalDateTime 出入参 yyyy-MM-dd HH:mm:ss、
+     * LocalDate 出入参 yyyy-MM-dd。此前走 Jackson 默认 ISO（带 T 分隔），
+     * 前端按规范发空格格式直接解析失败落 1000（2026-10-14 创建比赛排查定位，
+     * 组长拍板由后端对齐规范，而非前端迁就默认值）。
+     */
+    @Bean
+    public Jackson2ObjectMapperBuilderCustomizer timeFormatCustomizer() {
+        return builder -> {
+            DateTimeFormatter dateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            DateTimeFormatter date = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            builder.serializers(new LocalDateTimeSerializer(dateTime));
+            builder.deserializers(new LocalDateTimeDeserializer(dateTime));
+            builder.serializers(new LocalDateSerializer(date));
+            builder.deserializers(new LocalDateDeserializer(date));
         };
     }
 }
