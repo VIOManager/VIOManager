@@ -3,14 +3,46 @@
  * 论坛站布局壳：通栏白顶栏 + 内容区 + 简版页脚（V2EX 范式）
  * 视觉基准：.agentdocs/design-preview/forum-v2ex/ 样张；《论坛V2EX风格重设计-优化方案》§3
  * ⚠️ 冲突：图签页脚已按 2026-10-09 lzh 拍板废弃（改居中灰字简版），图纸档案语汇禁止回潮论坛站
- * TODO(联调)：搜索框接帖子搜索接口；"创作新主题"接发帖页（本期占位，方案 §8 不做富文本编辑器）
+ * 搜索：回车跳首页带 q 关键词（F01 keyword 参数），首页读取 route.query.q
+ * ⚠️ 角色调试下拉：开发演示件（联调后移除），切角色验证 9002 管理口径与 UI 显隐
  */
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { avatarOf } from '@/config/avatars'
+import { ROLE_LABEL } from '@/config/labels'
+import PostDialog from '@/components/PostDialog.vue'
 
 const user = useUserStore()
+const router = useRouter()
 const mainSite = import.meta.env.VITE_MAIN_SITE_URL ?? 'http://localhost:5174'
 const year = new Date().getFullYear()
+
+const searchWord = ref('')
+const postVisible = ref(false)
+
+/** 搜索回车：带 q 跳首页（首页 watch route.query.q 触发查询） */
+function doSearch() {
+  const q = searchWord.value.trim()
+  router.push({ path: '/', query: q ? { q } : {} })
+}
+
+/** 发帖成功后回首页并刷新列表（新帖在最新排序的顶部） */
+function onPosted() {
+  router.push({ path: '/', query: { t: Date.now() } })
+}
+
+/** 演示角色切换（调试件）：三个预设身份对应主站演示账号 */
+const DEMO_ROLES = [
+  { name: '管理员', role: 'SUPER_ADMIN' },
+  { name: '部门管理员', role: 'DEPT_ADMIN' },
+  { name: '学生', role: 'STUDENT' }
+]
+const demoRole = ref(user.role)
+function switchRole() {
+  const found = DEMO_ROLES.find((x) => x.role === demoRole.value)
+  user.devSwitchRole(found ? found.name : '演示成员', demoRole.value)
+}
 </script>
 
 <template>
@@ -21,16 +53,19 @@ const year = new Date().getFullYear()
         <router-link to="/" class="logo">VIO<em>论坛</em></router-link>
         <span class="search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="20.5" y1="20.5" x2="16.2" y2="16.2"/></svg>
-          <input aria-label="搜索" placeholder="">
+          <input v-model="searchWord" aria-label="搜索" placeholder="搜索主题与标签" @keyup.enter="doSearch">
         </span>
         <span class="sp"></span>
         <nav class="topnav">
           <router-link to="/" exact-active-class="on">首页</router-link>
           <router-link to="/feed" active-class="on">技术交流</router-link>
-          <router-link to="/kb" active-class="on">知识库</router-link>
         </nav>
-        <button class="btn-post" type="button">创作新主题</button>
+        <button class="btn-post" type="button" @click="postVisible = true">创作新主题</button>
         <span class="who"><img :src="avatarOf(user.realName, 26)" alt="">{{ user.realName }}</span>
+        <!-- 开发调试件：演示角色切换，联调后移除 -->
+        <select class="dev-role" v-model="demoRole" title="演示角色切换（调试件）" @change="switchRole">
+          <option v-for="(v, k) in ROLE_LABEL" :key="k" :value="k">{{ v }}</option>
+        </select>
       </div>
     </header>
 
@@ -43,10 +78,12 @@ const year = new Date().getFullYear()
       <div>
         <a href="#" @click.prevent>关于</a>
         <a :href="mainSite">主站</a>
-        <router-link to="/kb">知识库</router-link>
       </div>
       VIO Manager · 团队论坛 · 内部站点 · {{ year }} 秋
     </footer>
+
+    <!-- 全站发帖入口（成功后回首页看新帖） -->
+    <PostDialog v-model="postVisible" @created="onPosted" />
   </div>
 </template>
 
@@ -68,6 +105,8 @@ const year = new Date().getFullYear()
 .btn-post:hover { border-color: #999; }
 .who { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--body); margin-left: 18px; }
 .who img { width: 26px; height: 26px; border-radius: var(--radius-ava); }
+.dev-role { border: 1px dashed #DDD; border-radius: 4px; font-size: 12px; color: var(--fade); background: transparent; padding: 2px 4px; margin-left: 10px; }
+.dev-role:focus { outline: none; }
 
 .content { flex: 1; padding-top: 18px; padding-bottom: 20px; }
 

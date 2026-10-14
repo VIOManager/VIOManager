@@ -3,8 +3,8 @@
  * 对应方案：《前端骨架-开发方案》Step 2
  * ⚠️ 安全：本配置只决定"菜单显隐"这一展示层行为，接口与数据权限全部由后端判定，
  *    禁止把本配置当作任何安全依据（规范 §5.3）
- * ⚠️ 边界（2026-10-08 组长拍板）：社区三模块（团队论坛 / 技术交流 / 知识库）整体迁出，
- *    归属独立论坛网站（微服务论坛服务配套前端）；主站不再设社区分组
+ * ⚠️ 边界（2026-10-13 更新）：技术交流（论坛）迁出至独立论坛站（forum/，侧边栏底部「VIO 论坛 ↗」入口）；
+ *    **知识库于 2026-10-13 迁回主站**（/kb，三端入口，PRD §3.14）
  * badge 说明：审批中心红点由 P08 未读数驱动（layout/SideMenu.vue 接 stores/approval），本表不维护数值
  */
 import type { MenuEntry, Role } from '@/types'
@@ -33,6 +33,7 @@ export const ADMIN_MENU: MenuEntry[] = [
   { path: '/material', title: '材料管理', group: G.BIZ, roles: ADMIN },
   { path: '/achievement', title: '成果管理', group: G.BIZ, roles: ADMIN },
   { path: '/approval', title: '审批中心', group: G.COOP, roles: ALL },
+  { path: '/kb', title: '知识库', group: G.COOP, roles: ALL },
   { path: '/project', title: '项目管理', group: G.COOP, roles: ADMIN },
   { path: '/schedule', title: '排班管理', group: G.COOP, roles: ADMIN },
   { path: '/performance', title: '绩效统计', group: G.COOP, roles: ADMIN },
@@ -48,7 +49,8 @@ export const STUDENT_MENU: MenuEntry[] = [
   { path: '/my/achievement', title: '我的成果', group: '我的', roles: ['STUDENT'] },
   { path: '/my/schedule', title: '我的排班', group: '我的', roles: ['STUDENT'] },
   { path: '/my/performance', title: '我的绩效', group: '我的', roles: ['STUDENT'] },
-  { path: '/approval', title: '审批中心', group: '协同', roles: ALL }
+  { path: '/approval', title: '审批中心', group: '协同', roles: ALL },
+  { path: '/kb', title: '知识库', group: '协同', roles: ALL }
 ]
 
 /** 按角色取菜单：过滤 + 保持分组顺序 */

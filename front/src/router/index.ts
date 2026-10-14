@@ -32,7 +32,10 @@ const REAL_PAGES: Record<string, () => Promise<unknown>> = {
   '/my/performance': () => import('@/views/my/MyPerformancePage.vue'),
   '/schedule': () => import('@/views/schedule/SchedulePage.vue'),
   '/my/schedule': () => import('@/views/my/MySchedulePage.vue'),
-  '/project': () => import('@/views/project/ProjectPage.vue')
+  '/project': () => import('@/views/project/ProjectPage.vue'),
+  '/audit': () => import('@/views/audit/AuditPage.vue'),
+  '/system': () => import('@/views/system/SystemPage.vue'),
+  '/kb': () => import('@/views/kb/KbPage.vue')
 }
 
 /** 由菜单配置派生子路由：真实页用真实组件，其余先挂占位页 */
