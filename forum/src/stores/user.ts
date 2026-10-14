@@ -1,8 +1,8 @@
 /**
  * 论坛站用户状态
  * 对应：架构方案 §4——JWT 两服务共享，论坛只验签不查库
- * ⚠️ 安全：token 与主站共用 localStorage 键 vio_token（部署后同域共享；开发期两端口
- *    localStorage 隔离，用 devStubLogin 写论坛自己的键）
+ * ⚠️ 安全：token 存 sessionStorage（每标签页独立身份，与主站同策略）；开发调试键同存
+ *    sessionStorage，多窗口演示不同角色互不串号
  * TODO(联调)：realName/role 从 JWT 载荷解析（载荷含 userId role orgId realName），
  *    当前桩 token 非 JWT，解析失败走默认值
  */
@@ -37,10 +37,10 @@ function claimsFromJwt(token: string): { realName: string | null; role: string |
 
 export const useUserStore = defineStore('forum-user', {
   state: (): ForumUserState => {
-    const token = localStorage.getItem(TOKEN_KEY) ?? ''
+    const token = sessionStorage.getItem(TOKEN_KEY) ?? ''
     const claims = claimsFromJwt(token)
-    const name = claims.realName ?? localStorage.getItem(DEV_NAME_KEY) ?? '演示成员'
-    const role = claims.role ?? localStorage.getItem(DEV_ROLE_KEY) ?? 'SUPER_ADMIN'
+    const name = claims.realName ?? sessionStorage.getItem(DEV_NAME_KEY) ?? '演示成员'
+    const role = claims.role ?? sessionStorage.getItem(DEV_ROLE_KEY) ?? 'SUPER_ADMIN'
     return { token, realName: name, initials: name.slice(0, 1), role }
   },
   getters: {
@@ -51,7 +51,7 @@ export const useUserStore = defineStore('forum-user', {
   actions: {
     /**
      * ⚠️ 开发调试件：写入 stub token 并同步 store 与调试键（与主站登录桩同性质，联调后移除）
-     * name/role 落 localStorage 供 mock 层读取（见 api/mock/registry.ts）
+     * name/role 落 sessionStorage 供 mock 层读取（见 api/mock/registry.ts，按标签页隔离）
      */
     devStubLogin(name?: string, role?: string) {
       const n = name ?? '演示成员'
@@ -60,9 +60,9 @@ export const useUserStore = defineStore('forum-user', {
       this.realName = n
       this.initials = n.slice(0, 1)
       this.role = r
-      localStorage.setItem(TOKEN_KEY, this.token)
-      localStorage.setItem(DEV_NAME_KEY, n)
-      localStorage.setItem(DEV_ROLE_KEY, r)
+      sessionStorage.setItem(TOKEN_KEY, this.token)
+      sessionStorage.setItem(DEV_NAME_KEY, n)
+      sessionStorage.setItem(DEV_ROLE_KEY, r)
     },
     /** 切换演示角色（顶栏调试下拉用）：只换身份键 */
     devSwitchRole(name: string, role: string) {

@@ -16,6 +16,8 @@ import { ElMessage } from 'element-plus'
 import type { Result } from './types'
 import { mockAdapter } from './mock'
 
+// token 存 sessionStorage：按标签页隔离——多窗口多账号测试互不串号（2026-10-14 lzh 测试需求）；
+// 刷新保留、关标签页即登出；2 小时时效短 token 与此存储策略匹配
 const TOKEN_KEY = 'vio_token'
 const useMock = import.meta.env.VITE_USE_MOCK === 'true'
 
@@ -36,7 +38,7 @@ const http = axios.create({
 })
 
 http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = sessionStorage.getItem(TOKEN_KEY)
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
@@ -49,7 +51,7 @@ http.interceptors.response.use(
     if (body.code === 0) return body.data as never
     if (body.code === 1002) {
       // 登录失效：清 token 整页跳登录（整页刷新顺带清空内存态，最朴素也最稳）
-      localStorage.removeItem(TOKEN_KEY)
+      sessionStorage.removeItem(TOKEN_KEY)
       ElMessage.error(body.message || '登录已失效，请重新登录')
       window.location.assign('/login')
       return Promise.reject(new BizError(body.code, body.message))

@@ -2,7 +2,7 @@
  * 用户状态（token / 角色 / 姓名 / 默认密码标记）
  * 对应方案：《前端ABC模块页面开发-优化方案》FS2（登录改密闭环）
  * ⚠️ 安全：role 仅用于菜单显隐等展示层逻辑，接口数据权限一律由后端判定（规范 §5.3）
- * ⚠️ 安全：token 存 localStorage 是骨架方案待确认项的当前实现（刷新保活）；
+ * ⚠️ 安全：token 存 sessionStorage（每标签页一把独立身份，多窗口测试互不串号）；
  *    token 注入请求头只允许在 axios 实例统一做（http.ts），页面禁止手工拼
  */
 import { defineStore } from 'pinia'
@@ -37,7 +37,7 @@ function claimsFromJwt(token: string): { role: Role | null; realName: string | n
 
 export const useUserStore = defineStore('user', {
   state: (): UserState => ({
-    token: localStorage.getItem(TOKEN_KEY) ?? '',
+    token: sessionStorage.getItem(TOKEN_KEY) ?? '',
     role: 'SUPER_ADMIN',
     realName: '',
     defaultPassword: 0
@@ -50,7 +50,9 @@ export const useUserStore = defineStore('user', {
       this.role = resp.role
       this.realName = resp.realName
       this.defaultPassword = resp.defaultPassword
-      localStorage.setItem(TOKEN_KEY, resp.token)
+      sessionStorage.setItem(TOKEN_KEY, resp.token)
+      // 迁移清理：旧方案 token 存 localStorage，新代码不再读它，清掉防困惑
+      localStorage.removeItem(TOKEN_KEY)
       return resp
     },
     /** 刷新后凭 token 恢复身份：真 JWT 直接解析载荷（零请求）；mock 桩 token 走 /api/auth/me */
@@ -79,7 +81,7 @@ export const useUserStore = defineStore('user', {
       this.role = 'SUPER_ADMIN'
       this.realName = ''
       this.defaultPassword = 0
-      localStorage.removeItem(TOKEN_KEY)
+      sessionStorage.removeItem(TOKEN_KEY)
     },
     /** ⚠️ 开发调试件：顶栏角色切换器用，验证三端菜单显隐，联调后移除（角色实际来自登录响应） */
     setRole(role: Role) {

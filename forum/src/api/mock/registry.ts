@@ -72,14 +72,14 @@ export function markIdem(key: string): boolean {
   return true
 }
 
-/** 当前登录人登录名/角色（开发调试件）：真实联调后从 JWT 解析，不读这两个键 */
+/** 当前登录人登录名/角色（开发调试件，sessionStorage 按标签页隔离）：真实联调后从 JWT 解析 */
 const DEV_NAME_KEY = 'forum_dev_name'
 const DEV_ROLE_KEY = 'forum_dev_role'
 export function currentLoginName(): string {
-  return localStorage.getItem(DEV_NAME_KEY) ?? '演示成员'
+  return sessionStorage.getItem(DEV_NAME_KEY) ?? '演示成员'
 }
 export function currentRole(): string {
-  return localStorage.getItem(DEV_ROLE_KEY) ?? 'SUPER_ADMIN'
+  return sessionStorage.getItem(DEV_ROLE_KEY) ?? 'SUPER_ADMIN'
 }
 /** 管理操作权限口径：仅超管（对齐技术交流清单 9002 口径） */
 export function requireAdmin(): void {
