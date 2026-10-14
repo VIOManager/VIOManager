@@ -2,8 +2,8 @@
 /**
  * 登录页（方向一「图纸档案」定调版）
  * 对应方案：《前端骨架-开发方案》Step 3 + 《前端ABC模块页面开发-优化方案》FS2
- * FS2：登录接假数据（/api/auth/login）；defaultPassword=1 时改密引导由壳内 TopBar 自动弹出
- * ⚠️ 联调：下方"演示账号"提示为 mock 专属，切真实后端时删除
+ * FS2：登录闭环（/api/auth/login）；defaultPassword=1 时改密引导由壳内 TopBar 自动弹出
+ * 账号提示按 mock/真实模式切换（VITE_USE_MOCK），两套种子账号不同
  */
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -11,6 +11,7 @@ import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
 const user = useUserStore()
+const useMock = import.meta.env.VITE_USE_MOCK === 'true'
 const form = reactive({ loginName: '', password: '' })
 const loading = ref(false)
 
@@ -60,7 +61,10 @@ async function onSubmit() {
             <input v-model="form.password" type="password" placeholder="请输入密码" autocomplete="current-password" />
           </label>
           <button type="submit" class="btn-stamp" :disabled="loading">{{ loading ? '登记中…' : '登记登录' }}</button>
-          <p class="note">默认密码 abc123，首次登记后按安全规定修改；忘记密码请联系超级管理员重置。<br />mock 演示账号：admin（超管·未改默认密码）/ dept01（部门管理员）/ 2023319024（学生·在队）/ 2023319005（学生·无队），密码均为 abc123</p>
+          <p class="note">
+            <template v-if="useMock">mock 演示账号：admin（超管）/ dept01（部门管理员）/ 2023319024（学生·在队）/ 2023319005（学生·无队），密码均为 abc123</template>
+            <template v-else>联调种子账号：admin（超管）/ dept_chen（部门管理员）/ stu_wang（学生），初始密码为角色名加 @123456（如 Admin@123456）；忘记密码请联系超级管理员重置</template>
+          </p>
           <div class="seal" aria-hidden="true"><i>黑龙江科技大学<br />科创团队</i></div>
         </form>
       </div>
