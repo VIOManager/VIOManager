@@ -53,7 +53,7 @@ async function onReview(action: 'APPROVE' | 'REJECT') {
 /** 佐证覆盖上传（仅队长，按钮显隐由 viewerIsLeader 驱动） */
 async function onEvidence(file: UploadResp) {
   if (!detail.value) return
-  await apiUploadEvidence(detail.value.id, file.fileId, file.fileName)
+  await apiUploadEvidence(detail.value.id, file.fileId, file.originalName)
   ElMessage.success('佐证材料已更新（覆盖式）')
   await load()
   emit('changed')
@@ -94,6 +94,7 @@ async function onDelete() {
         <h6>佐证材料（覆盖式上传）</h6>
         <UploadField
           v-if="detail.viewerIsLeader"
+          biz-type="ACHIEVEMENT_EVIDENCE"
           accept=".pdf,.jpg,.png,.zip"
           :max-mb="20"
           button-text="上传/覆盖佐证"

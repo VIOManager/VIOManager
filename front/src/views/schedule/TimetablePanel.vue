@@ -8,7 +8,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiAssignImportSemester, apiClassMappings, apiConfirmMappings, apiTimetableImport, apiTimetableImportDetail, apiTimetableImports, apiTimetableTemplate } from '@/api/schedule'
 import type { ClassMapping, ImportBatch, ImportBatchDetail } from '@/api/schedule'
-import { apiSemesters } from '@/api/semester'
+import { apiSemestersSafe } from '@/api/semester'
 import type { Semester } from '@/api/semester'
 import { IMPORT_BATCH_STATUS_LABEL } from '@/config/labels'
 
@@ -82,7 +82,7 @@ async function confirmPicked() {
 
 onMounted(async () => {
   await load()
-  semesters.value = await apiSemesters()
+  semesters.value = await apiSemestersSafe()
 })
 </script>
 

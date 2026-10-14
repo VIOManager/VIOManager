@@ -298,9 +298,8 @@ export const SLOT_LABEL: Record<number, string> = {
   1: '1–2 节', 2: '3–4 节', 3: '5–6 节', 4: '7–8 节', 5: '9–10 节'
 }
 
-/** 知识库内容来源（PRD §3.14） */
+/** 知识库条目形态（lzh 2026-10-14 拍板简化：外部链接或上传文件二选一） */
 export const KB_SOURCE_LABEL: Record<string, string> = {
-  ADMIN_UPLOAD: '管理员上传',
   LINK: '外部链接',
-  AI_SUMMARY: 'AI 总结'
+  FILE: '文件'
 }

@@ -65,17 +65,6 @@ function onLogout() {
         @click="router.push('/approval')"
         style="cursor: pointer"
       >待办 {{ approval.total }}</span>
-      <!-- ⚠️ 开发调试件：三端菜单显隐验证用，联调后移除 -->
-      <select
-        class="role-switch mono"
-        :value="user.role"
-        @change="user.setRole(($event.target as HTMLSelectElement).value as Role)"
-        title="调试用：切换角色验证三端菜单"
-      >
-        <option value="SUPER_ADMIN">超管</option>
-        <option value="DEPT_ADMIN">部门管理员</option>
-        <option value="STUDENT">学生</option>
-      </select>
       <span class="user"><i class="ava">{{ user.realName.slice(0, 1) }}</i>{{ user.realName }} · {{ ROLE_LABEL[user.role] }}</span>
       <button class="btn-plain" @click="pwdVisible = true">改密</button>
       <button class="btn-plain" @click="onLogout">退出</button>

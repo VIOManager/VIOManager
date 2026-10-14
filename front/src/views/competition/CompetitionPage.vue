@@ -8,7 +8,7 @@
 import { onMounted, ref } from 'vue'
 import { apiContests } from '@/api/contest'
 import type { ContestListItem, PoolItem } from '@/api/contest'
-import { apiSemesters } from '@/api/semester'
+import { apiSemestersSafe } from '@/api/semester'
 import type { Semester } from '@/api/semester'
 import { CONTEST_STATUS_LABEL } from '@/config/labels'
 import ContestFormDialog from './ContestFormDialog.vue'
@@ -84,7 +84,7 @@ function statusStamp(s: string): string {
 
 onMounted(async () => {
   void load()
-  semesters.value = await apiSemesters()
+  semesters.value = await apiSemestersSafe()
 })
 </script>
 

@@ -36,17 +36,17 @@ function acceptOf(formats: string[]): string {
 }
 /** 单条上传：文件服务上传完成（拿到 fileId）后再调提交接口 */
 async function onSubmitOne(teamId: string, requirementId: string, resp: UploadResp) {
-  const r = await apiSubmitMaterial({ requirementId, teamId, fileId: resp.fileId, fileName: resp.fileName })
+  const r = await apiSubmitMaterial(requirementId, { teamId, fileId: resp.fileId, fileName: resp.originalName })
   ElMessage.success('已提交，当前版本 v' + r.version + (r.version > 1 ? '（旧版本已失效）' : ''))
   await load()
 }
 
 /** zip 批量上传：模拟解压结果展示匹配/不匹配清单 */
 async function onBatch(teamId: string, taskId: string, resp: UploadResp) {
-  const r = await apiBatchUpload({ teamId, taskId, fileId: resp.fileId, fileName: resp.fileName })
+  const r = await apiBatchUpload({ teamId, taskId, fileId: resp.fileId, fileName: resp.originalName })
   lastBatch.value = {
     teamId,
-    matched: r.matched.map((m) => MATERIAL_TYPE_LABEL[m.type] ?? m.type),
+    matched: r.matched.map((m) => MATERIAL_TYPE_LABEL[m.materialType] ?? m.materialType),
     unmatched: r.unmatched
   }
   if (r.matched.length > 0) {
@@ -93,9 +93,9 @@ onMounted(load)
         </thead>
         <tbody>
           <tr v-for="it in tm.items" :key="it.requirement.id">
-            <td style="color: var(--vio-ink); font-weight: 600">{{ MATERIAL_TYPE_LABEL[it.requirement.type] ?? it.requirement.type }}</td>
-            <td><span class="stamp" :class="it.requirement.required ? 'warn' : 'ok'">{{ it.requirement.required ? '必传' : '选传' }}</span></td>
-            <td class="mono" style="font-size: 12px">{{ it.requirement.formats.join(' / ') }}</td>
+            <td style="color: var(--vio-ink); font-weight: 600">{{ MATERIAL_TYPE_LABEL[it.requirement.materialType] ?? it.requirement.materialType }}</td>
+            <td><span class="stamp" :class="it.requirement.requiredFlag === 1 ? 'warn' : 'ok'">{{ it.requirement.requiredFlag === 1 ? '必传' : '选传' }}</span></td>
+            <td class="mono" style="font-size: 12px">{{ it.requirement.allowedFormats.join(' / ') }}</td>
             <td class="fs">{{ it.requirement.namingRule || '—' }}</td>
             <td>
               <span v-if="it.status === 'SUBMITTED'" class="stamp ok">已交 v{{ it.version }}</span>
@@ -104,7 +104,8 @@ onMounted(load)
             <td class="fs" style="font-size: 12px">{{ it.fileName || '—' }}</td>
             <td>
               <UploadField
-                :accept="acceptOf(it.requirement.formats)"
+                biz-type="MATERIAL_SUBMIT"
+                :accept="acceptOf(it.requirement.allowedFormats)"
                 :max-mb="it.requirement.maxSizeMb"
                 button-text="上传"
                 @uploaded="onSubmitOne(tm.teamId, it.requirement.id, $event)"
@@ -115,7 +116,7 @@ onMounted(load)
       </table>
 
       <div class="batch-zone">
-        <UploadField accept=".zip" :max-mb="50" button-text="zip 批量上传" @uploaded="onBatch(tm.teamId, tm.task.id, $event)" />
+        <UploadField biz-type="MATERIAL_SUBMIT" accept=".zip" :max-mb="50" button-text="zip 批量上传" @uploaded="onBatch(tm.teamId, tm.task.id, $event)" />
         <span class="fs" style="font-size: 12px; color: var(--vio-ink-3)">演示规则：压缩包文件名包含类型中文名即匹配（如 承诺书+合照.zip）</span>
       </div>
 

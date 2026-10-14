@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
  * 成果管理页（/achievement，管理端，PC3）
- * 列表（状态筛选/关键词）+ 录入（直接生效）+ 详情抽屉（审批/佐证/删除）
- * + 获奖导出（5008：队伍存在未通过成果时禁止导出）
+ * 列表（状态筛选/关键词/行勾选批量）+ 录入（直接生效）+ 详情抽屉（审批/佐证/删除）
+ * + 获奖导出（5008：队伍存在未通过成果时禁止导出）——勾选行按所选队伍逐队导出，
+ *   未勾选导出全部（后端 export 的 teamId 可选）
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiAchievements, apiExportAwards } from '@/api/achievement'
 import type { AchievementItem } from '@/api/achievement'
@@ -18,14 +19,37 @@ const list = ref<AchievementItem[]>([])
 const teams = ref<TeamListItem[]>([])
 const statusFilter = ref('')
 const keyword = ref('')
-const exportTeamId = ref('')
 
 const formVisible = ref(false)
 const drawerVisible = ref(false)
 const detailId = ref('')
 
+/** 行勾选（批量处理基础：勾选成果行 → 导出按所在队伍去重逐队下载） */
+const selectedIds = ref<string[]>([])
+const allPicked = computed(() => list.value.length > 0 && selectedIds.value.length === list.value.length)
+
+function toggle(id: string) {
+  const i = selectedIds.value.indexOf(id)
+  if (i >= 0) selectedIds.value.splice(i, 1)
+  else selectedIds.value.push(id)
+}
+
+function toggleAll() {
+  selectedIds.value = allPicked.value ? [] : list.value.map((a) => a.id)
+}
+
+/** 所选成果覆盖的队伍（去重） */
+function pickedTeamIds(): string[] {
+  const ids: string[] = []
+  for (const a of list.value) {
+    if (selectedIds.value.indexOf(a.id) >= 0 && ids.indexOf(a.teamId) < 0) ids.push(a.teamId)
+  }
+  return ids
+}
+
 async function load() {
   list.value = await apiAchievements({ status: statusFilter.value || undefined, keyword: keyword.value || undefined })
+  selectedIds.value = []
 }
 
 function openDetail(id: string) {
@@ -33,13 +57,21 @@ function openDetail(id: string) {
   drawerVisible.value = true
 }
 
+/**
+ * 导出：勾选了按所选队伍逐队下载（后端仅支持单 teamId，多队伍=多文件）；
+ * 未勾选导出全部。后端在队伍存在未通过成果时 5008 拦截（弹错由拦截器统一）
+ */
 async function onExport() {
-  if (!exportTeamId.value) {
-    ElMessage.warning('请选择要导出的队伍')
+  const teamIds = pickedTeamIds()
+  if (teamIds.length === 0) {
+    await apiExportAwards('')
+    ElMessage.success('导出下载已开始（全部队伍）')
     return
   }
-  const r = await apiExportAwards(exportTeamId.value)
-  ElMessage.success(r.note)
+  for (let i = 0; i < teamIds.length; i++) {
+    await apiExportAwards(teamIds[i])
+  }
+  ElMessage.success('导出下载已开始（' + teamIds.length + ' 个队伍，每队一个文件）')
 }
 
 onMounted(async () => {
@@ -53,7 +85,7 @@ onMounted(async () => {
     <div class="dossier-head">
       <h3>成果管理</h3>
       <div class="dossier-meta mono">
-        <span>共 {{ list.length }} 项</span>
+        <span>共 {{ list.length }} 项 · 已选 {{ selectedIds.length }} 项</span>
         <span>C 线 · A01–A08</span>
       </div>
     </div>
@@ -66,21 +98,29 @@ onMounted(async () => {
       </select>
       <button class="btn-line" @click="load">查询</button>
       <span style="flex: 1"></span>
-      <select v-model="exportTeamId" class="input-line">
-        <option value="">选择队伍导出获奖清单</option>
-        <option v-for="t in teams" :key="t.id" :value="t.id">{{ t.name }}</option>
-      </select>
-      <button class="btn-line" @click="onExport">导出</button>
+      <button class="btn-line" @click="onExport">
+        {{ selectedIds.length > 0 ? '导出所选（' + selectedIds.length + ' 项）' : '导出全部' }}
+      </button>
       <button class="btn-ink" @click="formVisible = true">录入成果</button>
     </div>
 
     <div class="panel">
       <table class="ledger">
         <thead>
-          <tr><th>成果名称</th><th>类型</th><th>级别</th><th>队伍</th><th>提交人</th><th>获奖时间</th><th>佐证</th><th>状态</th><th style="width: 60px">操作</th></tr>
+          <tr>
+            <th style="width: 36px">
+              <input id="pk-all" type="checkbox" class="pk" :checked="allPicked" @change="toggleAll" />
+              <label for="pk-all" class="pick" title="全选 / 清空"></label>
+            </th>
+            <th>成果名称</th><th>类型</th><th>级别</th><th>队伍</th><th>提交人</th><th>获奖时间</th><th>佐证</th><th>状态</th><th style="width: 60px">操作</th>
+          </tr>
         </thead>
         <tbody>
           <tr v-for="a in list" :key="a.id" class="linkrow" @click="openDetail(a.id)">
+            <td class="pickcell" @click.stop>
+              <input :id="'pk-' + a.id" type="checkbox" class="pk" :checked="selectedIds.indexOf(a.id) >= 0" @change="toggle(a.id)" />
+              <label :for="'pk-' + a.id" class="pick"></label>
+            </td>
             <td style="color: var(--vio-ink); font-weight: 600">{{ a.name }}</td>
             <td>{{ ACHIEVEMENT_TYPE_LABEL[a.type] }}</td>
             <td>{{ a.level }}</td>
@@ -105,4 +145,12 @@ onMounted(async () => {
 
 <style scoped>
 .stamp.bad { color: var(--vio-danger); border-color: var(--vio-danger); }
+
+/* 行勾选圆圈（图纸档案风：图线圆圈，选中实心墨蓝带白对勾；input 隐藏 + label 绘制） */
+.pk { display: none; }
+.pick { display: inline-block; position: relative; width: 16px; height: 16px; border: 1.5px solid var(--vio-rule); border-radius: 50%; cursor: pointer; vertical-align: middle; box-sizing: border-box; }
+.pick:hover { border-color: var(--vio-blue-ink); }
+.pk:checked + .pick { border-color: var(--vio-blue-ink); background: var(--vio-blue-ink); }
+.pk:checked + .pick::after { content: ''; position: absolute; left: 4px; top: 1.5px; width: 4px; height: 8px; border: solid #FFF; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+.pickcell { text-align: center; }
 </style>

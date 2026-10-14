@@ -57,7 +57,7 @@ async function openResubmit(row: WeeklyItem) {
 
 function onUploaded(f: UploadResp) {
   attachFileId.value = f.fileId
-  attachFileName.value = f.fileName
+  attachFileName.value = f.originalName
 }
 
 async function submit() {
@@ -178,7 +178,7 @@ onMounted(load)
         <label>本周工作内容</label>
         <textarea v-model="workContent" class="input-line" rows="5" placeholder="做了什么、产出是什么（驳回常见原因：内容过简）"></textarea>
         <label>附件（选填）</label>
-        <UploadField accept=".pdf,.docx,.zip,.jpg,.png" :max-mb="20" :button-text="attachFileName ? '已选：' + attachFileName : '上传附件'" @uploaded="onUploaded" />
+        <UploadField biz-type="PERFORMANCE_WEEKLY" accept=".pdf,.docx,.zip,.jpg,.png" :max-mb="20" :button-text="attachFileName ? '已选：' + attachFileName : '上传附件'" @uploaded="onUploaded" />
       </div>
       <template #footer>
         <button class="btn-line" @click="formVisible = false">取消</button>

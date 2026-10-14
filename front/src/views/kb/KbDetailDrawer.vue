@@ -1,13 +1,15 @@
 <script setup lang="ts">
 /**
  * 知识库详情抽屉（KB03–KB08）
- * 正文 + 外链 + 收藏切换 + 评论区（本人/管理员可删）+ 管理员操作（编辑/置顶/删除）
+ * lzh 2026-10-14 拍板简化：条目 = 外部链接或上传文件二选一
+ * 链接条目给「打开链接」；文件条目给「下载文件」（走文件服务流下载）
+ * 收藏切换 + 评论区（本人/管理员可删）+ 管理员操作（编辑/置顶/删除）
+ * ⚠️ 编辑暂只改标题/摘要/链接；换文件请删除后重新发布（简化期不整细）
  */
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiAddKbComment, apiDeleteKbComment, apiDeleteKbItem, apiKbComments, apiKbDetail, apiPinKbItem, apiToggleKbFavorite, apiUpdateKbItem } from '@/api/kb'
+import { apiAddKbComment, apiDeleteKbComment, apiDeleteKbItem, apiDownloadKbFile, apiKbComments, apiKbDetail, apiPinKbItem, apiToggleKbFavorite, apiUpdateKbItem } from '@/api/kb'
 import type { KbComment, KbDetail } from '@/api/kb'
-import { apiDictItems } from '@/api/dict'
 import { KB_SOURCE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
 
@@ -44,6 +46,18 @@ async function onFavorite() {
   emit('changed')
 }
 
+/** 链接条目：新标签页打开（noopener 防钓鱼页反手改原页） */
+function onOpenLink() {
+  if (!detail.value?.linkUrl) return
+  window.open(detail.value.linkUrl, '_blank', 'noopener')
+}
+
+/** 文件条目：走文件服务流下载，文件名用条目存的原始名兜底 */
+async function onDownload() {
+  if (!detail.value?.fileId) return
+  await apiDownloadKbFile(detail.value.fileId, detail.value.fileName)
+}
+
 async function onSendComment() {
   if (!detail.value || sending.value) return
   if (!commentText.value.trim()) {
@@ -74,17 +88,11 @@ async function onDeleteComment(c: KbComment) {
 
 // ── 管理员操作 ──
 const editVisible = ref(false)
-const editForm = ref({ title: '', category: '', summary: '', content: '', linkUrl: '' })
-const categories = ref<string[]>([])
+const editForm = ref({ title: '', summary: '', linkUrl: '' })
 
-async function openEdit() {
+function openEdit() {
   if (!detail.value) return
-  editForm.value = {
-    title: detail.value.title, category: detail.value.category,
-    summary: detail.value.summary, content: detail.value.content, linkUrl: detail.value.linkUrl
-  }
-  const dict = await apiDictItems('KB_CATEGORY')
-  categories.value = dict.map((d) => d.label)
+  editForm.value = { title: detail.value.title, summary: detail.value.summary, linkUrl: detail.value.linkUrl }
   editVisible.value = true
 }
 
@@ -123,20 +131,19 @@ async function onDelete() {
   <el-drawer v-model="visible" :title="detail ? detail.title : '内容详情'" size="560px">
     <template v-if="detail">
       <div class="dossier-meta mono" style="margin-bottom: 12px">
-        <span class="stamp ok">{{ detail.category }}</span>
-        <span>{{ KB_SOURCE_LABEL[detail.sourceType] }}</span>
+        <span class="stamp ok">{{ KB_SOURCE_LABEL[detail.sourceType] }}</span>
         <span v-if="detail.pinned" style="color: var(--vio-seal)">置顶</span>
       </div>
       <dl class="sheet">
         <div><dt>发布人</dt><dd>{{ detail.publisherName }}</dd></div>
         <div><dt>发布时间</dt><dd class="mono">{{ detail.createdAt }}</dd></div>
-        <div v-if="detail.linkUrl"><dt>外部链接</dt><dd class="mono" style="font-size: 12px">{{ detail.linkUrl }}</dd></div>
+        <div v-if="detail.sourceType === 'FILE'"><dt>文件</dt><dd class="mono" style="font-size: 12px">{{ detail.fileName }}</dd></div>
       </dl>
-      <div class="zone">
-        <pre class="content">{{ detail.content }}</pre>
-      </div>
+      <p v-if="detail.summary" class="summary">{{ detail.summary }}</p>
 
       <div class="zone action-row">
+        <button v-if="detail.sourceType === 'LINK'" class="btn-ink" @click="onOpenLink">打开链接</button>
+        <button v-if="detail.sourceType === 'FILE'" class="btn-ink" @click="onDownload">下载文件</button>
         <button class="btn-line" @click="onFavorite">{{ detail.favorited ? '★ 已收藏（点击取消）' : '☆ 收藏' }}</button>
         <template v-if="isAdmin">
           <button class="btn-line" @click="openEdit">编辑</button>
@@ -165,16 +172,13 @@ async function onDelete() {
         <div class="form-col">
           <label>标题</label>
           <input v-model="editForm.title" class="input-line" />
-          <label>分类</label>
-          <select v-model="editForm.category" class="input-line">
-            <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
-          </select>
           <label>摘要</label>
           <textarea v-model="editForm.summary" class="input-line" rows="2"></textarea>
-          <label>正文</label>
-          <textarea v-model="editForm.content" class="input-line" rows="6"></textarea>
-          <label>外部链接</label>
-          <input v-model="editForm.linkUrl" class="input-line" />
+          <template v-if="detail.sourceType === 'LINK'">
+            <label>链接地址</label>
+            <input v-model="editForm.linkUrl" class="input-line" />
+          </template>
+          <p v-else class="fs" style="color: var(--vio-ink-3)">文件条目不支持换文件：如需更换请删除后重新发布</p>
         </div>
         <template #footer>
           <button class="btn-line" @click="editVisible = false">取消</button>
@@ -189,10 +193,10 @@ async function onDelete() {
 .sheet div { display: flex; padding: 7px 0; border-bottom: 1px dashed var(--vio-rule-soft); font-size: 13px; }
 .sheet dt { width: 76px; color: var(--vio-ink-3); flex-shrink: 0; }
 .sheet dd { color: var(--vio-ink); }
+.summary { margin: 14px 0 0; font-size: 13px; line-height: 1.8; color: var(--vio-ink-2); }
 .zone { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--vio-rule-soft); }
 .zone h6 { font-size: 12px; color: var(--vio-ink-3); margin-bottom: 10px; letter-spacing: 0.08em; }
-.content { margin: 0; font-size: 13px; line-height: 1.9; color: var(--vio-ink); white-space: pre-wrap; word-break: break-all; font-family: var(--vio-body); }
-.action-row { display: flex; gap: 8px; }
+.action-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .comment { padding: 8px 0; border-bottom: 1px dashed var(--vio-rule-soft); }
 .comment-head { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .comment-head b { color: var(--vio-ink); }

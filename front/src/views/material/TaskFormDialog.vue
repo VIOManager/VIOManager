@@ -25,12 +25,12 @@ watch(() => props.modelValue, (v) => {
 })
 watch(visible, (v) => emit('update:modelValue', v))
 
-const form = reactive({ contestId: '', title: '', deadline: '' })
+const form = reactive({ contestId: '', name: '', deadline: '' })
 const saving = ref(false)
 
 function reset() {
   form.contestId = props.task ? props.task.contestId : ''
-  form.title = props.task ? props.task.title : ''
+  form.name = props.task ? props.task.name : ''
   form.deadline = props.task ? props.task.deadline : ''
 }
 
@@ -39,16 +39,16 @@ async function onSave() {
     ElMessage.warning('请选择比赛')
     return
   }
-  if (!form.title.trim() || !form.deadline) {
+  if (!form.name.trim() || !form.deadline) {
     ElMessage.warning('任务名与截止时间不能为空')
     return
   }
   saving.value = true
   try {
     if (props.task) {
-      await apiUpdateTask(props.task.id, { title: form.title.trim(), deadline: form.deadline })
+      await apiUpdateTask(props.task.id, { name: form.name.trim(), deadline: form.deadline })
     } else {
-      await apiCreateTask({ contestId: form.contestId, title: form.title.trim(), deadline: form.deadline })
+      await apiCreateTask({ contestId: form.contestId, name: form.name.trim(), deadline: form.deadline })
     }
     ElMessage.success(props.task ? '任务已更新' : '任务已创建')
     visible.value = false
@@ -69,7 +69,7 @@ async function onSave() {
         <span v-else class="fs">{{ task.contestName }}</span>
       </el-form-item>
       <el-form-item label="任务名" required>
-        <el-input v-model="form.title" placeholder="如：2026 电设校内选拔赛报名材料" maxlength="50" />
+        <el-input v-model="form.name" placeholder="如：2026 电设校内选拔赛报名材料" maxlength="50" />
       </el-form-item>
       <el-form-item label="截止时间" required>
         <el-date-picker v-model="form.deadline" type="datetime" value-format="YYYY-MM-DD HH:mm" placeholder="选择截止时间" style="width: 100%" />

@@ -23,6 +23,11 @@ async function load() {
     if (props.viewerIsLeader) {
       pool.value = await apiAttachableProjects(props.contestId || undefined)
     }
+  } catch {
+    // 联调降级：项目模块后端未实现（/api/teams/{id}/projects 与 attachable 均 404），
+    // 面板置空不弹错；后九模块上线后自动恢复
+    list.value = []
+    pool.value = []
   } finally {
     loading.value = false
   }

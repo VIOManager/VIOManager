@@ -36,7 +36,7 @@ export function recomputeTeam(teamId: string): void {
     let requiredMissing = 0
     for (const r of reqs) {
       if (validSubmission(r.id, teamId)) submitted += 1
-      else if (r.required) requiredMissing += 1
+      else if (r.requiredFlag === 1) requiredMissing += 1
     }
     tm.materialCompleteRate = Math.round((submitted / reqs.length) * 100)
     tm.materialStatus = requiredMissing > 0 ? '待补 ' + requiredMissing + ' 项' : '齐全'
@@ -102,12 +102,12 @@ registerMock({
       const reqs = requirements.filter((r) => r.taskId === task.id)
       let requiredMissing = 0
       const items = reqs.map((r) => {
-        if (!validSubmission(r.id, tm.id) && r.required) requiredMissing += 1
+        if (!validSubmission(r.id, tm.id) && r.requiredFlag === 1) requiredMissing += 1
         return { requirement: toReqView(r), ...submitInfoOf(r.id, tm.id) }
       })
       out.push({
         teamId: tm.id, teamName: tm.name,
-        task: { id: task.id, title: task.title, deadline: task.deadline },
+        task: { id: task.id, title: task.name, deadline: task.deadline },
         completeRate: tm.materialCompleteRate, requiredMissing, items
       })
     }
@@ -134,7 +134,7 @@ registerMock({
     const me = meAsMember(ctx.token)
     if (!me || !isActiveMember(tm, me.id)) return fail(5003, '仅本队在册成员可上传材料')
     const ext = fileName.indexOf('.') >= 0 ? fileName.split('.').pop()!.toLowerCase() : ''
-    if (r.formats.indexOf(ext) < 0) return fail(5004, '文件格式不符，允许格式：' + r.formats.join(' / '))
+    if (r.allowedFormats.indexOf(ext) < 0) return fail(5004, '文件格式不符，允许格式：' + r.allowedFormats.join(' / '))
     // 覆盖上传：旧版本失效、版本号 +1
     let version = 1
     for (const s of submissions) {
@@ -174,13 +174,13 @@ registerMock({
     const matched: Array<{ requirementId: string; type: string }> = []
     for (const r of requirements) {
       if (r.taskId !== taskId || validSubmission(r.id, teamId)) continue
-      if (base.indexOf(MATERIAL_TYPE_LABEL[r.type] ?? '') >= 0) {
+      if (base.indexOf(MATERIAL_TYPE_LABEL[r.materialType] ?? '') >= 0) {
         submissions.push({
           id: nextSubId(), requirementId: r.id, teamId, fileId: String(ctx.body.fileId ?? ''),
-          fileName: tm.name + '-' + MATERIAL_TYPE_LABEL[r.type] + '.pdf', version: 1,
+          fileName: tm.name + '-' + MATERIAL_TYPE_LABEL[r.materialType] + '.pdf', version: 1,
           uploadedBy: me.name, uploadedAt: '2026-10-10 12:00:00', valid: true
         })
-        matched.push({ requirementId: r.id, type: r.type })
+        matched.push({ requirementId: r.id, type: r.materialType })
       }
     }
     recomputeTeam(teamId)

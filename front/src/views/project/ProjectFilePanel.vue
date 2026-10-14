@@ -23,7 +23,7 @@ async function load() {
 }
 
 async function onUploaded(f: UploadResp) {
-  await apiAttachFile(props.projectId, { fileId: f.fileId, fileName: f.fileName, fileCategory: category.value })
+  await apiAttachFile(props.projectId, { fileId: f.fileId, fileName: f.originalName, fileCategory: category.value })
   ElMessage.success('文件已关联到项目')
   await load()
 }
@@ -59,7 +59,7 @@ onMounted(load)
       <select v-model="category" class="input-line" style="width: 100px">
         <option v-for="(label, v) in PROJECT_FILE_CATEGORY_LABEL" :key="v" :value="v">{{ label }}</option>
       </select>
-      <UploadField accept=".pdf,.docx,.zip,.jpg,.png" :max-mb="20" button-text="上传文件" @uploaded="onUploaded" />
+      <UploadField biz-type="PROJECT_FILE" accept=".pdf,.docx,.zip,.jpg,.png" :max-mb="20" button-text="上传文件" @uploaded="onUploaded" />
     </div>
     <div v-for="f in list" :key="f.id" class="row-line">
       <span>{{ f.fileName }}<em class="mono">{{ PROJECT_FILE_CATEGORY_LABEL[f.fileCategory] }} · {{ sizeText(f.fileSize) }} · {{ f.uploadedByName }}</em></span>

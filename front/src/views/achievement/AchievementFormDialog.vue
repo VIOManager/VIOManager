@@ -44,9 +44,9 @@ function reset() {
 }
 
 /** 佐证单文件覆盖式上传（先传文件服务拿 fileId，提交成果时一并带上） */
-function onEvidence(file: { fileId: string; fileName: string }) {
+function onEvidence(file: { fileId: string; originalName: string }) {
   form.evidenceFileId = file.fileId
-  form.evidenceFileName = file.fileName
+  form.evidenceFileName = file.originalName
 }
 
 async function onSave() {
@@ -100,7 +100,7 @@ async function onSave() {
         <el-input v-model="form.description" type="textarea" :rows="3" placeholder="选填" maxlength="300" />
       </el-form-item>
       <el-form-item label="佐证材料">
-        <UploadField accept=".pdf,.jpg,.png,.zip" :max-mb="20" button-text="上传佐证" tip="选填，论文/专利/作品均可；审批通过后还须在「我的材料」补交佐证必交项" @uploaded="onEvidence" />
+        <UploadField biz-type="ACHIEVEMENT_EVIDENCE" accept=".pdf,.jpg,.png,.zip" :max-mb="20" button-text="上传佐证" tip="选填，论文/专利/作品均可；审批通过后还须在「我的材料」补交佐证必交项" @uploaded="onEvidence" />
       </el-form-item>
     </el-form>
     <template #footer>

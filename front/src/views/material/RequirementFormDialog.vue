@@ -28,13 +28,13 @@ watch(visible, (v) => emit('update:modelValue', v))
 /** 常见格式白名单（要求表单可选项） */
 const FORMAT_OPTIONS = ['pdf', 'doc', 'docx', 'jpg', 'png', 'pptx', 'xlsx', 'zip', 'rar']
 
-const form = reactive({ type: '', required: true, formats: [] as string[], namingRule: '', maxSizeMb: 10 })
+const form = reactive({ materialType: '', requiredFlag: 1, allowedFormats: [] as string[], namingRule: '', maxSizeMb: 10 })
 const saving = ref(false)
 
 function reset() {
-  form.type = props.requirement ? props.requirement.type : ''
-  form.required = props.requirement ? props.requirement.required : true
-  form.formats = props.requirement ? props.requirement.formats.slice() : []
+  form.materialType = props.requirement ? props.requirement.materialType : ''
+  form.requiredFlag = props.requirement ? props.requirement.requiredFlag : 1
+  form.allowedFormats = props.requirement ? props.requirement.allowedFormats.slice() : []
   form.namingRule = props.requirement ? props.requirement.namingRule : ''
   form.maxSizeMb = props.requirement ? props.requirement.maxSizeMb : 10
 }
@@ -42,16 +42,16 @@ function reset() {
 /** 类型切换：未手动改过格式时带出该类型默认格式 */
 function onTypeChange(v: string) {
   for (const t of MATERIAL_TYPES) {
-    if (t.value === v) form.formats = t.defaultFormats.slice()
+    if (t.value === v) form.allowedFormats = t.defaultFormats.slice()
   }
 }
 
 async function onSave() {
-  if (!form.type) {
+  if (!form.materialType) {
     ElMessage.warning('请选择材料类型')
     return
   }
-  if (form.formats.length === 0) {
+  if (form.allowedFormats.length === 0) {
     ElMessage.warning('至少允许一种文件格式')
     return
   }
@@ -61,7 +61,7 @@ async function onSave() {
   }
   saving.value = true
   try {
-    const body = { type: form.type, required: form.required, formats: form.formats, namingRule: form.namingRule.trim(), maxSizeMb: form.maxSizeMb }
+    const body = { materialType: form.materialType, requiredFlag: form.requiredFlag, allowedFormats: form.allowedFormats, namingRule: form.namingRule.trim(), maxSizeMb: form.maxSizeMb }
     if (props.requirement) {
       await apiUpdateRequirement(props.requirement.id, body)
     } else {
@@ -80,15 +80,15 @@ async function onSave() {
   <el-dialog v-model="visible" :title="requirement ? '编辑材料要求' : '添加材料要求'" width="520px">
     <el-form label-width="92px" @submit.prevent>
       <el-form-item label="材料类型" required>
-        <el-select v-model="form.type" placeholder="12 种预设类型" style="width: 100%" @change="onTypeChange">
+        <el-select v-model="form.materialType" placeholder="12 种预设类型" style="width: 100%" @change="onTypeChange">
           <el-option v-for="t in MATERIAL_TYPES" :key="t.value" :value="t.value" :label="t.label" />
         </el-select>
       </el-form-item>
       <el-form-item label="是否必传">
-        <el-switch v-model="form.required" active-text="必传" inactive-text="选传" />
+        <el-switch v-model="form.requiredFlag" :active-value="1" :inactive-value="0" active-text="必传" inactive-text="选传" />
       </el-form-item>
       <el-form-item label="允许格式" required>
-        <el-select v-model="form.formats" multiple placeholder="至少一种" style="width: 100%">
+        <el-select v-model="form.allowedFormats" multiple placeholder="至少一种" style="width: 100%">
           <el-option v-for="f in FORMAT_OPTIONS" :key="f" :value="f" :label="f" />
         </el-select>
       </el-form-item>

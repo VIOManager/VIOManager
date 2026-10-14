@@ -5,7 +5,7 @@
  *    审批通过触发 §5 联动（材料任务自动补"佐证材料"必交项并重算齐全率）
  * 错误码（暂定）：5007 仅队长可提交/传佐证 / 5008 队伍有未通过成果时禁导出获奖清单
  */
-import { del, get, post, put } from './http'
+import { get, post, postIdem, delIdem, download } from './http'
 
 export type AchievementType = 'AWARD' | 'RATING' | 'QUALIFICATION' | 'ACTIVITY' | 'OTHER'
 export type AchievementStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
@@ -57,25 +57,25 @@ export function apiCreateAchievement(body: {
   evidenceFileId?: string
   evidenceFileName?: string
 }): Promise<{ id: string; status: AchievementStatus }> {
-  return post('/api/achievements', body)
+  return postIdem('/api/achievements', body, crypto.randomUUID())
 }
-/** 管理员审批（A04）：APPROVE 触发 §5 联动 */
+/** 管理员审批（A04）：⚠️ 后端暂未实现 POST /api/achievements/{id}/review——成果审批走审批中心还是独立接口待 C 线定，联调期此操作报资源不存在 */
 export function apiReviewAchievement(id: string, action: 'APPROVE' | 'REJECT', comment: string): Promise<null> {
   return post('/api/achievements/' + id + '/review', { action, comment })
 }
-/** 佐证材料覆盖上传（A05）：仅队长（5007） */
+/** 佐证材料覆盖上传（A05，后端为 POST）：仅队长（5007） */
 export function apiUploadEvidence(id: string, fileId: string, fileName: string): Promise<null> {
-  return put('/api/achievements/' + id + '/evidence', { fileId, fileName })
+  return postIdem('/api/achievements/' + id + '/evidence', { fileId, fileName }, crypto.randomUUID())
 }
 /** 删除未通过的成果（提交人可撤回） */
 export function apiDeleteAchievement(id: string): Promise<null> {
-  return del('/api/achievements/' + id)
+  return delIdem('/api/achievements/' + id, crypto.randomUUID())
 }
-/** 获奖导出（A07）：队伍存在未通过成果时 5008 */
-export function apiExportAwards(teamId: string): Promise<{ note: string }> {
-  return post('/api/achievements/export', { teamId })
+/** 获奖导出（A07，后端为 GET 文件流）：队伍存在未通过成果时 5008 */
+export function apiExportAwards(teamId: string): Promise<void> {
+  return download('/api/achievements/export' + (teamId ? '?teamId=' + encodeURIComponent(teamId) : ''), '获奖导出.xlsx')
 }
-/** 学生端我的成果（A08） */
+/** 学生端我的成果（A08，后端路径 /api/achievements/my/contributions） */
 export function apiMyAchievements(): Promise<MyAchievements> {
-  return get('/api/my/achievements')
+  return get('/api/achievements/my/contributions')
 }

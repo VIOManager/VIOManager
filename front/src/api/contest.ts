@@ -4,7 +4,7 @@
  * 规则三级继承：模板 defaultRules → 比赛 overrideRules → 赛道 overrideRules（JSON 只存被覆盖的键）
  * ⚠️ 规则键名全组唯一（§0 六键），禁止私自新增
  */
-import { del, get, post, put } from './http'
+import { get, postIdem, putIdem, delIdem } from './http'
 
 /** 规则值对象：键名见 §0（memberLimit/prefillLimit 为数值，其余布尔） */
 export type RulesMap = Record<string, number | boolean>
@@ -105,14 +105,14 @@ export function apiTemplates(category?: string): Promise<ContestTemplate[]> {
   return get('/api/contest-templates', category ? { category } : undefined)
 }
 export function apiCreateTemplate(body: { name: string; code: string; category: string; description: string; defaultRules: RulesMap }): Promise<ContestTemplate> {
-  return post('/api/contest-templates', body)
+  return postIdem('/api/contest-templates', body, crypto.randomUUID())
 }
 export function apiUpdateTemplate(id: string, body: { name: string; code: string; category: string; description: string; defaultRules: RulesMap }): Promise<ContestTemplate> {
-  return put('/api/contest-templates/' + id, body)
+  return putIdem('/api/contest-templates/' + id, body, crypto.randomUUID())
 }
 /** 被比赛引用拒绝（4012） */
 export function apiDeleteTemplate(id: string): Promise<null> {
-  return del('/api/contest-templates/' + id)
+  return delIdem('/api/contest-templates/' + id, crypto.randomUUID())
 }
 
 // ── 比赛 ──
@@ -123,28 +123,28 @@ export function apiContestDetail(id: string): Promise<ContestDetail> {
   return get('/api/contests/' + id)
 }
 export function apiCreateContest(body: ContestForm): Promise<ContestDetail> {
-  return post('/api/contests', body)
+  return postIdem('/api/contests', body, crypto.randomUUID())
 }
 export function apiUpdateContest(id: string, body: ContestForm): Promise<ContestDetail> {
-  return put('/api/contests/' + id, body)
+  return putIdem('/api/contests/' + id, body, crypto.randomUUID())
 }
 /** 仅 DRAFT 可删（4001） */
 export function apiDeleteContest(id: string): Promise<null> {
-  return del('/api/contests/' + id)
+  return delIdem('/api/contests/' + id, crypto.randomUUID())
 }
 /** 状态流转：按序不可跳（4011）；DRAFT→PUBLISHED 有发布前检查（4001 逐项指出缺项） */
 export function apiContestStatus(id: string, to: ContestStatus): Promise<null> {
-  return post('/api/contests/' + id + '/status', { to })
+  return postIdem('/api/contests/' + id + '/status', { to }, crypto.randomUUID())
 }
 export function apiCreateTrack(id: string, body: { name: string; code: string; description: string; overrideRules: RulesMap }): Promise<ContestTrack> {
-  return post('/api/contests/' + id + '/tracks', body)
+  return postIdem('/api/contests/' + id + '/tracks', body, crypto.randomUUID())
 }
 export function apiUpdateTrack(id: string, trackId: string, body: { name: string; code: string; description: string; overrideRules: RulesMap }): Promise<ContestTrack> {
-  return put('/api/contests/' + id + '/tracks/' + trackId, body)
+  return putIdem('/api/contests/' + id + '/tracks/' + trackId, body, crypto.randomUUID())
 }
 /** 有赛队挂载该赛道时拒绝 */
 export function apiDeleteTrack(id: string, trackId: string): Promise<null> {
-  return del('/api/contests/' + id + '/tracks/' + trackId)
+  return delIdem('/api/contests/' + id + '/tracks/' + trackId, crypto.randomUUID())
 }
 
 // ── 待处理比赛池 ──
@@ -153,8 +153,8 @@ export function apiContestPool(status?: string): Promise<PoolItem[]> {
 }
 /** 确认为正式比赛：按解析内容预填（可改）创建 contest */
 export function apiConfirmPoolItem(id: string, body: ContestForm): Promise<ContestDetail> {
-  return post('/api/contests/pool/' + id + '/confirm', body)
+  return postIdem('/api/contests/pool/' + id + '/confirm', body, crypto.randomUUID())
 }
 export function apiIgnorePoolItem(id: string): Promise<null> {
-  return post('/api/contests/pool/' + id + '/ignore')
+  return postIdem('/api/contests/pool/' + id + '/ignore', {}, crypto.randomUUID())
 }
