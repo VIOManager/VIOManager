@@ -231,14 +231,14 @@ async function onRenameAccount() {
               <span>证件照</span>
               <span v-if="detail.photoFileId" class="stamp ok">已上传（可覆盖）</span>
             </div>
-            <UploadField accept=".jpg,.jpeg,.png" :max-mb="5" button-text="上传证件照" tip="jpg/png，5MB 内；覆盖式单图" @uploaded="onPhoto" />
+            <UploadField biz-type="MEMBER_PHOTO" accept=".jpg,.jpeg,.png" :max-mb="5" button-text="上传证件照" tip="jpg/png，5MB 内；覆盖式单图" @uploaded="onPhoto" />
           </div>
           <div class="asset">
             <div class="asset-head">
               <span>电子签名</span>
               <span v-if="detail.signatureFileId" class="stamp ok">已上传（可覆盖）</span>
             </div>
-            <UploadField accept=".jpg,.jpeg,.png" :max-mb="5" button-text="上传电子签名" tip="jpg/png，5MB 内；覆盖式单图" @uploaded="onSignature" />
+            <UploadField biz-type="MEMBER_SIGNATURE" accept=".jpg,.jpeg,.png" :max-mb="5" button-text="上传电子签名" tip="jpg/png，5MB 内；覆盖式单图" @uploaded="onSignature" />
           </div>
         </div>
 

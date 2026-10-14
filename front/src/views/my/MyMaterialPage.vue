@@ -36,14 +36,14 @@ function acceptOf(formats: string[]): string {
 }
 /** 单条上传：文件服务上传完成（拿到 fileId）后再调提交接口 */
 async function onSubmitOne(teamId: string, requirementId: string, resp: UploadResp) {
-  const r = await apiSubmitMaterial(requirementId, { teamId, fileId: resp.fileId, fileName: resp.fileName })
+  const r = await apiSubmitMaterial(requirementId, { teamId, fileId: resp.fileId, fileName: resp.originalName })
   ElMessage.success('已提交，当前版本 v' + r.version + (r.version > 1 ? '（旧版本已失效）' : ''))
   await load()
 }
 
 /** zip 批量上传：模拟解压结果展示匹配/不匹配清单 */
 async function onBatch(teamId: string, taskId: string, resp: UploadResp) {
-  const r = await apiBatchUpload({ teamId, taskId, fileId: resp.fileId, fileName: resp.fileName })
+  const r = await apiBatchUpload({ teamId, taskId, fileId: resp.fileId, fileName: resp.originalName })
   lastBatch.value = {
     teamId,
     matched: r.matched.map((m) => MATERIAL_TYPE_LABEL[m.materialType] ?? m.materialType),
@@ -104,6 +104,7 @@ onMounted(load)
             <td class="fs" style="font-size: 12px">{{ it.fileName || '—' }}</td>
             <td>
               <UploadField
+                biz-type="MATERIAL_SUBMIT"
                 :accept="acceptOf(it.requirement.allowedFormats)"
                 :max-mb="it.requirement.maxSizeMb"
                 button-text="上传"
@@ -115,7 +116,7 @@ onMounted(load)
       </table>
 
       <div class="batch-zone">
-        <UploadField accept=".zip" :max-mb="50" button-text="zip 批量上传" @uploaded="onBatch(tm.teamId, tm.task.id, $event)" />
+        <UploadField biz-type="MATERIAL_SUBMIT" accept=".zip" :max-mb="50" button-text="zip 批量上传" @uploaded="onBatch(tm.teamId, tm.task.id, $event)" />
         <span class="fs" style="font-size: 12px; color: var(--vio-ink-3)">演示规则：压缩包文件名包含类型中文名即匹配（如 承诺书+合照.zip）</span>
       </div>
 

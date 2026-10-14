@@ -124,10 +124,14 @@ export async function download(url: string, fallbackName: string): Promise<void>
   URL.revokeObjectURL(href)
 }
 
-/** 文件上传专用：multipart 表单 + X-Idempotency-Key 幂等键（规范 §6，键由调用方生成） */
-export async function upload<T>(url: string, file: File, idempotencyKey: string): Promise<T> {
+/** 文件上传专用：multipart 表单 + X-Idempotency-Key 幂等键（规范 §6，键由调用方生成）
+ *  fields 为随表单一起提交的附加字段（如文件服务必填的 bizType 业务来源） */
+export async function upload<T>(url: string, file: File, idempotencyKey: string, fields?: Record<string, string>): Promise<T> {
   const fd = new FormData()
   fd.append('file', file)
+  if (fields) {
+    for (const k of Object.keys(fields)) fd.append(k, fields[k])
+  }
   return (await http.post(url, fd, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
 }
 

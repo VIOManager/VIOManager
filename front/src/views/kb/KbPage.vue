@@ -53,8 +53,8 @@ function openCreate() {
   formVisible.value = true
 }
 
-function onUploaded(f: { fileId: string; fileName: string }) {
-  uploaded.value = { fileId: f.fileId, fileName: f.fileName }
+function onUploaded(f: { fileId: string; originalName: string }) {
+  uploaded.value = { fileId: f.fileId, fileName: f.originalName }
 }
 
 async function submit() {
@@ -146,9 +146,10 @@ onMounted(load)
           <label>文件（选择后立即上传并安全扫描）</label>
           <UploadField
             :key="formSeq"
+            biz-type="KB_FILE"
             accept=".pdf,.mp4,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.png,.jpg"
-            tip="支持 PDF / MP4 / Office 文档 / 压缩包 / 图片，单文件上限 25MB（与后端一致）"
-            :max-mb="25"
+            tip="支持 PDF / MP4 / Office 文档 / 压缩包 / 图片，单文件上限 20MB（后端业务上限；mp4 待后端白名单放行）"
+            :max-mb="20"
             button-text="选择文件上传"
             @uploaded="onUploaded"
           />
