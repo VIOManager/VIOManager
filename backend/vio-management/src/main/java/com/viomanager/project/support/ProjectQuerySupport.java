@@ -63,7 +63,7 @@ public class ProjectQuerySupport {
                 .orderByDesc("updated_at");
 
         Page<Project> result = projectMapper.selectPage(new Page<>(page, size), qw);
-        List<ProjectVO> vos = toVOs(result.getRecords());
+        List<ProjectVO> vos = toCards(result.getRecords());
         return PageResult.of(vos, result.getTotal(), page, size);
     }
 
@@ -76,8 +76,8 @@ public class ProjectQuerySupport {
         return vo;
     }
 
-    /** 批量装配列表卡片 */
-    private List<ProjectVO> toVOs(List<Project> projects) {
+    /** 批量装配列表卡片（跨线名一次 IN 取齐，列表零 JOIN；PR15 挂载池等同款复用） */
+    public List<ProjectVO> toCards(List<Project> projects) {
         NameMaps names = nameMaps(projects);
         return projects.stream().map(p -> {
             ProjectVO vo = new ProjectVO();
