@@ -8,6 +8,8 @@ import com.viomanager.common.util.IpUtil;
 import com.viomanager.common.util.ParamsJsonUtil;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
 import java.util.concurrent.ExecutorService;
@@ -123,11 +125,28 @@ public class AuditLogAspect {
         record.setBizType(auditLog.bizType());
         record.setBizTypeLabel(auditLog.label().isEmpty() ? auditLog.bizType() : auditLog.label());
         record.setSummary(truncate(renderSummary(auditLog.summary(), joinPoint), SUMMARY_MAX));
-        //4.请求参数摘要：敏感接口（密码、身份证相关）留空，防敏感值进日志
+        //4.请求参数摘要：敏感接口（密码、身份证相关）留空，防敏感值进日志；
+        // ServletRequest/ServletResponse 必须先置换——Jackson 内省会调 getWriter()/getOutputStream()
+        // 等有副作用的 getter，污染响应流（SC08/PF10 等导出接口全炸在这一点上）
         if (!auditLog.sensitive()) {
-            record.setRequestParams(truncate(ParamsJsonUtil.toJson(joinPoint.getArgs()), REQUEST_PARAMS_MAX));
+            record.setRequestParams(
+                    truncate(ParamsJsonUtil.toJson(filterWebObjects(joinPoint.getArgs())), REQUEST_PARAMS_MAX));
         }
         return record;
+    }
+
+    /** 控制器入参里的活 Servlet 对象置换为占位符，保持参数位置可读 */
+    private static Object[] filterWebObjects(Object[] args) {
+        if (args == null) {
+            return args;
+        }
+        Object[] filtered = new Object[args.length];
+        for (int i = 0; i < args.length; i++) {
+            filtered[i] = args[i] instanceof ServletRequest || args[i] instanceof ServletResponse
+                    ? "<" + args[i].getClass().getSimpleName() + ">"
+                    : args[i];
+        }
+        return filtered;
     }
 
     /**

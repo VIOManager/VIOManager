@@ -15,6 +15,7 @@ import com.viomanager.schedule.service.ScheduleRuleService;
 import com.viomanager.schedule.service.ScheduleService;
 import com.viomanager.schedule.support.FreeSlotCalcSupport;
 import com.viomanager.schedule.support.NameNormalizer;
+import com.viomanager.schedule.support.ScheduleKeyReleaseSupport;
 import com.viomanager.schedule.support.ScheduleMemberSupport;
 import com.viomanager.schedule.support.SemesterSupport;
 import com.viomanager.schedule.support.SubOrgSupport;
@@ -55,6 +56,9 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Resource
     private FreeSlotCalcSupport calcSupport;
+
+    @Resource
+    private ScheduleKeyReleaseSupport keyReleaseSupport;
 
     @Override
     public List<ScheduleCellVO> weekTable(Long semesterId, Integer weekNo, Long subOrgId) {
@@ -131,6 +135,9 @@ public class ScheduleServiceImpl implements ScheduleService {
                 throw new BizException(ScheduleErrorCode.COURSE_CONFLICT,
                         "人员「" + member.name() + "」" + conflictNote + "，确认强制保存请重试并携带 force");
             }
+            //同格可能被本人已取消的行占键，落库前释放（uk_schedule_conflict 尾列是 deleted）
+            keyReleaseSupport.releaseSuperseded(dto.getSemesterId(), dto.getWeekNo(), dto.getSubOrgId(),
+                    member.id(), assignment.getSlotIndex());
             scheduleMapper.insert(new Schedule()
                     .setSemesterId(dto.getSemesterId())
                     .setWeekNo(dto.getWeekNo())
@@ -162,6 +169,8 @@ public class ScheduleServiceImpl implements ScheduleService {
         //改时段才重过 8007/8006/8005/8008（排除自身）；仅改文案不动校验
         if (slotChanged) {
             validateTargetSlot(schedule, weekday, slotIndex);
+            keyReleaseSupport.releaseSuperseded(schedule.getSemesterId(), schedule.getWeekNo(),
+                    schedule.getSubOrgId(), schedule.getMemberId(), slotIndex);
         }
         schedule.setWeekday(weekday)
                 .setSlotIndex(slotIndex)

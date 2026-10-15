@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
  * 排班导出实现（POI xlsx 流）。可见性与查询接口同口径：部门管理员仅本子树
  * （复用 ScheduleServiceImpl 同款校验，见 visibleOrgIds 调用）。
  */
+@Slf4j
 @Service
 public class ScheduleExportServiceImpl implements ScheduleExportService {
 
@@ -119,6 +121,7 @@ public class ScheduleExportServiceImpl implements ScheduleExportService {
         } catch (BizException e) {
             throw e;
         } catch (Exception e) {
+            log.error("排班导出失败：{}", fileName, e);
             throw new BizException(com.viomanager.common.enums.CommonErrorCode.INTERNAL_ERROR, "导出失败");
         }
     }

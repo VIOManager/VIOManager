@@ -26,11 +26,13 @@ import java.util.stream.Collectors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
  * 汇总服务实现。PF05 免参取当前激活学期；未提交过周报的成员返回全零占位（前端展示用）。
  */
+@Slf4j
 @Service
 public class PerformanceSummaryServiceImpl implements PerformanceSummaryService {
 
@@ -165,6 +167,7 @@ public class PerformanceSummaryServiceImpl implements PerformanceSummaryService 
         } catch (BizException e) {
             throw e;
         } catch (Exception e) {
+            log.error("绩效汇总导出失败：{}", fileName, e);
             throw new BizException(CommonErrorCode.INTERNAL_ERROR, "导出失败");
         }
     }
