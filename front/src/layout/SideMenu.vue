@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 侧边目录（图纸档案 · 编号目录式菜单）
- * 对应方案：Step 2；菜单数据来自 @/config/menu（三端显隐唯一数据源）
+ * 侧边目录（粗野贴纸 · SEC 编组导航）
+ * 对应方案：Step 2；S2 双主题粗野重涂（2026-10-15 方案）；菜单数据来自 @/config/menu（三端显隐唯一数据源）
  * ⚠️ 安全：菜单过滤仅为展示层，路由与接口权限以服务端为准
  * badge：审批中心项接 P08 未读数（stores/approval），其余项暂无红点
  */
@@ -51,89 +51,119 @@ const seq = computed(() => {
 <template>
   <aside class="catalog">
     <div class="catalog-head">
-      <b>VIOMANAGER</b>
-      <span class="mono">{{ user.role === 'STUDENT' ? '学生端 · 2026 秋' : '管理台账 · 2026 秋' }}</span>
+      <span class="brand">VIO<span class="tick">.</span></span>
+      <span class="mono sub">{{ user.role === 'STUDENT' ? 'STUDENT DECK' : 'ADMIN DECK' }} · 2026F</span>
     </div>
     <nav class="catalog-menu">
       <template v-for="g in groups" :key="g.group">
-        <div class="cat-group">{{ g.group }}</div>
+        <div class="cat-group mono">SEC · {{ g.group }}</div>
         <router-link
           v-for="m in g.items"
           :key="m.path"
           :to="m.path"
           active-class="active"
         >
-          <span>{{ seq.get(m.path) }} {{ m.title }}</span>
-          <em v-if="badgeOf(m)">{{ badgeOf(m) }}</em>
+          <span class="m-no mono">{{ seq.get(m.path) }}</span>
+          <span class="m-title">{{ m.title }}</span>
+          <em v-if="badgeOf(m)" class="mono">{{ badgeOf(m) }}</em>
         </router-link>
       </template>
     </nav>
     <div class="catalog-foot">
-      <a class="forum-link mono" :href="forumUrl" target="_blank" rel="noopener">VIO 论坛 ↗</a>
-      <span class="mono">VOL.2026F · W6</span>
+      <a class="forum-link mono" :href="forumUrl" target="_blank" rel="noopener">论坛 FORUM ↗</a>
+      <span class="mono">VOL.2026F</span>
     </div>
   </aside>
 </template>
 
 <style scoped>
 .catalog {
-  border-right: 1px solid var(--vio-rule);
-  background: var(--vio-sheet);
+  border-right: 3px solid var(--vio2-bd);
+  background: var(--vio2-panel);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  position: relative;
+  z-index: 1; /* 压过壳层网格底纹 */
 }
-.catalog-head { padding: 20px 20px 14px; border-bottom: 2px solid var(--vio-ink); }
-.catalog-head b { display: block; font-family: var(--vio-disp-latin); font-size: 16px; letter-spacing: 0.1em; }
-.catalog-head span { font-size: 11px; color: var(--vio-ink-3); letter-spacing: 0.12em; }
-.catalog-menu { flex: 1; padding: 10px 14px 16px; overflow: auto; }
+.catalog-head { padding: 18px 18px 14px; border-bottom: 3px solid var(--vio2-bd); }
+.brand {
+  display: inline-block;
+  background: var(--vio2-yellow);
+  color: #101010;
+  border: 3px solid var(--vio2-bd);
+  box-shadow: 4px 4px 0 var(--vio2-shadow);
+  padding: 2px 10px 3px;
+  font-family: var(--vio2-din);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  transform: rotate(-2deg);
+}
+.tick { color: var(--vio2-pink); }
+.catalog-head .sub {
+  display: block;
+  margin-top: 10px;
+  font-size: 10px;
+  color: var(--vio2-ink-3);
+  letter-spacing: 0.22em;
+}
+.catalog-menu { flex: 1; padding: 12px 14px 16px; overflow: auto; }
 .cat-group {
-  margin: 16px 0 5px;
-  font-family: var(--vio-serif);
+  margin: 14px 2px 6px;
+  font-size: 10px;
   font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.2em;
-  color: var(--vio-ink);
+  letter-spacing: 0.18em;
+  color: var(--vio2-ink-3);
 }
 .catalog-menu a {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 7px 10px;
-  margin-bottom: 1px;
-  font-size: 13px;
-  color: var(--vio-ink-2);
-  font-family: var(--vio-mono);
+  gap: 8px;
+  padding: 7px 9px;
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  color: var(--vio2-ink-2);
+  background: var(--vio2-panel-2);
+  border: 2px solid var(--vio2-bd);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
   text-decoration: none;
-  transition: background 0.2s var(--vio-ease), color 0.2s var(--vio-ease);
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.catalog-menu a:hover { background: var(--vio-wash); color: var(--vio-blue-ink); }
+.catalog-menu a:hover { transform: translate(-1px, -1px); color: var(--vio2-ink); }
 .catalog-menu a.active {
-  background: var(--vio-wash);
-  color: var(--vio-blue-ink);
+  background: var(--vio2-yellow);
+  color: #101010;
   font-weight: 700;
-  box-shadow: inset 3px 0 0 var(--vio-blue-ink);
+  transform: translate(-1px, -1px);
 }
+.m-no { font-size: 10px; color: var(--vio2-ink-3); font-weight: 700; }
+a.active .m-no { color: #101010; }
+.m-title { flex: 1; }
 .catalog-menu a em {
   font-style: normal;
-  font-size: 11px;
-  color: var(--vio-seal);
+  font-size: 10px;
   font-weight: 700;
+  color: #101010;
+  background: var(--vio2-pink);
+  border: 2px solid var(--vio2-bd);
+  padding: 0 5px;
 }
 .catalog-foot {
-  padding: 13px 20px;
-  border-top: 1px solid var(--vio-rule-soft);
-  font-size: 10.5px;
-  color: var(--vio-ink-3);
+  padding: 12px 18px;
+  border-top: 3px solid var(--vio2-bd);
+  font-size: 10px;
+  color: var(--vio2-ink-3);
   letter-spacing: 0.14em;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 .forum-link {
-  color: var(--vio-blue-ink);
+  color: var(--vio2-blue);
   text-decoration: none;
-  font-size: 11px;
+  font-weight: 700;
+  font-size: 10px;
   letter-spacing: 0.1em;
 }
 .forum-link:hover { text-decoration: underline; }
