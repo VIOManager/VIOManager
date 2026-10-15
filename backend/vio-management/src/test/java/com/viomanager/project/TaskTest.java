@@ -12,6 +12,7 @@ import com.jayway.jsonpath.JsonPath;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.MediaType;
 
 /**
@@ -19,6 +20,7 @@ import org.springframework.http.MediaType;
  * PR23 权限矩阵（所有人全字段 / 负责人仅置 DONE / 其余 7002）、
  * 完成列语义（置 DONE 回填、离开 DONE 清空）、7012 跨项目防串、删除同步任务。
  */
+@Transactional
 class TaskTest extends PmTestSupport {
 
     private static final Long ORG_SOFT = 9301L;

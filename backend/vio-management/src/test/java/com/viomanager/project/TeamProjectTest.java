@@ -12,6 +12,7 @@ import com.jayway.jsonpath.JsonPath;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.MediaType;
 
 /**
@@ -20,6 +21,7 @@ import org.springframework.http.MediaType;
  * 镜像列表双向可见性、可挂载池口径（PUBLIC/ORG 同部门/参与，授权不进池）。
  * B 线 team/team_member/contest_track 行用 jdbcTemplate 直插（M3 只读 B 线数据）。
  */
+@Transactional
 class TeamProjectTest extends PmTestSupport {
 
     private static final Long ORG_SOFT = 9301L;

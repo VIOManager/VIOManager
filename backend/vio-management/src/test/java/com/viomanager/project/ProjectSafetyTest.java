@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.MediaType;
 
 /**
@@ -20,6 +21,7 @@ import org.springframework.http.MediaType;
  * 子表行（member/advisor/grant/ref）用 jdbcTemplate 直插——M2/M3 的写接口未交付，
  * 但可见性判定依赖的读路径本里程碑就要钉死。
  */
+@Transactional
 class ProjectSafetyTest extends PmTestSupport {
 
     private static final Long ORG_SOFT = 9301L;

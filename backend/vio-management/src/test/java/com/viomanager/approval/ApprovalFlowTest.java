@@ -230,10 +230,11 @@ class ApprovalFlowTest extends ApprovalTestBase {
 
     @Test
     void unregisteredBizTypeFallsBack() throws Exception {
-        // PROJECT_VIEW 没有任何 Handler 注册：兜底顶上（记日志不动作），审批照常能批
+        // SEMESTER_SWITCH 尚无 Handler 注册（A 线未交付）：兜底顶上（记日志不动作），审批照常能批。
+        // 原用 PROJECT_VIEW 当样例，2026-10-15 项目管理线 M6 注册 ProjectViewHandler 后不再成立
         ApprovalCreateDTO dto = new ApprovalCreateDTO();
-        dto.setBizType("PROJECT_VIEW");
-        dto.setBizTitle("项目查看申请");
+        dto.setBizType("SEMESTER_SWITCH");
+        dto.setBizTitle("学期切换申请");
         dto.setApplicantMemberId(8801L);
         dto.setApplicantName("张三");
         dto.setApproverOrgId(9301L);

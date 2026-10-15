@@ -20,7 +20,7 @@ public interface ProjectService {
     /** PR02 创建：所有人=当前用户；同学期同组织名称唯一（7004） */
     Result<ProjectDetailVO> create(ProjectCreateDTO dto);
 
-    /** PR03 详情：可见性八条规则判定（7003）；ONCE 授权消耗随 M6 授权落地一并实现 */
+    /** PR03 详情：可见性八条规则判定（7003）；ONCE 授权在此消耗（用完置 EXPIRED） */
     Result<ProjectDetailVO> detail(Long id);
 
     /** PR04 编辑：仅所有人（7002）；乐观锁（1007）；状态限 ACTIVE→FINISHED→ARCHIVED 按序 */

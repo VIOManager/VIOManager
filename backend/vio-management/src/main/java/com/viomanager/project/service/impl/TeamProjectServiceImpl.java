@@ -160,6 +160,10 @@ public class TeamProjectServiceImpl implements TeamProjectService {
         if (operatorId == null || !operatorId.equals(longOf(team.get("leader_member_id")))) {
             throw new BizException(CommonErrorCode.FORBIDDEN);
         }
+        //1.5 锁赛队行：同一队的挂载/解绑串行化——可空赛道的防重只有先查后插
+        //（uk 对 NULL 不生效），无锁时并发双插会双挂载（方案 §7.7 并发矩阵）
+        jdbcTemplate.queryForObject(
+                "SELECT id FROM team WHERE id = ? AND deleted = 0 FOR UPDATE", Long.class, teamId);
         //2.项目可见（7001/7003 走八条规则——队长本人必须看得到才能挂）
         Project project = visibilitySupport.requireVisibleProject(dto.getProjectId(), user, operatorId);
         //3.同学期（7008）：项目与赛队必须同一学期
@@ -178,27 +182,29 @@ public class TeamProjectServiceImpl implements TeamProjectService {
             }
         }
         //5.防重（7007）：同队同项目同赛道仍有 ACTIVE 挂载则拒。
-        //   track_id 可空用 <=> NULL 安全比较；uk 对 NULL 轨道不生效，必须先查
+        //   track_id 可空用 <=> NULL 安全比较；uk 对 NULL 轨道不生效，必须先查后插。
+        //   ⚠️ 查询带 FOR UPDATE（当前读）——普通 SELECT 是快照读，RR 隔离下等锁线程
+        //   的旧快照看不到先行事务刚提交的插入，防重会漏（并发套件实测 8 连插）
         Integer activeCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM team_project_ref WHERE team_id = ? AND project_id = ? "
-                        + "AND track_id <=> ? AND status = 'ACTIVE' AND deleted = 0",
+                        + "AND track_id <=> ? AND status = 'ACTIVE' AND deleted = 0 FOR UPDATE",
                 Integer.class, teamId, dto.getProjectId(), dto.getTrackId());
         if (activeCount != null && activeCount > 0) {
             throw new BizException(ProjectErrorCode.ALREADY_MOUNTED);
         }
         //6.落挂载行：contest/semester 冗余自赛队（校验已保证一致）。
-        //   同键已解绑（RELEASED）的行复用置回 ACTIVE——uk 下同键活行仅一行，直接 INSERT 必撞键
-        TeamProjectRef released = refMapper.selectOne(
-                new QueryWrapper<TeamProjectRef>().eq("team_id", teamId)
-                        .eq("project_id", dto.getProjectId())
-                        .apply("track_id <=> {0}", dto.getTrackId())
-                        .eq("status", "RELEASED"));
-        if (released != null) {
+        //   同键已解绑（RELEASED）的行复用置回 ACTIVE——uk 下同键活行仅一行，直接 INSERT 必撞键。
+        //   复用查询同样当前读（FOR UPDATE），理由同上
+        List<Long> releasedIds = jdbcTemplate.queryForList(
+                "SELECT id FROM team_project_ref WHERE team_id = ? AND project_id = ? "
+                        + "AND track_id <=> ? AND status = 'RELEASED' AND deleted = 0 FOR UPDATE",
+                Long.class, teamId, dto.getProjectId(), dto.getTrackId());
+        if (!releasedIds.isEmpty()) {
             //复用置回 ACTIVE：released_at 须显式置 NULL——updateById 的 NOT_NULL 策略跳过 null 字段清不掉
             jdbcTemplate.update(
                     "UPDATE team_project_ref SET status = 'ACTIVE', attached_by = ?, "
                             + "attached_at = NOW(), released_at = NULL, updated_by = ? WHERE id = ?",
-                    operatorId, user.getUserId(), released.getId());
+                    operatorId, user.getUserId(), releasedIds.get(0));
         } else {
             TeamProjectRef ref = new TeamProjectRef();
             ref.setTeamId(teamId);
@@ -224,15 +230,20 @@ public class TeamProjectServiceImpl implements TeamProjectService {
         if (operatorId == null || !operatorId.equals(longOf(team.get("leader_member_id")))) {
             throw new BizException(CommonErrorCode.FORBIDDEN);
         }
-        //只解 ACTIVE 行（已解绑的再解=不存在，1004）；已生成的任务不回收（清单 PR14）
-        TeamProjectRef ref = refMapper.selectOne(
-                new QueryWrapper<TeamProjectRef>().eq("team_id", teamId)
-                        .eq("project_id", projectId).eq("status", "ACTIVE"));
-        if (ref == null) {
+        //锁赛队行：与挂载互斥（防解绑/挂载竞态），见 attach 注释
+        jdbcTemplate.queryForObject(
+                "SELECT id FROM team WHERE id = ? AND deleted = 0 FOR UPDATE", Long.class, teamId);
+        //只解 ACTIVE 行（已解绑的再解=不存在，1004）；已生成的任务不回收（清单 PR14）。
+        //当前读（FOR UPDATE）：防与挂载并发的快照漏读，理由同 attach
+        List<Long> activeIds = jdbcTemplate.queryForList(
+                "SELECT id FROM team_project_ref WHERE team_id = ? AND project_id = ? "
+                        + "AND status = 'ACTIVE' AND deleted = 0 FOR UPDATE",
+                Long.class, teamId, projectId);
+        if (activeIds.isEmpty()) {
             throw new BizException(CommonErrorCode.NOT_FOUND);
         }
         TeamProjectRef patch = new TeamProjectRef();
-        patch.setId(ref.getId());
+        patch.setId(activeIds.get(0));
         patch.setStatus("RELEASED");
         patch.setReleasedAt(LocalDateTime.now());
         refMapper.updateById(patch);

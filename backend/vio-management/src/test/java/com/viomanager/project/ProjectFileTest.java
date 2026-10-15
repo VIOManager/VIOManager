@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MvcResult;
@@ -21,6 +22,7 @@ import org.springframework.test.web.servlet.MvcResult;
  * ClamAV 未起时按组长拍板的不可用策略：上传照常成功、scanStatus=UNAVAILABLE、
  * 下载不拦（只有 INFECTED 才拒）——本测试不依赖 ClamAV 进程。
  */
+@Transactional
 class ProjectFileTest extends PmTestSupport {
 
     private static final Long ORG_SOFT = 9301L;

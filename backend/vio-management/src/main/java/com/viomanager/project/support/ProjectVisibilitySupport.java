@@ -35,6 +35,17 @@ public class ProjectVisibilitySupport {
 
     /** 单项目可见性判定（详情/编辑/删除等单对象入口） */
     public boolean canView(Project project, CurrentUser user, Long memberId) {
+        //1-6 条：身份与可见范围（不含授权）
+        if (matchesWithoutGrant(project, user, memberId)) {
+            return true;
+        }
+        //7 生效中的查看授权（ONCE 未消耗 / LIMITED 未到期）
+        //8 都不满足
+        return memberId != null && hasActiveGrant(project.getId(), memberId);
+    }
+
+    /** 第 1-6 条（所有人/超管/成员教师/部门管理员/PUBLIC/ORG），不含第 7 条授权 */
+    private boolean matchesWithoutGrant(Project project, CurrentUser user, Long memberId) {
         //1 所有人
         if (memberId != null && memberId.equals(project.getOwnerMemberId())) {
             return true;
@@ -58,17 +69,9 @@ public class ProjectVisibilitySupport {
             return true;
         }
         //6 本部门可见：用户组织在项目组织子树内（项目挂子组织时，该子树内用户可见）
-        if ("ORG".equals(project.getVisibility())
+        return "ORG".equals(project.getVisibility())
                 && project.getOrgId() != null && user.getOrgId() != null
-                && orgInSubtree(user.getOrgId(), orgPath(project.getOrgId()))) {
-            return true;
-        }
-        //7 生效中的查看授权（ONCE 未用完 / LIMITED 未到期，状态列已编码消耗与到期）
-        if (memberId != null && hasActiveGrant(project.getId(), memberId)) {
-            return true;
-        }
-        //8 都不满足
-        return false;
+                && orgInSubtree(user.getOrgId(), orgPath(project.getOrgId()));
     }
 
     /** 读接口统一入口：存在（7001）+ 可见（7003）一步到位 */
@@ -79,6 +82,51 @@ public class ProjectVisibilitySupport {
         }
         if (!canView(project, user, memberId)) {
             throw new BizException(ProjectErrorCode.VIEW_DENIED);
+        }
+        return project;
+    }
+
+    /**
+     * PR03 详情专用入口：仅当靠第 7 条授权才可见时消耗 ONCE（清单 PR03：ONCE 授权
+     * 在此消耗，used_count 加一、用完置 EXPIRED）；靠 1-6 条可见的人不碰授权。
+     * 并发双耗防多扣：条件 UPDATE（WHERE status='ACTIVE'）只有一个线程扣到，
+     * 没扣到的线程按 7003 拒绝——一次性授权语义下并发两次浏览只放行一次。
+     */
+    public Project requireVisibleProjectConsumingOnce(Long projectId, CurrentUser user,
+                                                       Long memberId) {
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BizException(ProjectErrorCode.NOT_FOUND);
+        }
+        //1-6 条可见：与授权无关，不消耗
+        if (matchesWithoutGrant(project, user, memberId)) {
+            return project;
+        }
+        //第 7 条：找到 ACTIVE 授权（ONCE/LIMITED 都行——LIMITED 浏览不消耗）
+        if (memberId == null) {
+            throw new BizException(ProjectErrorCode.VIEW_DENIED);
+        }
+        List<Long> grantIds = jdbcTemplate.queryForList(
+                "SELECT id FROM project_view_grant WHERE project_id = ? AND applicant_id = ? "
+                        + "AND status = 'ACTIVE' AND deleted = 0 "
+                        + "AND (expire_at IS NULL OR expire_at > NOW()) ORDER BY id LIMIT 1",
+                Long.class, projectId, memberId);
+        if (grantIds.isEmpty()) {
+            throw new BizException(ProjectErrorCode.VIEW_DENIED);
+        }
+        Long grantId = grantIds.get(0);
+        //ONCE 才消耗：用一次即 EXPIRED；并发下只有一个线程扣到（0 行=已被并发消耗→拒绝）
+        var grantType = jdbcTemplate.queryForObject(
+                "SELECT grant_type FROM project_view_grant WHERE id = ?", String.class, grantId);
+        if ("ONCE".equals(grantType)) {
+            int rows = jdbcTemplate.update(
+                    "UPDATE project_view_grant SET used_count = used_count + 1, status = 'EXPIRED', "
+                            + "updated_at = updated_at "
+                            + "WHERE id = ? AND grant_type = 'ONCE' AND status = 'ACTIVE' AND deleted = 0",
+                    grantId);
+            if (rows == 0) {
+                throw new BizException(ProjectErrorCode.VIEW_DENIED);
+            }
         }
         return project;
     }
@@ -115,11 +163,12 @@ public class ProjectVisibilitySupport {
         return advisorCount != null && advisorCount > 0;
     }
 
-    /** 是否有生效中的查看授权（可见性第 7 条） */
+    /** 是否有生效中的查看授权（可见性第 7 条；LIMITED 到期视失效） */
     private boolean hasActiveGrant(Long projectId, Long memberId) {
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM project_view_grant WHERE project_id = ? AND applicant_id = ? "
-                        + "AND status = 'ACTIVE' AND deleted = 0",
+                        + "AND status = 'ACTIVE' AND deleted = 0 "
+                        + "AND (expire_at IS NULL OR expire_at > NOW())",
                 Integer.class, projectId, memberId);
         return count != null && count > 0;
     }

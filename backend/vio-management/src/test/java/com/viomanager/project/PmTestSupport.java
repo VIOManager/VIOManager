@@ -22,14 +22,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * 项目管理模块测试基类（M1–M6 共用夹具）。
- * 与 FileServiceTest 同款基建：真实 dev 库 + @Transactional 回滚 + MockMvc 全链路；
+ * 与 FileServiceTest 同款基建：真实 dev 库 + MockMvc 全链路；
  * 差异是 PM 的业务身份是 member 档案（owner/memberId 口径），故用户一律绑档案造号
  * （纯管理账号走 createAdminAndLogin 不绑档案）。
+ * @Transactional 不在基类——单线程用例各自声明（回滚）；并发套件（PmConcurrencyTest）
+ * 不能有事务（子线程开独立事务提交后主线程回滚不了），靠独立 ID 段 + @AfterEach 自清理。
  * 审计切同步模式便于事务内断言（后续里程碑用）。
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Transactional
 @TestPropertySource(properties = {"vio.audit.async=false", "vio.pm.cache.enabled=false"})
 public abstract class PmTestSupport {
 

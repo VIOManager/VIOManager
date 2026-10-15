@@ -13,6 +13,7 @@ import jakarta.annotation.Resource;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.MediaType;
 
 /**
@@ -21,6 +22,7 @@ import org.springframework.http.MediaType;
  * 真实审批链路端到端（submit → 超管 approve → 节点 APPROVED + 挂载项目批量生成任务）、
  * 回调重放幂等（synced 防重）、驳回记流水意见、挂载回溯补建。
  */
+@Transactional
 class MilestoneTest extends PmTestSupport {
 
     private static final Long ORG_SOFT = 9301L;

@@ -11,12 +11,14 @@ import com.jayway.jsonpath.JsonPath;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.MediaType;
 
 /**
  * M2 成员与指导教师测试（PR06–PR10）：OWNER 行生成与保护、加人防重 7005、
  * 教师类型校验 7006、越权 7002、可见者可看成员列表、移除后可重加（uk 含 deleted）。
  */
+@Transactional
 class ProjectMemberTest extends PmTestSupport {
 
     private static final Long ORG_SOFT = 9301L;

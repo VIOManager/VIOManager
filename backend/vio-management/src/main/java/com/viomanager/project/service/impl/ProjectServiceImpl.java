@@ -162,8 +162,8 @@ public class ProjectServiceImpl implements ProjectService {
     public Result<ProjectDetailVO> detail(Long id) {
         CurrentUser user = UserHolder.getUser();
         Long memberId = memberIdSupport.currentMemberId(user);
-        //可见性八条规则唯一收口（7001 不存在 / 7003 不可见）
-        Project project = visibilitySupport.requireVisibleProject(id, user, memberId);
+        //PR03 专用入口：靠授权（第 7 条）可见时消耗 ONCE（用完置 EXPIRED）；其余读口不消耗
+        Project project = visibilitySupport.requireVisibleProjectConsumingOnce(id, user, memberId);
         return Result.ok(querySupport.toDetail(project));
     }
 

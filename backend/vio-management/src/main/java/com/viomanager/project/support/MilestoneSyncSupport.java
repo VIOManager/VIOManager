@@ -79,10 +79,11 @@ public class MilestoneSyncSupport {
             if (node == null) {
                 continue;
             }
-            //锁内存在性检查：该项目已有该节点的任务则跳过（审批时同步过 / 已回溯过）
+            //锁内存在性检查：该项目已有该节点的任务则跳过（审批时同步过 / 已回溯过）。
+            //当前读（FOR UPDATE）：普通 COUNT 是快照读，与并发的回调同步会互相看不到
             Integer existing = jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM project_task WHERE project_id = ? AND milestone_node_id = ? "
-                            + "AND deleted = 0",
+                            + "AND deleted = 0 FOR UPDATE",
                     Integer.class, projectId, nodeId);
             if (existing != null && existing > 0) {
                 continue;
