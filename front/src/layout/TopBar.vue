@@ -9,6 +9,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useApprovalStore } from '@/stores/approval'
+import { useThemeStore } from '@/stores/theme'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import type { Role } from '@/types'
 
@@ -16,6 +17,7 @@ const route = useRoute()
 const router = useRouter()
 const user = useUserStore()
 const approval = useApprovalStore()
+const theme = useThemeStore()
 
 const crumb = computed(() => ({
   group: (route.meta.group as string) ?? '',
@@ -66,6 +68,7 @@ function onLogout() {
         style="cursor: pointer"
       >待办 {{ approval.total }}</span>
       <span class="user"><i class="ava">{{ user.realName.slice(0, 1) }}</i>{{ user.realName }} · {{ ROLE_LABEL[user.role] }}</span>
+      <button class="btn-plain" :title="theme.current === 'light' ? '当前：图纸白，点击切深空黑' : '当前：深空黑，点击切图纸白'" @click="theme.toggle()">{{ theme.current === 'light' ? '☾ 深色' : '☀ 浅色' }}</button>
       <button class="btn-plain" @click="pwdVisible = true">改密</button>
       <button class="btn-plain" @click="onLogout">退出</button>
     </div>

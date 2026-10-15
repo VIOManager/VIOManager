@@ -1,32 +1,94 @@
 /**
- * 设计令牌：方向一「图纸档案」（Step D0 组长 2026-10-08 拍板定调）
- * 对应样张：.agentdocs/design-preview/direction-1-blueprint/
- * 同步映射 Element Plus 运行时变量（--el-*），全站禁止另起色值
+ * 设计令牌：双主题「图纸白 / 深空黑」（2026-10-15 lzh 定稿，方案见
+ * .agentdocs/plans/2026-10-15/主站视觉重设计-双主题-优化方案.md）
+ *
+ * 结构说明：
+ * - --vio2-* 是新粗野系统令牌（新页面用，S2 起逐页迁移）
+ * - --vio-* 是旧图纸档案令牌（存量页面继续用；暗色块里做了近似映射，
+ *   使未迁移页面在深色模式下也能整体跟随，避免割裂）
+ * - --el-* 全部引用 --vio-*，惰性求值随主题翻转，Element Plus 不需要官方暗色集
+ * - 主题开关：html[data-theme]，由 index.html 防闪烁脚本与 stores/theme.ts 共同维护
  */
-:root {
-  /* 图纸档案令牌 */
-  --vio-paper: #F9FAF7;        /* 冷白纸底 */
-  --vio-sheet: #FFFFFF;        /* 卡面 */
-  --vio-ink: #1B2330;          /* 主墨色 */
-  --vio-ink-2: #4A5568;        /* 次级文字 */
-  --vio-ink-3: #8B95A5;        /* 批注灰 */
-  --vio-blue-ink: #1D3A8F;     /* 钢笔墨蓝（主色） */
-  --vio-blue-deep: #142B6E;    /* 主色按压态 */
-  --vio-rule: #C9CFD8;         /* 图线 */
-  --vio-rule-soft: #E3E7ED;    /* 细图线 */
-  --vio-seal: #C0392B;         /* 印章红（仅印章/警示/红点） */
-  --vio-wash: #EEF1F6;         /* 淡蓝底 */
+:root,
+:root[data-theme='light'] {
+  /* ── 旧令牌 · 图纸白（原值不动）── */
+  --vio-paper: #F9FAF7;
+  --vio-sheet: #FFFFFF;
+  --vio-ink: #1B2330;
+  --vio-ink-2: #4A5568;
+  --vio-ink-3: #8B95A5;
+  --vio-blue-ink: #1D3A8F;
+  --vio-blue-deep: #142B6E;
+  --vio-rule: #C9CFD8;
+  --vio-rule-soft: #E3E7ED;
+  --vio-seal: #C0392B;
+  --vio-wash: #EEF1F6;
   --vio-ok: #1E7B4F;
   --vio-warn: #B06A0C;
   --vio-danger: #B03527;
+
+  /* ── 新令牌 · 图纸白（粗野骨架）── */
+  --vio2-bg: #F6F3EA;          /* 页面底：暖米纸 */
+  --vio2-panel: #FFFFFF;       /* 面板 */
+  --vio2-panel-2: #F1EFE6;     /* 面板加深（表头/输入底） */
+  --vio2-head: #101010;        /* 顶栏底 */
+  --vio2-ink: #101010;
+  --vio2-ink-2: #55503F;
+  --vio2-ink-3: #7A7562;
+  --vio2-bd: #101010;          /* 主边框（3px 粗边） */
+  --vio2-row-line: #101010;    /* 行分隔（2px） */
+  --vio2-shadow: #101010;      /* 硬投影色 */
+  --vio2-grid: transparent;    /* 网格底纹（浅色不用） */
+}
+
+:root[data-theme='dark'] {
+  /* ── 旧令牌 · 深色近似映射（让存量页面整体跟随，非精修）── */
+  --vio-paper: #0B0E14;
+  --vio-sheet: #141926;
+  --vio-ink: #E9EDF5;
+  --vio-ink-2: #98A2B8;
+  --vio-ink-3: #5D6880;
+  --vio-blue-ink: #5B8CFF;
+  --vio-blue-deep: #3D63CC;
+  --vio-rule: #2E3750;
+  --vio-rule-soft: #20283A;
+  --vio-seal: #FF8FAB;
+  --vio-wash: #1A2130;
+  --vio-ok: #3DDC97;
+  --vio-warn: #FFB454;
+  --vio-danger: #FF7A6B;
+
+  /* ── 新令牌 · 深空黑（粗野骨架）── */
+  --vio2-bg: #0B0E14;
+  --vio2-panel: #141926;
+  --vio2-panel-2: #1A2130;
+  --vio2-head: #070A10;
+  --vio2-ink: #E9EDF5;
+  --vio2-ink-2: #98A2B8;
+  --vio2-ink-3: #5D6880;
+  --vio2-bd: #2E3750;
+  --vio2-row-line: #20283A;
+  --vio2-shadow: #04060B;
+  --vio2-grid: rgba(255, 255, 255, 0.024);
+}
+
+/* ── 两主题同值令牌（强调色 / 字体 / 动效，只声明一次）── */
+:root {
+  --vio2-yellow: #FFD02F;      /* 主行动 / 待办高亮 */
+  --vio2-blue: #5B8CFF;        /* 链接 / 进行中（深色态可加光晕） */
+  --vio2-green: #7DE07A;       /* 通过 / 报名中 */
+  --vio2-lilac: #B9AFFF;       /* 次级强调 */
+  --vio2-pink: #FF8FAB;        /* 警示 / 过期 */
+
   --vio-serif: "SimSun", "NSimSun", "宋体", serif;
   --vio-fangsong: "FangSong", "仿宋", "STFangsong", serif;
   --vio-body: "Microsoft YaHei", "Segoe UI Variable Text", sans-serif;
   --vio-mono: "Cascadia Mono", Consolas, monospace;
   --vio-disp-latin: "Bahnschrift", "Segoe UI Variable Display", sans-serif;
+  --vio2-din: "Bahnschrift", "Microsoft YaHei", sans-serif;   /* 粗野标题字体 */
   --vio-ease: cubic-bezier(0.32, 0.72, 0, 1);
 
-  /* Element Plus 变量映射：组件库只做结构，皮走令牌（方案 Step 2 约定） */
+  /* Element Plus 变量映射：组件库只做结构，皮走令牌（引用惰性求值，随主题翻转） */
   --el-color-primary: var(--vio-blue-ink);
   --el-color-success: var(--vio-ok);
   --el-color-warning: var(--vio-warn);
@@ -41,7 +103,11 @@
   --el-text-color-primary: var(--vio-ink);
   --el-text-color-regular: var(--vio-ink-2);
   --el-text-color-secondary: var(--vio-ink-3);
+  --el-fill-color: var(--vio-wash);
   --el-fill-color-light: var(--vio-wash);
+  --el-fill-color-blank: var(--vio-sheet);
+  --el-fill-color-dark: var(--vio-rule-soft);
   --el-bg-color: var(--vio-sheet);
   --el-bg-color-page: var(--vio-paper);
+  --el-mask-color: rgba(11, 14, 20, 0.6);
 }
