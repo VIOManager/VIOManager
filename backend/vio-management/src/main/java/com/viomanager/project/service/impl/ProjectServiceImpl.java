@@ -146,6 +146,15 @@ public class ProjectServiceImpl implements ProjectService {
             //uk_project_name(semester_id, org_id, name, deleted) 撞键：同学期同组织重名
             throw new BizException(ProjectErrorCode.NAME_EXISTS);
         }
+        //建项目即在成员表落 OWNER 行：PR06 列表含角色的锚点、PR08"OWNER 行不可移除"的前提；
+        //组织冗余取用户所属组织（非项目组织，显式跨组织建项目时两者不同）
+        ProjectMember ownerRow = new ProjectMember();
+        ownerRow.setProjectId(project.getId());
+        ownerRow.setMemberId(ownerId);
+        ownerRow.setMemberName(user.getRealName());
+        ownerRow.setMemberOrgId(user.getOrgId());
+        ownerRow.setProjectRole("OWNER");
+        memberMapper.insert(ownerRow);
         return Result.ok(querySupport.toDetail(project));
     }
 

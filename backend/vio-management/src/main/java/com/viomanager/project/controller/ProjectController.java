@@ -4,14 +4,19 @@ import com.viomanager.common.audit.AuditLog;
 import com.viomanager.common.auth.RequireRole;
 import com.viomanager.common.result.PageResult;
 import com.viomanager.common.result.Result;
+import com.viomanager.project.dto.ProjectAdvisorAddDTO;
 import com.viomanager.project.dto.ProjectCreateDTO;
+import com.viomanager.project.dto.ProjectMemberAddDTO;
 import com.viomanager.project.dto.ProjectQueryDTO;
 import com.viomanager.project.dto.ProjectUpdateDTO;
+import com.viomanager.project.service.ProjectMemberService;
 import com.viomanager.project.service.ProjectService;
 import com.viomanager.project.vo.ProjectDetailVO;
+import com.viomanager.project.vo.ProjectMemberVO;
 import com.viomanager.project.vo.ProjectVO;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,6 +39,9 @@ public class ProjectController {
 
     @Resource
     private ProjectService projectService;
+
+    @Resource
+    private ProjectMemberService memberService;
 
     /** PR01 项目列表：数据范围按角色自动；筛选 keyword/status/contestId/semesterId/orgId */
     @GetMapping
@@ -73,5 +81,53 @@ public class ProjectController {
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
         return projectService.delete(id);
+    }
+
+    // ------------------------------------------------------------ 成员与指导教师（PR06–PR10）
+
+    /** PR06 成员列表：含角色与加入时间；项目可见者可看 */
+    @GetMapping("/{id}/members")
+    public Result<List<ProjectMemberVO>> listMembers(@PathVariable("id") Long id) {
+        return memberService.listMembers(id);
+    }
+
+    /** PR07 添加成员：仅所有人；已在项目 7005；不走审批 */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN", "STUDENT"})
+    @AuditLog(bizType = "PROJECT_MEMBER_ADD", label = "添加项目成员",
+            summary = "'项目' + #id + ' 添加成员 ' + #dto.memberId")
+    @PostMapping("/{id}/members")
+    public Result<Void> addMember(@PathVariable("id") Long id,
+                                  @Valid @RequestBody ProjectMemberAddDTO dto) {
+        return memberService.addMember(id, dto);
+    }
+
+    /** PR08 移除成员：仅所有人；OWNER 行不可移除（7002） */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN", "STUDENT"})
+    @AuditLog(bizType = "PROJECT_MEMBER_REMOVE", label = "移除项目成员",
+            summary = "'项目' + #id + ' 移除成员 ' + #memberId")
+    @DeleteMapping("/{id}/members/{memberId}")
+    public Result<Void> removeMember(@PathVariable("id") Long id,
+                                     @PathVariable("memberId") Long memberId) {
+        return memberService.removeMember(id, memberId);
+    }
+
+    /** PR09 添加指导教师：仅所有人；目标须教师类型（7006） */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN", "STUDENT"})
+    @AuditLog(bizType = "PROJECT_ADVISOR_ADD", label = "添加指导教师",
+            summary = "'项目' + #id + ' 添加教师 ' + #dto.memberId")
+    @PostMapping("/{id}/advisors")
+    public Result<Void> addAdvisor(@PathVariable("id") Long id,
+                                   @Valid @RequestBody ProjectAdvisorAddDTO dto) {
+        return memberService.addAdvisor(id, dto);
+    }
+
+    /** PR10 移除指导教师：仅所有人 */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN", "STUDENT"})
+    @AuditLog(bizType = "PROJECT_ADVISOR_REMOVE", label = "移除指导教师",
+            summary = "'项目' + #id + ' 移除教师 ' + #memberId")
+    @DeleteMapping("/{id}/advisors/{memberId}")
+    public Result<Void> removeAdvisor(@PathVariable("id") Long id,
+                                      @PathVariable("memberId") Long memberId) {
+        return memberService.removeAdvisor(id, memberId);
     }
 }
