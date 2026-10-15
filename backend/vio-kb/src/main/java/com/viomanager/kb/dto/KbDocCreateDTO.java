@@ -5,8 +5,9 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * KB12 发布/存草稿请求体。
- * 条件校验在 service：LINK 必填 sourceUrl；isPrompt=1 必填 promptSchema（清单 §5）。
+ * KB12 发布/存草稿请求体（2026-10-14 lzh 拍板简化：条目 = 外部链接或上传文件二选一，
+ * 砍分类与正文——category 落库给默认值、content 列闲置，待正式需求加回）。
+ * 二选一条件校验在 service：LINK 必填 linkUrl；FILE 必填 fileId + fileName。
  */
 @Data
 public class KbDocCreateDTO {
@@ -15,43 +16,27 @@ public class KbDocCreateDTO {
     @Size(max = 300, message = "标题最长 300 字")
     private String title;
 
-    @NotBlank(message = "分类不能为空")
-    @Size(max = 64, message = "分类最长 64 字")
-    private String category;
-
-    /** 是否 AI 提示词：1 是 0 否（缺省 0） */
-    private Integer isPrompt;
-
-    /** 提示词结构模板（JSON 字符串），isPrompt=1 时必填 */
-    private String promptSchema;
-
-    /** 正文 Markdown（MANUAL/AI_SUMMARY 类型） */
-    private String content;
-
     @Size(max = 1000, message = "摘要最长 1000 字")
     private String summary;
 
-    /** 封面文件 ID（先走 /api/files 拿 fileId 再提交） */
-    private Long coverFileId;
-
-    /** 附件文件 ID（单附件，表结构即契约） */
-    private Long attachFileId;
-
-    /** 来源：MANUAL（缺省）/ LINK / AI_SUMMARY */
+    /** 条目形态：LINK 外部链接 / FILE 上传文件（拍板口径，必填） */
+    @NotBlank(message = "sourceType 不能为空（LINK / FILE）")
     private String sourceType;
 
-    /** 外部来源链接，LINK 必填 */
-    private String sourceUrl;
+    /** 外部链接地址，LINK 时必填 */
+    @Size(max = 1000, message = "链接最长 1000 字")
+    private String linkUrl;
 
-    @Size(max = 300, message = "标签最长 300 字")
-    private String tags;
+    /** 文件服务上传返回的 fileId（两段式：先传 /api/files），FILE 时必填 */
+    private Long fileId;
+
+    /** 原始文件名，FILE 时必填（列表展示与下载兜底） */
+    @Size(max = 300, message = "文件名最长 300 字")
+    private String fileName;
 
     /** 目标状态：PUBLISHED（缺省，直接发布）/ DRAFT（存草稿） */
     private String status;
 
     /** 归属组织（缺省取当前登录人 orgId，管理端归属标记） */
     private Long orgId;
-
-    /** AI 总结时使用的模型名（AI_SUMMARY 类型用） */
-    private String aiModel;
 }

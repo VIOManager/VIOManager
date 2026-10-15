@@ -76,18 +76,29 @@ public class KbDocServiceImpl implements KbDocService {
 
     // ==================== 写口 ====================
 
-    /** KB12 发布/存草稿。条件校验按清单 §5：LINK 必填 sourceUrl；isPrompt=1 必填 promptSchema */
+    /** 分类拍板砍掉后的占位默认值（列 NOT NULL；正式需求加回分类时再开入参） */
+    private static final String CATEGORY_DEFAULT = "未分类";
+
+    /** KB12 发布/存草稿。二选一校验（2026-10-14 拍板）：LINK 必填 linkUrl；FILE 必填 fileId+fileName */
     @Override
     public Result<KbDocVO> create(KbDocCreateDTO dto) {
-        //1.条件校验
-        String sourceType = StringUtils.hasText(dto.getSourceType())
-                ? dto.getSourceType() : KbSourceType.MANUAL.name();
-        if (KbSourceType.LINK.name().equals(sourceType) && !StringUtils.hasText(dto.getSourceUrl())) {
-            throw new BizException(CommonErrorCode.PARAM_INVALID, "LINK 类型必填 sourceUrl");
+        //1.形态校验：新建只收 LINK / FILE
+        String sourceType = dto.getSourceType();
+        boolean isLink = KbSourceType.LINK.name().equals(sourceType);
+        boolean isFile = KbSourceType.FILE.name().equals(sourceType);
+        if (!isLink && !isFile) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "sourceType 只能是 LINK 或 FILE");
         }
-        int isPrompt = dto.getIsPrompt() != null && dto.getIsPrompt() == 1 ? 1 : 0;
-        if (isPrompt == 1 && !StringUtils.hasText(dto.getPromptSchema())) {
-            throw new BizException(CommonErrorCode.PARAM_INVALID, "AI 提示词必填 promptSchema");
+        if (isLink && !StringUtils.hasText(dto.getLinkUrl())) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "LINK 条目必填 linkUrl");
+        }
+        if (isFile) {
+            if (dto.getFileId() == null) {
+                throw new BizException(CommonErrorCode.PARAM_INVALID, "FILE 条目必填 fileId");
+            }
+            if (!StringUtils.hasText(dto.getFileName())) {
+                throw new BizException(CommonErrorCode.PARAM_INVALID, "FILE 条目必填 fileName");
+            }
         }
         //2.落库（创建只能直接发布或存草稿；上下架/归档走 KB16）
         String status = StringUtils.hasText(dto.getStatus())
@@ -99,22 +110,20 @@ public class KbDocServiceImpl implements KbDocService {
         CurrentUser user = UserHolder.getUser();
         KbDoc doc = new KbDoc();
         doc.setTitle(dto.getTitle());
-        doc.setCategory(dto.getCategory());
-        doc.setIsPrompt(isPrompt);
-        doc.setPromptSchema(dto.getPromptSchema());
-        doc.setContent(dto.getContent());
+        doc.setCategory(CATEGORY_DEFAULT);
+        doc.setIsPrompt(0);
         doc.setSummary(dto.getSummary());
-        doc.setCoverFileId(dto.getCoverFileId());
-        doc.setAttachFileId(dto.getAttachFileId());
         doc.setSourceType(sourceType);
-        doc.setSourceUrl(dto.getSourceUrl());
-        doc.setTags(dto.getTags());
+        doc.setSourceUrl(isLink ? dto.getLinkUrl() : null);
+        doc.setAttachFileId(isFile ? dto.getFileId() : null);
+        doc.setFileName(isFile ? dto.getFileName() : null);
+        // 发布人姓名取 JWT 快照（独立库无用户表，V2 冗余列）
+        doc.setPublisherName(user.getRealName());
         doc.setStatus(status);
         doc.setTopFlag(0);
         doc.setViewCount(0);
         doc.setCollectCount(0);
         doc.setCommentCount(0);
-        doc.setAiModel(dto.getAiModel());
         // 归属组织缺省取当前登录人组织（管理端归属标记，浏览侧不按此过滤）
         doc.setOrgId(dto.getOrgId() != null ? dto.getOrgId() : user.getOrgId());
         // created_by 基座暂不自动填充（同 FileServiceImpl 口径，手工置）
@@ -126,15 +135,18 @@ public class KbDocServiceImpl implements KbDocService {
         return Result.ok(querySupport.toVO(doc));
     }
 
-    /** KB13 编辑全字段。带 updatedAt 即乐观锁：0 行命中 1007（规范预留码） */
+    /** KB13 编辑（标题/摘要/链接/换文件）。带 updatedAt 即乐观锁：0 行命中 1007（规范预留码） */
     @Override
     public Result<Void> update(Long id, KbDocUpdateDTO dto) {
         KbDoc existing = accessSupport.requireExists(id);
-        //LINK 收紧校验：显式改 LINK 且未给链接、原文档也没有链接 → 拒绝
-        if (KbSourceType.LINK.name().equals(dto.getSourceType())
-                && !StringUtils.hasText(dto.getSourceUrl())
-                && !StringUtils.hasText(existing.getSourceUrl())) {
-            throw new BizException(CommonErrorCode.PARAM_INVALID, "LINK 类型必填 sourceUrl");
+        //LINK 条目不允许清空唯一链接
+        if (dto.getLinkUrl() != null && !StringUtils.hasText(dto.getLinkUrl())
+                && KbSourceType.LINK.name().equals(existing.getSourceType())) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "LINK 条目不能清空 linkUrl");
+        }
+        //换文件必须成对提供 fileId 与 fileName，避免半截数据
+        if ((dto.getFileId() != null) != StringUtils.hasText(dto.getFileName())) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "fileId 与 fileName 必须成对提供");
         }
         //条件更新：WHERE 带旧 updated_at（若提供），SET 只改传入字段
         UpdateWrapper<KbDoc> uw = new UpdateWrapper<>();
@@ -143,18 +155,10 @@ public class KbDocServiceImpl implements KbDocService {
             uw.eq("updated_at", dto.getUpdatedAt());
         }
         uw.set(dto.getTitle() != null, "title", dto.getTitle())
-                .set(dto.getCategory() != null, "category", dto.getCategory())
-                .set(dto.getIsPrompt() != null, "is_prompt", dto.getIsPrompt())
-                .set(dto.getPromptSchema() != null, "prompt_schema", dto.getPromptSchema())
-                .set(dto.getContent() != null, "content", dto.getContent())
                 .set(dto.getSummary() != null, "summary", dto.getSummary())
-                .set(dto.getCoverFileId() != null, "cover_file_id", dto.getCoverFileId())
-                .set(dto.getAttachFileId() != null, "attach_file_id", dto.getAttachFileId())
-                .set(dto.getSourceType() != null, "source_type", dto.getSourceType())
-                .set(dto.getSourceUrl() != null, "source_url", dto.getSourceUrl())
-                .set(dto.getTags() != null, "tags", dto.getTags())
-                .set(dto.getAiModel() != null, "ai_model", dto.getAiModel())
-                .set(dto.getOrgId() != null, "org_id", dto.getOrgId())
+                .set(dto.getLinkUrl() != null, "source_url", dto.getLinkUrl())
+                .set(dto.getFileId() != null, "attach_file_id", dto.getFileId())
+                .set(dto.getFileName() != null, "file_name", dto.getFileName())
                 .set("updated_by", UserHolder.getUser().getUserId());
         int rows = kbDocMapper.update(null, uw);
         if (rows == 0) {

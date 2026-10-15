@@ -105,9 +105,11 @@ public class KbCollectServiceImpl implements KbCollectService {
                     KbCollectVO vo = new KbCollectVO();
                     vo.setDocId(doc.getId());
                     vo.setTitle(doc.getTitle());
-                    vo.setCategory(doc.getCategory());
                     vo.setSummary(doc.getSummary());
                     vo.setSourceType(doc.getSourceType());
+                    vo.setLinkUrl(doc.getSourceUrl());
+                    vo.setFileId(doc.getAttachFileId());
+                    vo.setFileName(doc.getFileName());
                     vo.setCollectedAt(c.getCreatedAt());
                     return vo;
                 })

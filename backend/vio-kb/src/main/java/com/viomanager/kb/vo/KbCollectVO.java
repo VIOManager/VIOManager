@@ -14,11 +14,19 @@ public class KbCollectVO {
 
     private String title;
 
-    private String category;
-
     private String summary;
 
+    /** 条目形态：LINK / FILE */
     private String sourceType;
+
+    /** 外部链接（LINK 时有值） */
+    private String linkUrl;
+
+    /** 附件文件 ID（FILE 时有值） */
+    private Long fileId;
+
+    /** 附件原始文件名（FILE 时有值） */
+    private String fileName;
 
     /** 收藏时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

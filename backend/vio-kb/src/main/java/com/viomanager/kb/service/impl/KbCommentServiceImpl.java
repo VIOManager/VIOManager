@@ -73,7 +73,7 @@ public class KbCommentServiceImpl implements KbCommentService {
 
         //3.组装楼中楼（父级不可见的子回复随分组自然不出现）
         List<KbCommentVO> vos = top.getRecords().stream()
-                .map(c -> toVO(c, me, repliesByParent.getOrDefault(c.getId(), List.of()), me))
+                .map(c -> toVO(c, repliesByParent.getOrDefault(c.getId(), List.of()), me))
                 .toList();
         return Result.ok(PageResult.of(vos, top.getTotal(), p, s));
     }
@@ -150,17 +150,16 @@ public class KbCommentServiceImpl implements KbCommentService {
         return Result.ok();
     }
 
-    /** 评论实体 → VO（含子回复递归一层；本模块楼中楼只有两层） */
-    private KbCommentVO toVO(KbComment c, Long me, List<KbComment> replies, Long currentUserId) {
+    /** 评论实体 → VO（字段对齐前端 KbComment：authorName/mine；含子回复一层，本模块楼中楼只有两层） */
+    private KbCommentVO toVO(KbComment c, List<KbComment> replies, Long currentUserId) {
         KbCommentVO vo = new KbCommentVO();
         vo.setId(c.getId());
-        vo.setMemberId(c.getMemberId());
-        vo.setMemberName(c.getMemberName());
+        vo.setAuthorName(c.getMemberName());
         vo.setContent(c.getContent());
         vo.setCreatedAt(c.getCreatedAt());
         vo.setMine(c.getMemberId() != null && c.getMemberId().equals(currentUserId));
         vo.setChildren(replies.stream()
-                .map(r -> toVO(r, null, List.of(), currentUserId))
+                .map(r -> toVO(r, List.of(), currentUserId))
                 .toList());
         return vo;
     }

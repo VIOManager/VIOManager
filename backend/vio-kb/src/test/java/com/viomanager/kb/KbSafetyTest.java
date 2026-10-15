@@ -19,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
@@ -175,10 +176,11 @@ class KbSafetyTest {
                 .andExpect(jsonPath("$.code").value(0));
     }
 
-    /** KB12 学生发布 1003；管理员带幂等键发布成功且学生可读 */
+    /** KB12 学生发布 1003；管理员带幂等键发布成功且学生可读（新契约：LINK 二选一形态） */
     @Test
     void createRequiresAdmin() throws Exception {
-        String body = "{\"title\":\"" + KbTestSupport.PREFIX + "-新文档\",\"category\":\"其他\",\"content\":\"正文\"}";
+        String body = "{\"title\":\"" + KbTestSupport.PREFIX + "-新文档\",\"sourceType\":\"LINK\","
+                + "\"linkUrl\":\"https://example.com/kb\"}";
         mockMvc.perform(withKey(post("/api/kb/docs"), "test-kb-cr1")
                         .header("Authorization", bearer(studentToken))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -192,6 +194,44 @@ class KbSafetyTest {
         long newId = Long.parseLong(JsonPath.read(resp, "$.data.id"));
         mockMvc.perform(get("/api/kb/docs/{id}", newId).header("Authorization", bearer(studentToken)))
                 .andExpect(jsonPath("$.code").value(0));
+    }
+
+    /** KB12 二选一校验：非法形态 / LINK 缺链接 / FILE 缺 fileId、fileName 均 1001（拍板口径） */
+    @Test
+    void createValidatesBinaryChoice() throws Exception {
+        postCreate(adminToken, "test-kb-v1", "{\"title\":\"" + KbTestSupport.PREFIX + "-形态\","
+                        + "\"sourceType\":\"MANUAL\"}")
+                .andExpect(jsonPath("$.code").value(1001));
+        postCreate(adminToken, "test-kb-v2", "{\"title\":\"" + KbTestSupport.PREFIX + "-缺链\","
+                        + "\"sourceType\":\"LINK\"}")
+                .andExpect(jsonPath("$.code").value(1001));
+        postCreate(adminToken, "test-kb-v3", "{\"title\":\"" + KbTestSupport.PREFIX + "-缺文件\","
+                        + "\"sourceType\":\"FILE\"}")
+                .andExpect(jsonPath("$.code").value(1001));
+        postCreate(adminToken, "test-kb-v4", "{\"title\":\"" + KbTestSupport.PREFIX + "-缺文件名\","
+                        + "\"sourceType\":\"FILE\",\"fileId\":123}")
+                .andExpect(jsonPath("$.code").value(1001));
+    }
+
+    /** KB12 FILE 形态：返回 fileId/fileName/publisherName（JWT realName 快照冗余，V2 列） */
+    @Test
+    void createFileDocReturnsFileFields() throws Exception {
+        String resp = mockMvc.perform(withKey(post("/api/kb/docs"), "test-kb-f1")
+                        .header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"" + KbTestSupport.PREFIX + "-文件条目\",\"sourceType\":\"FILE\","
+                                + "\"fileId\":99001,\"fileName\":\"赛题分析.pdf\"}"))
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.fileId").value("99001"))
+                .andExpect(jsonPath("$.data.fileName").value("赛题分析.pdf"))
+                .andExpect(jsonPath("$.data.publisherName").value("李管理"))
+                .andExpect(jsonPath("$.data.pinned").value(false))
+                .andReturn().getResponse().getContentAsString();
+        long newId = Long.parseLong(JsonPath.read(resp, "$.data.id"));
+        mockMvc.perform(get("/api/kb/docs/{id}", newId).header("Authorization", bearer(studentToken)))
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.favorited").value(false))
+                .andExpect(jsonPath("$.data.fileId").value("99001"));
     }
 
     /** KB13 乐观锁：带过期 updated_at 编辑 → 1007（规范预留码） */
@@ -229,6 +269,13 @@ class KbSafetyTest {
 
     private MockHttpServletRequestBuilder withKey(MockHttpServletRequestBuilder builder, String key) {
         return builder.header("X-Idempotency-Key", key);
+    }
+
+    /** 发布请求统一执行（二选一校验用例共用） */
+    private ResultActions postCreate(String token, String key, String body) throws Exception {
+        return mockMvc.perform(withKey(post("/api/kb/docs"), key)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
     private String bearer(String token) {

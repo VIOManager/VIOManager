@@ -9,17 +9,15 @@ import lombok.Data;
 /**
  * KB08 评论项（时间正序，含楼中楼：顶层评论带 children，子回复折叠在其下）。
  * 父级 HIDDEN/删除时整楼不返回（查询侧折叠，见 service）。
+ * 字段对齐前端 KbComment（authorName/mine）。
  */
 @Data
 public class KbCommentVO {
 
     private Long id;
 
-    /** 评论人 ID（前端判断作者用 mine 即可，不必展示） */
-    private Long memberId;
-
     /** 评论人姓名（发表时快照） */
-    private String memberName;
+    private String authorName;
 
     private String content;
 

@@ -36,10 +36,13 @@ public class KbDoc extends BaseEntity {
     /** 封面文件 ID（弱引用主服务 file_object，无外键） */
     private Long coverFileId;
 
-    /** 附件文件 ID（弱引用主服务 file_object，无外键） */
+    /** 附件文件 ID（弱引用主服务 file_object，无外键；FILE 形态必填） */
     private Long attachFileId;
 
-    /** 来源：MANUAL / LINK / AI_SUMMARY（见 KbSourceType） */
+    /** 附件原始文件名（FILE 形态冗余，V2：免跨服务查文件元数据） */
+    private String fileName;
+
+    /** 来源：LINK / FILE（新建口径，见 KbSourceType；MANUAL/AI_SUMMARY 为历史与扩展值） */
     private String sourceType;
 
     /** 外部来源链接，LINK 类型必填 */
@@ -68,4 +71,7 @@ public class KbDoc extends BaseEntity {
 
     /** 归属组织（管理端归属标记；浏览侧不按此过滤——PUBLISHED 全员可见） */
     private Long orgId;
+
+    /** 发布人姓名（JWT realName 快照，V2：独立库无用户表，冗余免跨服务查询） */
+    private String publisherName;
 }

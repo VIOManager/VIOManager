@@ -28,10 +28,11 @@ import org.springframework.util.StringUtils;
 @Component
 public class KbDocQuerySupport {
 
-    /** 列表/卡片公共列（⚠️ 不含 content） */
+    /** 列表/卡片公共列（⚠️ 不含 content；拍板砍掉的字段（category 等）不选不返） */
     public static final String[] LIST_COLUMNS = {
-            "id", "title", "category", "is_prompt", "summary", "source_type", "source_url",
-            "tags", "top_flag", "view_count", "collect_count", "comment_count", "created_at"};
+            "id", "title", "summary", "source_type", "source_url", "attach_file_id",
+            "file_name", "publisher_name", "top_flag", "view_count", "collect_count",
+            "comment_count", "created_at"};
 
     @Resource
     private KbDocMapper kbDocMapper;
@@ -58,32 +59,16 @@ public class KbDocQuerySupport {
         return kbDocMapper.selectList(qw).stream().map(this::toVO).toList();
     }
 
-    /** KB02 详情：非 PUBLISHED 在门槛处 9002；浏览数原子 +1；isCollected 强一致现查 */
+    /** KB02 详情：非 PUBLISHED 在门槛处 9002；浏览数原子 +1；favorited 强一致现查 */
     public KbDocDetailVO detail(Long id) {
         KbDoc doc = accessSupport.requirePublished(id);
         // 原子自增（同步直更库；100-200 人规模足够，阶段 3 再议 Redis 计数——清单 §6 口径）
         kbDocMapper.increaseViewCount(id);
 
         KbDocDetailVO vo = new KbDocDetailVO();
-        vo.setId(doc.getId());
-        vo.setTitle(doc.getTitle());
-        vo.setCategory(doc.getCategory());
-        vo.setIsPrompt(doc.getIsPrompt());
-        vo.setSummary(doc.getSummary());
-        vo.setSourceType(doc.getSourceType());
-        vo.setSourceUrl(doc.getSourceUrl());
-        vo.setTags(doc.getTags());
-        vo.setTopFlag(doc.getTopFlag());
+        fillCard(vo, doc);
         vo.setViewCount(doc.getViewCount() + 1);
-        vo.setCollectCount(doc.getCollectCount());
-        vo.setCommentCount(doc.getCommentCount());
-        vo.setCreatedAt(doc.getCreatedAt());
-        vo.setContent(doc.getContent());
-        vo.setCoverFileId(doc.getCoverFileId());
-        vo.setAttachFileId(doc.getAttachFileId());
-        vo.setOrgId(doc.getOrgId());
-        vo.setAiModel(doc.getAiModel());
-        vo.setIsCollected(isCollected(id, UserHolder.getUser().getUserId()));
+        vo.setFavorited(isCollected(id, UserHolder.getUser().getUserId()));
         return vo;
     }
 
@@ -171,19 +156,24 @@ public class KbDocQuerySupport {
     /** 实体 → 列表卡片 VO（KB12 创建成功返回复用，public 供 ServiceImpl 调用） */
     public KbDocVO toVO(KbDoc doc) {
         KbDocVO vo = new KbDocVO();
+        fillCard(vo, doc);
+        return vo;
+    }
+
+    /** 卡片公共字段填充（KbDocDetailVO 继承 KbDocVO，列表/详情共用） */
+    private void fillCard(KbDocVO vo, KbDoc doc) {
         vo.setId(doc.getId());
         vo.setTitle(doc.getTitle());
-        vo.setCategory(doc.getCategory());
-        vo.setIsPrompt(doc.getIsPrompt());
         vo.setSummary(doc.getSummary());
         vo.setSourceType(doc.getSourceType());
-        vo.setSourceUrl(doc.getSourceUrl());
-        vo.setTags(doc.getTags());
-        vo.setTopFlag(doc.getTopFlag());
+        vo.setLinkUrl(doc.getSourceUrl());
+        vo.setFileId(doc.getAttachFileId());
+        vo.setFileName(doc.getFileName());
+        vo.setPinned(doc.getTopFlag() != null && doc.getTopFlag() == 1);
         vo.setViewCount(doc.getViewCount());
-        vo.setCollectCount(doc.getCollectCount());
+        vo.setFavoriteCount(doc.getCollectCount());
         vo.setCommentCount(doc.getCommentCount());
+        vo.setPublisherName(doc.getPublisherName());
         vo.setCreatedAt(doc.getCreatedAt());
-        return vo;
     }
 }

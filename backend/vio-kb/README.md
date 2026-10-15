@@ -29,15 +29,20 @@ mvn spring-boot:run -pl vio-kb
 ⚠️ **JWT_SECRET 必须与主服务同值**（同一环境变量）。密钥不一致 = 主服务签发的 token 到这里全部 401。
 token 由主服务登录接口签发，本服务无登录端点。
 
+## 表结构版本
+
+- V1：基线（3 张 kb 表 + 2 张基座表），**禁改**
+- V2：2026-10-14 lzh 拍板条目简化——kb_doc 加 `file_name`/`publisher_name` 两列（冗余快照，免跨服务查询），
+  已同步 `docs/db/initsql.sql`；改表只新增 V3+ 并同步该文件
+
 ## 验证口径
 
 ```bash
-# 登录（主服务 8088）拿 token 后：
-curl -H "Authorization: Bearer <token>" "http://localhost:8091/api/kb/docs?category=Python%20教程"
+# 登录（主服务 8088）拿 token 后（2026-10-14 拍板契约：链接或文件二选一）：
 curl -H "Authorization: Bearer <token>" -H "X-Idempotency-Key: k1" \
      -H "Content-Type: application/json" \
      -X POST http://localhost:8091/api/kb/docs \
-     -d '{"title":"测试","category":"其他"}'
+     -d '{"title":"测试链接","sourceType":"LINK","linkUrl":"https://example.com"}'
 ```
 
 ## 测试
