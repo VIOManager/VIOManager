@@ -72,10 +72,10 @@ public class KbDocQuerySupport {
         return vo;
     }
 
-    /** KB03 推荐位：置顶优先再时间倒序取前 N（默认 5 上限 10），60s 本地缓存 */
+    /** KB03 推荐位：置顶优先再时间倒序取前 N（默认 5 上限 10），Redis 60s 缓存（按条数分键） */
     public List<KbDocVO> recommend(Integer limit) {
         int n = (limit == null || limit < 1) ? 5 : Math.min(limit, 10);
-        return recommendCache.get(() -> {
+        return recommendCache.get(n, () -> {
             QueryWrapper<KbDoc> qw = new QueryWrapper<>();
             qw.select(LIST_COLUMNS)
                     .eq("status", KbDocStatus.PUBLISHED.name())

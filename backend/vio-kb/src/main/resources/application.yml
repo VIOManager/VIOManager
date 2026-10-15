@@ -10,6 +10,15 @@ server:
 spring:
   application:
     name: vio-kb
+  data:
+    redis:
+      # 推荐位缓存（KbRecommendCache，组长 2026-10-15 拍板：缓存落本模块）；不可用时自动降级直查库
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # ⚠️ 命令超时必须短（默认 60s）：Redis 挂掉时命令在等重连而不是立刻报错，
+      # 超时太长会把降级前的第一个请求拖死；1s + 熔断 = 每 30s 窗口最多一次 1s 慢请求
+      timeout: ${REDIS_TIMEOUT:1s}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
   datasource:
     # 独立库 viomanager_kb（与主库同实例不同 schema；库需一次性手工创建，见本模块 README）
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${KB_DATABASE:viomanager_kb}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
