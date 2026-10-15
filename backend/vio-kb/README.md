@@ -139,5 +139,5 @@ mvn -pl vio-kb test
 1. `kb_comment/kb_collect.member_id` 以 JWT userId 落库（独立服务无 member 表）
 2. KB17 部门管理员范围 v1 = 本组织精确匹配（子树待 org 能力跨服务化）
 3. 审计写本库 `audit_log`，AQ01 跨库聚合留待集成阶段
-4. ~~前端 kb.ts 暂定契约需调整~~ → 已本地对齐（docs 路径/幂等头/收藏语义），待 lzh 按正式清单复核提交
+4. ~~前端 kb.ts 暂定契约需调整~~ → 已随本分支提交（docs 路径/幂等头/收藏语义/上传上限），PR 中请 lzh 复核
 5. PR 报备项：父 pom `<module>`、`common.enums` 新增枚举、`initsql.sql` 同步（公共文件）
