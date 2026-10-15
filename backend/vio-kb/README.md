@@ -81,7 +81,8 @@ com.viomanager.kb
 下载      → GET 8088/api/files/{fileId}/download（文件服务鉴权流式回写）
 ```
 
-文件上限与扩展名白名单由主服务 `application.yml` 统一管（200MB；视频 mp4/mov/avi/mkv/webm 已放行）。
+文件上限与扩展名白名单由主服务 `application.yml` 统一管（200MB；视频 mp4/mov/avi/mkv/webm 已放行）；
+下载权限：`KB_FILE` 属公共资源，登录即可下（文件服务矩阵 2026-10-15 补充规则），条目可见性（PUBLISHED）由本服务把关。
 
 ### 6.2 推荐位缓存（KbRecommendCache）
 
