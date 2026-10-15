@@ -47,6 +47,12 @@
             <artifactId>flyway-mysql</artifactId>
         </dependency>
 
+        <!-- Redis：项目管理共享读缓存（方案 §7.6，2026-10-15 模块负责人允许的增量，PR 时报备） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>

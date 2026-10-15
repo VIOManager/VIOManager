@@ -22,6 +22,17 @@ spring:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${MYSQL_DATABASE:viomanager}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD:dev-root-123}
+  data:
+    redis:
+      # 项目管理共享读缓存用（PmQueryCache）；不可用时自动降级直查库，不阻塞业务
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 1s
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -62,3 +73,8 @@ vio:
   approval:
     # 审批单有效期（天）：到期未处理由定时任务转 EXPIRED（方案 §7 待确认项，建议值 7）
     expire-days: 7
+  pm:
+    # 项目管理共享读缓存（方案 §7.6）：只缓存用户无关的共享读；测试里关掉防事务回滚脏缓存
+    cache:
+      enabled: ${PM_CACHE_ENABLED:true}
+      ttl-seconds: 60

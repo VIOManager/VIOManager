@@ -14,6 +14,7 @@ import com.viomanager.project.entity.TeamProjectRef;
 import com.viomanager.project.mapper.ProjectMapper;
 import com.viomanager.project.mapper.TeamProjectRefMapper;
 import com.viomanager.project.service.TeamProjectService;
+import com.viomanager.project.support.MilestoneSyncSupport;
 import com.viomanager.project.support.ProjectQuerySupport;
 import com.viomanager.project.support.ProjectVisibilitySupport;
 import com.viomanager.project.vo.ProjectTeamVO;
@@ -55,6 +56,9 @@ public class TeamProjectServiceImpl implements TeamProjectService {
 
     @Resource
     private ProjectQuerySupport querySupport;
+
+    @Resource
+    private MilestoneSyncSupport syncSupport;
 
     @Resource
     private MemberIdSupport memberIdSupport;
@@ -206,8 +210,8 @@ public class TeamProjectServiceImpl implements TeamProjectService {
             ref.setAttachedBy(operatorId);
             refMapper.insert(ref);
         }
-        //TODO(M4)：挂载回溯——该项目关联比赛下若有未同步的已审核节点，补建对应任务
-        //（MilestoneSyncSupport 交付后在此调用，方案 §9 M3 备注留待 M4 后补测）
+        //挂载回溯：补建该项目在该比赛下缺的已审核节点任务（行锁内存在性检查防重）
+        syncSupport.syncOnAttach(dto.getProjectId(), contestId);
         return Result.ok();
     }
 

@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-@TestPropertySource(properties = "vio.audit.async=false")
+@TestPropertySource(properties = {"vio.audit.async=false", "vio.pm.cache.enabled=false"})
 public abstract class PmTestSupport {
 
     @Autowired
