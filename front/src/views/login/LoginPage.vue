@@ -14,6 +14,8 @@ const user = useUserStore()
 const useMock = import.meta.env.VITE_USE_MOCK === 'true'
 const form = reactive({ loginName: '', password: '' })
 const loading = ref(false)
+/** 密码明文切换（改密弹窗走 el-input show-password 自带小眼睛，登录页原生 input 需自备） */
+const showPwd = ref(false)
 
 async function onSubmit() {
   if (!form.loginName || !form.password || loading.value) return
@@ -58,7 +60,10 @@ async function onSubmit() {
           </label>
           <label class="line-field">
             <span>密码</span>
-            <input v-model="form.password" type="password" placeholder="请输入密码" autocomplete="current-password" />
+            <span class="pw-row">
+              <input v-model="form.password" :type="showPwd ? 'text' : 'password'" placeholder="请输入密码" autocomplete="current-password" />
+              <button type="button" class="pw-toggle" @click="showPwd = !showPwd">{{ showPwd ? '隐藏' : '明文' }}</button>
+            </span>
           </label>
           <button type="submit" class="btn-stamp" :disabled="loading">{{ loading ? '登记中…' : '登记登录' }}</button>
           <p class="note">
@@ -162,6 +167,22 @@ async function onSubmit() {
 }
 .line-field input::placeholder { color: #B9C0CB; }
 .line-field input:focus { outline: none; border-bottom: 2px solid var(--vio-blue-ink); margin-bottom: -1px; }
+.pw-row { display: flex; align-items: flex-end; gap: 8px; }
+.pw-row input { flex: 1; }
+.pw-toggle {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--vio-rule);
+  color: var(--vio-ink-3);
+  font-family: var(--vio-fangsong);
+  font-size: 11px;
+  padding: 2px 9px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  border-radius: 0;
+  transition: all 0.2s var(--vio-ease);
+}
+.pw-toggle:hover { border-color: var(--vio-blue-ink); color: var(--vio-blue-ink); }
 .btn-stamp {
   width: 100%;
   padding: 13px;
