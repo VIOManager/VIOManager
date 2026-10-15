@@ -22,16 +22,23 @@ import org.apache.ibatis.annotations.Update;
 @DataScope(scope = DataScope.Scope.ALL)
 public interface KbDocMapper extends BaseMapper<KbDoc> {
 
+    /** 计数类更新统一自赋值 updated_at：阻止列上 ON UPDATE CURRENT_TIMESTAMP 刷新——
+     *  浏览/收藏/评论不是内容修改，刷了乐观锁版本会让"打开详情→保存"必然 1007。
+     *  置顶/状态流转（下方两方法）是真实内容变更，刻意保留自动刷新。 */
+
     /** 浏览数原子 +1（KB02 详情页同步调用；200 人规模直更库，阶段 3 再议 Redis 计数） */
-    @Update("UPDATE kb_doc SET view_count = view_count + 1 WHERE id = #{id} AND deleted = 0")
+    @Update("UPDATE kb_doc SET view_count = view_count + 1, updated_at = updated_at "
+            + "WHERE id = #{id} AND deleted = 0")
     int increaseViewCount(@Param("id") Long id);
 
     /** 收藏数原子 ±delta（与 kb_collect 增删同事务调用） */
-    @Update("UPDATE kb_doc SET collect_count = collect_count + #{delta} WHERE id = #{id} AND deleted = 0")
+    @Update("UPDATE kb_doc SET collect_count = collect_count + #{delta}, updated_at = updated_at "
+            + "WHERE id = #{id} AND deleted = 0")
     int adjustCollectCount(@Param("id") Long id, @Param("delta") int delta);
 
     /** 评论数原子 ±delta（口径=可见数，发/删/隐藏/恢复随口径调用） */
-    @Update("UPDATE kb_doc SET comment_count = comment_count + #{delta} WHERE id = #{id} AND deleted = 0")
+    @Update("UPDATE kb_doc SET comment_count = comment_count + #{delta}, updated_at = updated_at "
+            + "WHERE id = #{id} AND deleted = 0")
     int adjustCommentCount(@Param("id") Long id, @Param("delta") int delta);
 
     /** 置顶原子翻转（KB15：两个管理员同时点也不会翻乱，单条 SQL 天然串行） */

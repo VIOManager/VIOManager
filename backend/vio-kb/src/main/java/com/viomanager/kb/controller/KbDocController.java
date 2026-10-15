@@ -11,6 +11,7 @@ import com.viomanager.kb.dto.KbDocQueryDTO;
 import com.viomanager.kb.dto.KbDocStatusDTO;
 import com.viomanager.kb.dto.KbDocUpdateDTO;
 import com.viomanager.kb.service.KbDocService;
+import com.viomanager.kb.vo.KbAdminDocVO;
 import com.viomanager.kb.vo.KbDocDetailVO;
 import com.viomanager.kb.vo.KbDocVO;
 import com.viomanager.kb.vo.KbPromptVO;
@@ -114,7 +115,7 @@ public class KbDocController {
     /** KB17 管理视角列表（管理员；含 DRAFT/OFFLINE，部门管理员限本部门） */
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
     @GetMapping("/admin/docs")
-    public Result<PageResult<KbDocVO>> adminList(KbAdminQueryDTO dto) {
+    public Result<PageResult<KbAdminDocVO>> adminList(KbAdminQueryDTO dto) {
         return kbDocService.adminList(dto);
     }
 }

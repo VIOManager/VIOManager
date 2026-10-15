@@ -19,6 +19,7 @@ import com.viomanager.kb.service.KbDocService;
 import com.viomanager.kb.support.KbDocAccessSupport;
 import com.viomanager.kb.support.KbDocQuerySupport;
 import com.viomanager.kb.support.KbRecommendCache;
+import com.viomanager.kb.vo.KbAdminDocVO;
 import com.viomanager.kb.vo.KbDocDetailVO;
 import com.viomanager.kb.vo.KbDocVO;
 import com.viomanager.kb.vo.KbPromptVO;
@@ -70,7 +71,7 @@ public class KbDocServiceImpl implements KbDocService {
     }
 
     @Override
-    public Result<PageResult<KbDocVO>> adminList(KbAdminQueryDTO dto) {
+    public Result<PageResult<KbAdminDocVO>> adminList(KbAdminQueryDTO dto) {
         return Result.ok(querySupport.adminList(dto));
     }
 

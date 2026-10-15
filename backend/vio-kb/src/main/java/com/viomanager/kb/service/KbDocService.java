@@ -5,6 +5,7 @@ import com.viomanager.kb.dto.KbAdminQueryDTO;
 import com.viomanager.kb.dto.KbDocCreateDTO;
 import com.viomanager.kb.dto.KbDocQueryDTO;
 import com.viomanager.kb.dto.KbDocUpdateDTO;
+import com.viomanager.kb.vo.KbAdminDocVO;
 import com.viomanager.kb.vo.KbDocDetailVO;
 import com.viomanager.kb.vo.KbDocVO;
 import com.viomanager.kb.vo.KbPromptVO;
@@ -29,7 +30,7 @@ public interface KbDocService {
     Result<List<KbPromptVO>> prompts();
 
     /** KB17 管理视角列表（含 DRAFT/OFFLINE；部门管理员限本部门，v1 精确匹配） */
-    Result<PageResult<KbDocVO>> adminList(KbAdminQueryDTO dto);
+    Result<PageResult<KbAdminDocVO>> adminList(KbAdminQueryDTO dto);
 
     /** KB12 发布/存草稿：LINK 必填 sourceUrl，isPrompt=1 必填 promptSchema */
     Result<KbDocVO> create(KbDocCreateDTO dto);

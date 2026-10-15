@@ -12,6 +12,7 @@ import com.viomanager.kb.entity.KbCollect;
 import com.viomanager.kb.entity.KbDoc;
 import com.viomanager.kb.mapper.KbCollectMapper;
 import com.viomanager.kb.mapper.KbDocMapper;
+import com.viomanager.kb.vo.KbAdminDocVO;
 import com.viomanager.kb.vo.KbDocDetailVO;
 import com.viomanager.kb.vo.KbDocVO;
 import com.viomanager.kb.vo.KbPromptVO;
@@ -32,7 +33,14 @@ public class KbDocQuerySupport {
     public static final String[] LIST_COLUMNS = {
             "id", "title", "summary", "source_type", "source_url", "attach_file_id",
             "file_name", "publisher_name", "top_flag", "view_count", "collect_count",
-            "comment_count", "created_at"};
+            "comment_count", "created_at", "updated_at"};
+
+    /** KB17 管理列表列：公共列 + status（状态是管理概念，浏览侧不返回） */
+    public static final String[] ADMIN_COLUMNS;
+    static {
+        ADMIN_COLUMNS = java.util.Arrays.copyOf(LIST_COLUMNS, LIST_COLUMNS.length + 1);
+        ADMIN_COLUMNS[LIST_COLUMNS.length] = "status";
+    }
 
     @Resource
     private KbDocMapper kbDocMapper;
@@ -109,13 +117,13 @@ public class KbDocQuerySupport {
      * "本子树"与"org_id 为空的全局文档仅超管可管"是清单待确认项，待 org 能力可跨服务获取后升级
      * （独立库无 sys_org，不能走拦截器 ORG 注入，见 KbDocMapper 注释）。
      */
-    public PageResult<KbDocVO> adminList(KbAdminQueryDTO dto) {
+    public PageResult<KbAdminDocVO> adminList(KbAdminQueryDTO dto) {
         CurrentUser user = UserHolder.getUser();
         int page = dto.getPage() == null || dto.getPage() < 1 ? 1 : dto.getPage();
         int size = dto.getSize() == null || dto.getSize() < 1 ? 20 : Math.min(dto.getSize(), 100);
 
         QueryWrapper<KbDoc> qw = new QueryWrapper<>();
-        qw.select(LIST_COLUMNS)
+        qw.select(ADMIN_COLUMNS)
                 .eq(StringUtils.hasText(dto.getStatus()), "status", dto.getStatus())
                 .eq(StringUtils.hasText(dto.getCategory()), "category", dto.getCategory())
                 .apply(StringUtils.hasText(dto.getKeyword()),
@@ -127,7 +135,12 @@ public class KbDocQuerySupport {
         }
 
         Page<KbDoc> result = kbDocMapper.selectPage(new Page<>(page, size), qw);
-        List<KbDocVO> vos = result.getRecords().stream().map(this::toVO).toList();
+        List<KbAdminDocVO> vos = result.getRecords().stream().map(doc -> {
+            KbAdminDocVO vo = new KbAdminDocVO();
+            fillCard(vo, doc);
+            vo.setStatus(doc.getStatus());
+            return vo;
+        }).toList();
         return PageResult.of(vos, result.getTotal(), page, size);
     }
 
@@ -175,5 +188,6 @@ public class KbDocQuerySupport {
         vo.setCommentCount(doc.getCommentCount());
         vo.setPublisherName(doc.getPublisherName());
         vo.setCreatedAt(doc.getCreatedAt());
+        vo.setUpdatedAt(doc.getUpdatedAt());
     }
 }

@@ -245,6 +245,23 @@ class KbSafetyTest {
                 .andExpect(jsonPath("$.code").value(1007));
     }
 
+    /** KB02→KB13 闭环：详情返回的 updatedAt 可直接用于编辑。浏览量自增不得刷新乐观锁版本
+     *  （先等 1.1s 跨秒——若版本被浏览自增刷新，编辑必 1007，秒级精度也判得出来） */
+    @Test
+    void updatedAtFromDetailEnablesOptimisticLock() throws Exception {
+        long docId = support.insertDoc(KbTestSupport.PREFIX + "-锁闭环", "PUBLISHED", ORG_A);
+        Thread.sleep(1100);
+        String detail = mockMvc.perform(get("/api/kb/docs/{id}", docId)
+                        .header("Authorization", bearer(adminToken)))
+                .andReturn().getResponse().getContentAsString();
+        String updatedAt = JsonPath.read(detail, "$.data.updatedAt");
+        String body = "{\"summary\":\"闭环编辑\",\"updatedAt\":\"" + updatedAt + "\"}";
+        mockMvc.perform(put("/api/kb/docs/{id}", docId)
+                        .header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(jsonPath("$.code").value(0));
+    }
+
     /** KB17 部门管理员范围：只见本组织文档（v1 精确匹配口径） */
     @Test
     void deptAdminSeesOnlyOwnOrg() throws Exception {
@@ -254,6 +271,24 @@ class KbSafetyTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.list.length()").value(1))
                 .andExpect(jsonPath("$.data.list[0].title").value(KbTestSupport.PREFIX + "-本部门"));
+    }
+
+    /** 出参闭环：管理列表带 status 徽标；详情带 updatedAt（KB13 乐观锁数据源）且不含 status */
+    @Test
+    void adminListCarriesStatusAndDetailCarriesUpdatedAt() throws Exception {
+        support.insertDoc(KbTestSupport.PREFIX + "-草稿z", "DRAFT", ORG_A);
+        long publishedId = support.insertDoc(KbTestSupport.PREFIX + "-发布z", "PUBLISHED", ORG_A);
+        //管理列表按 DRAFT 筛：条目带 status 与 updatedAt
+        mockMvc.perform(get("/api/kb/admin/docs?status=DRAFT").header("Authorization", bearer(adminToken)))
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.list.length()").value(1))
+                .andExpect(jsonPath("$.data.list[0].status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.list[0].updatedAt").isNotEmpty());
+        //详情返回 updatedAt 供编辑回传；浏览侧出参刻意无 status（状态是管理概念）
+        mockMvc.perform(get("/api/kb/docs/{id}", publishedId).header("Authorization", bearer(adminToken)))
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.updatedAt").isNotEmpty())
+                .andExpect(jsonPath("$.data.status").doesNotExist());
     }
 
     /** KB01 学生浏览正常返回（@DataScope(ALL) 生效——漏声明会被默认拒绝，防退化） */

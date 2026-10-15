@@ -45,4 +45,8 @@ public class KbDocVO {
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
+
+    /** 最后更新时间（KB13 编辑回传此值启用乐观锁，冲突 1007） */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime updatedAt;
 }

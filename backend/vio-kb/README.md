@@ -3,7 +3,7 @@
 > 独立 Spring Boot 服务：17 个接口（KB01–KB17）、3 张业务表 + 2 张基座表、9xxx 错误码段。
 > 方案：`.agentdocs/plans/2026-10-14/知识库微服务-开发方案.md`；契约：lzh 2026-10-14 拍板简化
 > （`docs/api/知识库-接口清单.md` 为简化前旧版，字段差异见 §2，更新走报备流程）。
-> 2026-10-15 全链路实测通过：14/14 测试绿，发布/收藏/评论/下载/缓存/权限矩阵逐项验证。
+> 2026-10-15 全链路实测通过：16/16 测试绿，发布/收藏/评论/下载/缓存/权限矩阵逐项验证。
 
 ## 1. 工程定位
 
@@ -41,7 +41,7 @@ com.viomanager.kb
 | 编号 | 接口 | 角色 | 附加约束 |
 |------|------|------|----------|
 | KB01 | GET /docs | 登录 | 筛选 keyword(FULLTEXT ngram)/sourceType/分页；仅 PUBLISHED；置顶优先再时间倒序 |
-| KB02 | GET /docs/{id} | 登录 | 浏览数同步 +1；返回 `favorited`；非 PUBLISHED → 9002 |
+| KB02 | GET /docs/{id} | 登录 | 浏览数同步 +1（不刷新乐观锁版本）；返回 `favorited` / `updatedAt`（KB13 回传启用乐观锁）；非 PUBLISHED → 9002 |
 | KB03 | GET /docs/recommend?limit= | 登录 | 置顶 + 最新 N 条（默认 5 上限 10）；走 Redis 缓存 |
 | KB04 | GET /prompts | 登录 | AI 提示词列表（is_prompt=1 遗留数据源，新契约不再产生） |
 | KB05 | POST /docs/{id}/collect | 登录 | 幂等键；重复 → 9001 |
@@ -56,7 +56,7 @@ com.viomanager.kb
 | KB14 | DELETE /docs/{id} | ADMIN | 审计；逻辑删除，评论收藏不级联清 |
 | KB15 | PUT /docs/{id}/top | ADMIN | 审计；原子翻转，重复点击效果稳定 |
 | KB16 | PUT /docs/{id}/status | ADMIN | 审计；DRAFT/PUBLISHED/OFFLINE 条件更新防并发跳档 |
-| KB17 | GET /admin/docs | ADMIN | 管理视角（含 DRAFT/OFFLINE）；部门管理员限本部门 |
+| KB17 | GET /admin/docs | ADMIN | 管理视角（含 DRAFT/OFFLINE），出参带 `status` 徽标；部门管理员限本部门 |
 | — | GET /api/health | 匿名 | 健康检查 |
 
 写接口（KB05/09/12）需带 `X-Idempotency-Key` 请求头（全站规范 §6，缺失 → 1001）。
@@ -93,7 +93,8 @@ com.viomanager.kb
 
 ### 6.3 乐观锁 / 幂等 / 审计
 
-- 乐观锁：更新带 `updatedAt`（@JsonFormat）比对，冲突 → 1007
+- 乐观锁：更新带 `updatedAt`（详情/列表出参已含，前端透传即可启用）比对，冲突 → 1007；
+  浏览/收藏/评论计数更新**刻意不刷新** `updated_at`（计数非内容修改，否则"打开详情→保存"必 1007）
 - 幂等：写接口 `@Idempotent`，写本库 idempotent_record
 - 审计：管理写操作 `@AuditLog(bizType="KB")`，写本库 audit_log
 
@@ -122,7 +123,7 @@ mvn install && java -jar vio-kb/target/vio-kb-0.1.0-SNAPSHOT.jar
 ⚠️ **JWT_SECRET 必须与主服务同值**（同一环境变量）。密钥不一致 = 主服务签发的 token 到这里全部 401。
 token 由主服务登录接口签发，本服务无登录端点。前端联调走 Vite 代理 `/api/kb → 8091`（其余 `/api → 8088`）。
 
-## 8. 测试（KbSafetyTest，14 例）
+## 8. 测试（KbSafetyTest，16 例）
 
 覆盖：匿名/越权/资源不存在/二选一校验/FILE 字段回显/乐观锁/收藏防重/隐藏评论计数等安全口径；
 夹具用直接 SQL 插数，不依赖演示数据，仅依赖 MySQL。
