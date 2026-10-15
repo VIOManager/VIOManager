@@ -82,7 +82,8 @@ com.viomanager.kb
 ```
 
 文件上限与扩展名白名单由主服务 `application.yml` 统一管（200MB；视频 mp4/mov/avi/mkv/webm 已放行）；
-下载权限：`KB_FILE` 属公共资源，登录即可下（文件服务矩阵 2026-10-15 补充规则），条目可见性（PUBLISHED）由本服务把关。
+下载权限：`KB_FILE` 属公共资源，登录即可下（文件服务矩阵 2026-10-15 补充规则），条目可见性（PUBLISHED）由本服务把关；
+下载链路稳定性：主服务审计参数已脱敏（ParamsJsonUtil，e9f3777），response 不再被 Jackson 序列化污染，2026-10-15 起全角色实测 200。
 
 ### 6.2 推荐位缓存（KbRecommendCache）
 
