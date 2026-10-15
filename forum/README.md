@@ -15,6 +15,16 @@ cp .env.example .env.development
 npm run dev   # http://localhost:5175
 ```
 
+## 容器化运行（可选，不需要装 Node）
+
+只想看效果/给别人演示时用；论坛后端尚未实现，容器默认烘焙演示数据（`USE_MOCK=true`），
+不依赖后端即可完整浏览，后端就绪后 compose 里改 `false` 重建切真实接口：
+
+```bash
+docker compose up -d --build    # http://localhost:8092  # 8091 被 vio-kb 微服务占用
+docker compose down             # 收场
+```
+
 ## 与主站的关系
 
 - **JWT 共享**：登录态读主站同一 localStorage 键 `vio_token`，论坛不设登录页；未登录进 /gate 引导回主站（VITE_MAIN_SITE_URL）
