@@ -41,9 +41,11 @@ public class ClassMappingServiceImpl implements ClassMappingService {
     @Override
     public List<ClassMappingVO> list(Long semesterId, Boolean confirmed) {
         semesterSupport.requireSemester(semesterId);
+        //先物化标志位：wrapper 的三参 eq 会无条件求值第三参，Boolean 拆箱在 confirmed=null 时 NPE
+        Integer confirmedFlag = confirmed == null ? null : (confirmed ? 1 : 0);
         List<ClassMapping> rows = classMappingMapper.selectList(new LambdaQueryWrapper<ClassMapping>()
                 .eq(ClassMapping::getSemesterId, semesterId)
-                .eq(confirmed != null, ClassMapping::getConfirmed, confirmed ? 1 : 0)
+                .eq(confirmedFlag != null, ClassMapping::getConfirmed, confirmedFlag)
                 .orderByAsc(ClassMapping::getClassKey));
         List<ClassMappingVO> result = new ArrayList<>();
         for (ClassMapping row : rows) {

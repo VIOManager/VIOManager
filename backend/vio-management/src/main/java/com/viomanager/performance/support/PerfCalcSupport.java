@@ -152,6 +152,7 @@ public class PerfCalcSupport {
             summary.setBestWeekNo(null);
         }
         summary.setActivityTags(toTagsJson(tags));
+        summary.setLastCalcAt(java.time.LocalDateTime.now());
         if (summary.getId() == null) {
             summaryMapper.insert(summary);
         } else {
