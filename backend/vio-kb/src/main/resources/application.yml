@@ -1,0 +1,53 @@
+# 知识库微服务配置：默认值为本机开发口径（原生 MySQL 3306 / root），其他环境（如 compose 基础设施）用环境变量覆盖；
+# 生产配置不得写死在文件里（PRD §5）。
+server:
+  port: ${KB_SERVER_PORT:8091}   # 网关按 /api/kb/** 转发到本端口；无网关直跑亦可
+  compression:
+    enabled: true   # gzip（PRD §5）
+    mime-types: application/json,text/html,text/css,application/javascript
+    min-response-size: 1KB
+
+spring:
+  application:
+    name: vio-kb
+  data:
+    redis:
+      # 推荐位缓存（KbRecommendCache，组长 2026-10-15 拍板：缓存落本模块）；不可用时自动降级直查库
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # ⚠️ 命令超时必须短（默认 60s）：Redis 挂掉时命令在等重连而不是立刻报错，
+      # 超时太长会把降级前的第一个请求拖死；1s + 熔断 = 每 30s 窗口最多一次 1s 慢请求
+      timeout: ${REDIS_TIMEOUT:1s}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
+  datasource:
+    # 独立库 viomanager_kb（与主库同实例不同 schema；库需一次性手工创建，见本模块 README）
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${KB_DATABASE:viomanager_kb}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # ⚠️ V1 是本服务基线（3 张 kb 表 + 2 张基座表），禁改；改表只新增 V2+ 并同步 docs/db/initsql.sql
+
+app:
+  version: @project.version@
+
+logging:
+  # 链路追踪：TraceIdFilter 写入 MDC，日志带服务名+traceId，跨服务排障凭同一 traceId 串联
+  pattern:
+    level: "%5p [${spring.application.name:-},%X{traceId:-}]"
+
+vio:
+  jwt:
+    # ⚠️ 必须与主服务同值（同一环境变量）：密钥不一致 = 主服务签发的 token 到这里全部 401
+    secret: ${JWT_SECRET:viomanager-local-dev-secret-key-32bytes-minimum}
+    expire-hours: 2
+  auth:
+    # 本服务无登录接口，token 由主服务签发；免认证路径只有健康检查
+    skip-paths: /api/health
+  idempotent:
+    expire-hours: 24
+  audit:
+    # 审计异步写本库 audit_log（表在 V1 基线里）；测试里用同步模式断言
+    enabled: true
+    async: true

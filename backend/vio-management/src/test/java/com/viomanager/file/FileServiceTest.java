@@ -194,12 +194,30 @@ class FileServiceTest {
                 .andExpect(jsonPath("$.code").value(1004));
     }
 
+    @Test
+    void kbFileDownloadableByAnyLoggedInUser() throws Exception {
+        //知识库附件（KB_FILE）随条目全员可见：部门管理员上传，外部门无归属关系的学生也能下载
+        String body = upload("file-key-kb", "知识库.pdf", PDF_CONTENT, deptAToken, "KB_FILE");
+        assertEquals(0, (int) JsonPath.read(body, "$.code"));
+        long fileId = Long.parseLong(JsonPath.read(body, "$.data.fileId"));
+        MvcResult downloadResult = mockMvc.perform(get("/api/files/" + fileId + "/download")
+                        .header("Authorization", "Bearer " + studentBToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertArrayEquals(PDF_CONTENT, downloadResult.getResponse().getContentAsByteArray());
+    }
+
     /** 打上传接口：multipart + token + 幂等键，返回响应体字符串 */
     private String upload(String idemKey, String filename, byte[] content, String token) throws Exception {
+        return upload(idemKey, filename, content, token, "MATERIAL");
+    }
+
+    /** 打上传接口：bizType 可指定（KB_FILE 公共资源等场景） */
+    private String upload(String idemKey, String filename, byte[] content, String token, String bizType) throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", filename, "application/pdf", content);
         MockHttpServletRequestBuilder request = multipart("/api/files")
                 .file(file)
-                .param("bizType", "MATERIAL")
+                .param("bizType", bizType)
                 .header("Authorization", "Bearer " + token)
                 .header("X-Idempotency-Key", idemKey);
         MvcResult result = mockMvc.perform(request)
