@@ -1,43 +1,86 @@
 /**
- * 论坛站设计令牌：V2EX 范式（2026-10-09 lzh 拍板，论坛独立换皮）
- * 依据：《论坛V2EX风格重设计-优化方案》§4；视觉基准样张 .agentdocs/design-preview/forum-v2ex/
- * ⚠️ 冲突：本令牌仅服务 forum/ 论坛站；与主站 front/ 的 tokens.css 同名但互不相干，
- *    图纸档案令牌禁止回潮论坛站，品牌蓝已全站退出
+ * 论坛站设计令牌：双主题「图纸白 / 深空黑」（2026-10-15 lzh 定稿）
+ * 依据：《主站视觉重设计-双主题-优化方案》§2 + 论坛样张 .agentdocs/design-preview/2026-10-15-forum-redesign/
+ * 说明：
+ * - 令牌名与主站完全一致（--vio2-* 前缀），两站同一词表
+ * - 主题开关 html[data-theme]，由 index.html 防闪烁脚本与 stores/theme.ts 共同维护
+ * - Element Plus 不接官方暗色包：--el-* 引用 --vio2-* 惰性求值，随主题翻转
+ * ⚠️ 冲突：本文件 2026-10-16 起整体替换旧 V2EX 令牌（--bg/--box/--ink 等旧名全部退场，
+ *    整站一次性换皮，无新旧并存期）
  */
+:root,
+:root[data-theme='light'] {
+  /* ── 图纸白（浅）── */
+  --vio2-bg: #F6F3EA;          /* 页面底：暖米纸 */
+  --vio2-panel: #FFFFFF;       /* 面板 */
+  --vio2-panel-2: #F1EFE6;     /* 面板加深（盒内次级底、引用块） */
+  --vio2-head: #101010;        /* 顶栏底（恒黑条） */
+  --vio2-ink: #101010;         /* 主文字 */
+  --vio2-ink-2: #55503F;       /* 次文字 */
+  --vio2-ink-3: #7A7562;       /* 弱文字 */
+  --vio2-bd: #101010;          /* 主边框（3px 粗边） */
+  --vio2-row-line: #101010;    /* 行分隔（2px） */
+  --vio2-shadow: #101010;      /* 硬投影色 */
+  --vio2-on-ac: #101010;       /* 强调色块上的文字 */
+  --vio2-green: #7DE07A;       /* 通过 / 排名（浅色档） */
+  --vio2-bar-shadow: rgba(255, 255, 255, 0.25);  /* 黑条上白色硬投影 */
+  --vio2-mask: rgba(16, 16, 16, 0.5);  /* 弹窗遮罩（浅色档） */
+}
+
+:root[data-theme='dark'] {
+  /* ── 深空黑（深）── */
+  --vio2-bg: #0B0E14;
+  --vio2-panel: #141926;
+  --vio2-panel-2: #1A2130;
+  --vio2-head: #070A10;
+  --vio2-ink: #E9EDF5;
+  --vio2-ink-2: #98A2B8;
+  --vio2-ink-3: #5D6880;
+  --vio2-bd: #2E3750;
+  --vio2-row-line: #20283A;
+  --vio2-shadow: #04060B;
+  --vio2-on-ac: #0B0E14;
+  --vio2-green: #3DDC97;       /* 深色档调亮 */
+  --vio2-bar-shadow: #04060B;
+  --vio2-mask: rgba(4, 6, 11, 0.72);  /* 弹窗遮罩（深色档） */
+}
+
+/* ── 两主题同值令牌（强调色 / 字栈 / 边框规格 / 投影规格）── */
 :root {
-  /* 灰阶底色与盒子 */
-  --bg: #E2E2E2;           /* 页面灰底 */
-  --box: #FFFFFF;          /* 内容白盒 */
-  --box-soft: #FAFAFA;     /* 盒内次级底（回复盒头、附件条） */
+  --vio2-yellow: #FFD02F;      /* 主行动 / 热榜 */
+  --vio2-blue: #5B8CFF;        /* 链接 / 作者名（深色态可加光晕） */
+  --vio2-lilac: #B9AFFF;       /* 次级强调（贴纸 / 订阅态） */
+  --vio2-pink: #FF8FAB;        /* 置顶 / 警示 / 已收藏 */
+  --vio2-din: "Bahnschrift", "Microsoft YaHei", sans-serif;
+  --vio2-mono: "Cascadia Mono", Consolas, monospace;
 
-  /* 文字四阶 */
-  --ink: #333333;          /* 标题 */
-  --body: #555555;         /* 正文 */
-  --fade: #999999;         /* 弱化字 */
-  --meta: #778087;         /* 链接与作者灰蓝（V2EX 标志性灰蓝） */
+  /* 粗野规格：主边 3px、行分隔 2px；强调块与头像用更深的边（== 投影色） */
+  --vio2-bd-main: 3px solid var(--vio2-bd);
+  --vio2-bd-row: 2px solid var(--vio2-bd);
+  --vio2-bd-acc: 3px solid var(--vio2-shadow);
+  --vio2-hard: 8px 8px 0 var(--vio2-shadow);
+  --vio2-hard-s: 5px 5px 0 var(--vio2-shadow);
+  --vio2-hard-xs: 3px 3px 0 var(--vio2-shadow);
 
-  /* 分隔线与激活态 */
-  --line: #E2E2E2;         /* 盒边框分隔 */
-  --line-soft: #F0F0F0;    /* 列表细分隔 */
-  --tab-dark: #34393F;     /* 激活 tab / 选中态（炭黑，非品牌蓝） */
-  --pill: #AAB0C6;         /* 回复数/收藏数胶囊底 */
-
-  /* 字栈照抄 V2EX；列表标题 400 常规字重 + 1.3 行高（v1/v2 用 500 字重发闷被批，勿改） */
-  --font: "Helvetica Neue", "Luxi Sans", "DejaVu Sans", Tahoma, "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-
-  /* 圆角与阴影：盒 3px、头像 4px、胶囊全圆角；全站只允许这一种阴影 */
-  --radius-box: 3px;
-  --radius-ava: 4px;
-  --shadow-box: 0 2px 3px rgba(0, 0, 0, 0.06);
-
-  /* Element Plus 中性化：论坛页面基本不用 El 组件，万一用到不许冒品牌蓝 */
-  --el-color-primary: var(--tab-dark);
-  --el-border-radius-base: var(--radius-box);
-  --el-font-family: var(--font);
-  --el-text-color-primary: var(--ink);
-  --el-text-color-regular: var(--body);
-  --el-bg-color: var(--box);
-  --el-bg-color-page: var(--bg);
-  --el-border-color: var(--line);
-  --el-border-color-light: var(--line-soft);
+  /* Element Plus 变量映射（ElMessage/ElMessageBox 随主题翻转） */
+  --el-color-primary: var(--vio2-blue);
+  --el-color-success: #3DDC97;
+  --el-color-warning: var(--vio2-yellow);
+  --el-color-danger: var(--vio2-pink);
+  --el-color-error: var(--vio2-pink);
+  --el-border-radius-base: 0;
+  --el-border-radius-small: 0;
+  --el-font-family: var(--vio2-din);
+  --el-border-color: var(--vio2-bd);
+  --el-border-color-light: var(--vio2-row-line);
+  --el-border-color-lighter: var(--vio2-row-line);
+  --el-text-color-primary: var(--vio2-ink);
+  --el-text-color-regular: var(--vio2-ink-2);
+  --el-text-color-secondary: var(--vio2-ink-3);
+  --el-fill-color: var(--vio2-panel-2);
+  --el-fill-color-light: var(--vio2-panel-2);
+  --el-fill-color-blank: var(--vio2-panel);
+  --el-bg-color: var(--vio2-panel);
+  --el-bg-color-page: var(--vio2-bg);
+  --el-mask-color: rgba(11, 14, 20, 0.6);
 }

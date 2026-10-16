@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 帖子详情：面包屑 + 主楼（左 73px 大头像）+ 回复楼层 + 回复框沉底 + 右栏
- * 视觉基准：.agentdocs/design-preview/forum-v2ex/topic.html（v3 样张，lzh 已过目）
+ * 帖子详情：mono 面包屑 + 主楼（左 73px 方头像）+ 回复楼层 + 回复框沉底 + 右栏
+ * 视觉基准：.agentdocs/design-preview/2026-10-15-forum-redesign/topic.html（新粗野双主题，lzh 已拍板）
  * 数据：F04 详情（浏览计数服务端 +1）、F05 楼层、F02 本版热议
  * 写操作：F07 回帖（幂等键防重）、F08/F10 点赞、F09 收藏（后三者为状态型天然幂等）
  * TODO(联调-论坛清单)：以上路径为前端预设；附件下载依赖文件服务方案，点击仅提示
@@ -159,39 +159,41 @@ function attachTip() {
 
 <template>
   <div>
-    <div v-if="detail" class="crumb"><router-link to="/">首页</router-link> › <a href="#" @click.prevent>{{ boardName(detail.board) }}</a> › 主题</div>
+    <div v-if="detail" class="crumb2"><router-link to="/">首页</router-link> › <a href="#" @click.prevent>{{ boardName(detail.board) }}</a> › 主题 #{{ detail.id }}</div>
     <div class="grid">
       <div>
-        <!-- 主楼：V2EX 结构 = 左 73px 大头像 + 标题/meta -->
+        <!-- 主楼：左 73px 方头像 + 标题/meta -->
         <div v-if="detail" class="box post">
-          <div class="p-head">
-            <img class="pava" :src="avatarOf(detail.author, 73)" :alt="detail.author">
-            <div class="ph-main">
-              <h1><span v-if="detail.pinned" class="pin">置顶</span>{{ detail.title }}</h1>
-              <div class="p-meta"><b>{{ detail.author }}</b> · <span class="node">{{ boardName(detail.board) }}</span> · {{ detail.publishAt }} · 阅读 {{ detail.viewCount }}</div>
+          <div class="in">
+            <div class="p-top">
+              <img class="pava" :src="avatarOf(detail.author, 73)" :alt="detail.author">
+              <div class="ph-main">
+                <h1><span v-if="detail.pinned" class="pin">置顶</span>{{ detail.title }}</h1>
+                <div class="p-meta"><b>{{ detail.author }}</b> · <span class="node">{{ boardName(detail.board) }}</span> · {{ detail.publishAt }} · 阅读 {{ detail.viewCount }}</div>
+              </div>
             </div>
-          </div>
-          <div class="p-body">
-            <p v-for="(p, i) in detail.body" :key="i">{{ p }}</p>
-          </div>
-          <div v-if="detail.attach.length > 0" class="attach">
-            <div v-for="a in detail.attach" :key="a.name">
-              <a href="#" @click.prevent="attachTip">{{ a.name }}</a>
-              <span class="gray">{{ a.size }} · 下载 {{ a.downloads }}</span>
+            <div class="p-body">
+              <p v-for="(p, i) in detail.body" :key="i">{{ p }}</p>
             </div>
-          </div>
-          <div class="ops">
-            <button type="button" :class="{ on: detail.liked }" @click="toggleLike">{{ detail.liked ? '👍 已点赞' : '👍 点赞' }} {{ detail.likeCount }}</button>
-            <button type="button" :class="{ on: detail.collected }" @click="toggleCollect">{{ detail.collected ? '⭐ 已收藏' : '⭐ 收藏' }}</button>
-            <button type="button" @click="scrollToReply">回复</button>
+            <div v-if="detail.attach.length > 0" class="attach">
+              <div v-for="a in detail.attach" :key="a.name">
+                <a href="#" @click.prevent="attachTip">{{ a.name }}</a>
+                <span class="gray">{{ a.size }} · 下载 {{ a.downloads }}</span>
+              </div>
+            </div>
+            <div class="ops">
+              <button type="button" class="chipbtn" :class="{ on: detail.liked }" @click="toggleLike">{{ detail.liked ? '👍 已点赞' : '👍 点赞' }} {{ detail.likeCount }}</button>
+              <button type="button" class="chipbtn" :class="{ on: detail.collected }" @click="toggleCollect">{{ detail.collected ? '⭐ 已收藏' : '⭐ 收藏' }}</button>
+              <button type="button" class="chipbtn" @click="scrollToReply">↩ 回复</button>
+            </div>
           </div>
         </div>
 
-        <!-- 回复盒：灰底头行 + 楼层 -->
+        <!-- 回复盒：黑条头行 + 楼层（楼层样式走 skin.css） -->
         <div class="box replies">
-          <div class="r-head">{{ floors.length }} 条回复 · 按时间正序 <a href="#reply">添加新回复 ↓</a></div>
+          <div class="box-h"><b>{{ floors.length }} 条回复 · 按时间正序</b><span><a href="#reply" class="h-link">添加新回复 ↓</a></span></div>
           <div v-for="f in floors" :key="f.id" class="floor">
-            <img class="fava" :src="avatarOf(f.author, 48)" :alt="f.author">
+            <img class="ava" :src="avatarOf(f.author, 48)" :alt="f.author">
             <div class="f-main">
               <div class="f-meta"><b>{{ f.author }}</b>{{ f.authorGroup }} · {{ f.publishAt }}<span class="fno">#{{ f.floorNo }}</span></div>
               <div v-if="f.quote" class="quote">@{{ f.quote.author }} #{{ f.quote.floorNo }}：{{ f.quote.text }}</div>
@@ -205,43 +207,49 @@ function attachTip() {
         </div>
 
         <!-- 回复框沉底 -->
-        <div class="box reply" id="reply">
-          <h5>添加一条新回复</h5>
-          <div v-if="quoteReply" class="q-tip">
-            引用 @{{ quoteReply.author }} #{{ quoteReply.floorNo }}
-            <a href="#" @click.prevent="quoteReply = null">取消</a>
-          </div>
-          <textarea ref="replyBox" v-model="replyText" :disabled="submitting" placeholder="回复即留痕，删除需管理员操作"></textarea>
-          <div class="r-foot">
-            <i>※ 文明发言，排障类回复请尽量附现象、配置与波形</i>
-            <button class="btn-post" type="button" :disabled="submitting" @click="submitReply">
-              {{ submitting ? '回复中…' : '回复' }}
-            </button>
+        <div class="box replybox" id="reply">
+          <div class="in">
+            <h5>添加一条新回复</h5>
+            <div v-if="quoteReply" class="q-tip">
+              引用 @{{ quoteReply.author }} #{{ quoteReply.floorNo }}
+              <a href="#" @click.prevent="quoteReply = null">取消</a>
+            </div>
+            <textarea ref="replyBox" v-model="replyText" :disabled="submitting" placeholder="回复即留痕，删除需管理员操作"></textarea>
+            <div class="r-foot">
+              <i>※ 文明发言，排障类回复请尽量附现象、配置与波形</i>
+              <button class="btn" type="button" :disabled="submitting" @click="submitReply">
+                {{ submitting ? '回复中…' : '回复' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="side">
         <div v-if="detail" class="box">
-          <h5>关于作者</h5>
-          <div class="author">
-            <img :src="avatarOf(detail.author, 48)" :alt="detail.author">
-            <div><b>{{ detail.author }}</b><div class="gray">{{ detail.authorGroup }}</div></div>
-          </div>
-          <div class="stat">
-            <div><b>{{ detail.authorStats.postCount }}</b>发帖</div>
-            <div><b>{{ detail.authorStats.likeTotal }}</b>获赞</div>
-            <div><b>{{ detail.authorStats.archivedCount }}</b>被归档</div>
+          <div class="box-h"><b>关于作者</b><span>AUTHOR</span></div>
+          <div class="bd">
+            <div class="author">
+              <img class="ava" :src="avatarOf(detail.author, 48)" :alt="detail.author">
+              <div><b>{{ detail.author }}</b><div class="gray2">{{ detail.authorGroup }}</div></div>
+            </div>
+            <div class="astat">
+              <div><b>{{ detail.authorStats.postCount }}</b>发帖</div>
+              <div><b>{{ detail.authorStats.likeTotal }}</b>获赞</div>
+              <div><b>{{ detail.authorStats.archivedCount }}</b>被归档</div>
+            </div>
           </div>
         </div>
         <div class="box">
-          <h5>热议主题</h5>
-          <ul class="hot">
-            <li v-for="h in boardHot" :key="h.id">
-              <img class="hava" :src="avatarOf(h.author, 24)" :alt="h.author">
-              <router-link :to="`/topic/${h.id}`">{{ h.title }}</router-link>
-            </li>
-          </ul>
+          <div class="box-h"><b>热议主题</b><span>HOT</span></div>
+          <div class="bd">
+            <ul class="hot">
+              <li v-for="(h, i) in boardHot" :key="h.id">
+                <span class="rk">{{ String(i + 1).padStart(2, '0') }}</span>
+                <router-link :to="`/topic/${h.id}`">{{ h.title }}</router-link>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -249,76 +257,30 @@ function attachTip() {
 </template>
 
 <style scoped>
-.grid { display: grid; grid-template-columns: 1fr 270px; gap: 20px; align-items: start; }
-.box { background: var(--box); border-radius: var(--radius-box); box-shadow: var(--shadow-box); }
-.gray { font-size: 12px; color: var(--fade); }
-.crumb { font-size: 12.5px; color: var(--fade); margin-bottom: 10px; }
-.crumb a:hover { color: var(--ink); }
-
-/* 主楼 */
-.post { padding: 18px 20px 14px; margin-bottom: 18px; }
-.p-head { display: flex; gap: 14px; }
-.pava { width: 73px; height: 73px; flex: none; border-radius: var(--radius-ava); object-fit: cover; }
+/* 页面差异：双列网格 + 主楼/回复框结构；楼层/附件/统计格走 skin.css 共享组件 */
+.grid { display: grid; grid-template-columns: 1fr 270px; gap: 22px; align-items: start; }
+.post, .replies { margin-bottom: 22px; }
+.post .in { padding: 20px 22px 16px; }
+.p-top { display: flex; gap: 16px; }
+.pava { width: 73px; height: 73px; flex: none; border: var(--vio2-bd-acc); box-shadow: var(--vio2-hard-xs); object-fit: cover; }
 .ph-main { flex: 1; min-width: 0; }
-.post h1 { font-size: 21px; color: var(--ink); line-height: 1.3; font-weight: 500; }
-.pin { font-size: 11px; color: var(--fade); border: 1px solid #DDD; border-radius: 3px; padding: 0 5px; margin-right: 6px; vertical-align: 2px; font-weight: 400; }
-.p-meta { margin-top: 8px; font-size: 12px; color: var(--fade); }
-.node { background: #F5F5F5; color: var(--fade); border-radius: 10px; padding: 1px 8px; }
-.p-meta b { color: var(--meta); }
-.p-body { margin-top: 16px; font-size: 14px; line-height: 1.7; color: var(--ink); }
+.post h1 { font-size: 22px; font-weight: 900; line-height: 1.35; }
+.p-meta { margin-top: 9px; font-size: 12px; color: var(--vio2-ink-3); font-family: var(--vio2-mono); }
+.p-meta b { color: var(--vio2-blue); }
+.p-body { margin-top: 18px; font-size: 14px; line-height: 1.8; font-weight: 600; }
 .p-body p { margin-bottom: 10px; }
-.attach { margin-top: 14px; background: var(--box-soft); border-radius: var(--radius-box); padding: 10px 14px; font-size: 12.5px; }
-.attach div { display: flex; justify-content: space-between; padding: 3px 0; }
-.attach a:hover { color: var(--ink); }
-.ops { margin-top: 16px; display: flex; gap: 8px; }
-.ops button { background: #F5F5F5; border: 1px solid var(--line); color: var(--body); font-size: 12.5px; padding: 5px 14px; border-radius: var(--radius-box); cursor: pointer; }
-.ops button:hover { background: #EBEBEB; }
-.ops button.on { background: var(--pill); border-color: var(--pill); color: #FFF; }
-
-/* 楼层 */
-.replies { margin-bottom: 18px; }
-.r-head { padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--fade); background: var(--box-soft); border-radius: var(--radius-box) var(--radius-box) 0 0; display: flex; }
-.r-head a { margin-left: auto; }
-.r-head a:hover { color: var(--ink); }
-.floor { display: flex; gap: 12px; padding: 13px 14px; border-bottom: 1px solid var(--line-soft); }
-.floor:last-child { border-bottom: none; }
-.fava { width: 48px; height: 48px; flex: none; border-radius: var(--radius-ava); object-fit: cover; }
-.f-main { flex: 1; min-width: 0; }
-.f-meta { font-size: 12px; color: var(--fade); margin-bottom: 4px; display: flex; align-items: baseline; }
-.f-meta b { color: var(--meta); margin-right: 8px; font-size: 13px; }
-.fno { margin-left: auto; color: #D0D0D0; font-size: 12px; }
-.quote { background: var(--box-soft); border-left: 2px solid var(--line); padding: 6px 10px; font-size: 12.5px; color: var(--fade); border-radius: 2px; margin-bottom: 6px; }
-.f-text { font-size: 14px; color: var(--ink); line-height: 1.7; }
-.f-ops { margin-top: 5px; font-size: 12px; }
-.f-ops a { margin-right: 12px; color: #B0B0B0; }
-.f-ops a:hover, .f-ops a.on { color: var(--pill); }
-
-/* 回复框 */
-.reply { padding: 14px 18px 16px; }
-.reply h5 { font-size: 13px; color: var(--body); margin-bottom: 10px; font-weight: 600; }
-.q-tip { font-size: 12px; color: var(--meta); background: var(--box-soft); border-left: 2px solid var(--pill); border-radius: 2px; padding: 5px 10px; margin-bottom: 8px; }
-.q-tip a { color: var(--fade); margin-left: 8px; }
-.reply textarea { width: 100%; height: 110px; border: 1px solid var(--line); border-radius: var(--radius-box); padding: 10px; font-size: 13px; line-height: 1.7; font-family: inherit; resize: vertical; background: var(--box-soft); color: var(--ink); box-sizing: border-box; }
-.reply textarea:focus { outline: none; border-color: #CCC; background: var(--box); }
-.r-foot { display: flex; align-items: center; margin-top: 10px; }
-.r-foot i { font-style: normal; font-size: 12px; color: var(--fade); flex: 1; }
-.btn-post { font-size: 13px; color: var(--ink); background: var(--box); border: 1px solid #CCC; border-radius: var(--radius-box); padding: 5px 14px; cursor: pointer; }
-.btn-post:hover:not(:disabled) { border-color: #999; }
-.btn-post:disabled { opacity: 0.55; cursor: not-allowed; }
-
-/* 右栏 */
-.side .box { padding: 12px 14px; margin-bottom: 18px; }
-.side h5 { font-size: 12.5px; color: var(--fade); font-weight: 400; border-bottom: 1px solid var(--line-soft); padding-bottom: 8px; margin-bottom: 8px; }
-.author { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
-.author img { width: 48px; height: 48px; border-radius: var(--radius-ava); object-fit: cover; }
-.author b { color: var(--ink); font-size: 14px; }
-.stat { display: flex; font-size: 12px; color: var(--fade); }
-.stat div { flex: 1; text-align: center; }
-.stat b { display: block; font-size: 16px; color: var(--body); font-weight: 600; }
-.hot { margin: 0; padding: 0; }
-.hot li { list-style: none; display: flex; gap: 9px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #F4F4F4; }
-.hot li:last-child { border: none; }
-.hava { width: 24px; height: 24px; flex: none; border-radius: var(--radius-ava); object-fit: cover; margin-top: 1px; }
-.hot a { font-size: 12.5px; color: var(--body); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.hot a:hover { color: #000; }
+.ops { margin-top: 16px; display: flex; gap: 10px; }
+.h-link { color: #C9C4B4; }
+.h-link:hover { color: var(--vio2-yellow); }
+.replybox .in { padding: 16px 18px 18px; }
+.replybox h5 { font-size: 13px; font-weight: 900; letter-spacing: 0.1em; margin-bottom: 10px; }
+.q-tip { font-size: 12px; color: var(--vio2-ink-2); background: var(--vio2-panel-2); border-left: 4px solid var(--vio2-lilac); padding: 5px 10px; margin-bottom: 8px; font-weight: 600; }
+.q-tip a { color: var(--vio2-ink-3); margin-left: 8px; }
+.replybox textarea { width: 100%; height: 110px; border: var(--vio2-bd-main); background: var(--vio2-panel-2); color: var(--vio2-ink); padding: 11px; font: inherit; font-size: 13px; line-height: 1.7; resize: vertical; }
+.replybox textarea:focus { outline: none; border-color: var(--vio2-blue); }
+.r-foot { display: flex; align-items: center; margin-top: 12px; gap: 14px; }
+.r-foot i { font-style: normal; font-size: 11.5px; color: var(--vio2-ink-3); flex: 1; font-family: var(--vio2-mono); }
+.author { display: flex; gap: 11px; align-items: center; margin-bottom: 12px; }
+.author b { font-size: 14px; }
+.gray2 { font-size: 11px; color: var(--vio2-ink-3); font-family: var(--vio2-mono); margin-top: 3px; }
 </style>

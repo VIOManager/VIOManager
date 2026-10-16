@@ -5,6 +5,17 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VIOManager 团队论坛</title>
+    <!-- 防闪烁：挂载前算好主题写根节点（键 vio_theme，缺省跟随系统偏好），机制同主站 -->
+    <script>
+      (function () {
+        var t = null
+        try { t = localStorage.getItem('vio_theme') } catch (e) {}
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        document.documentElement.setAttribute('data-theme', t)
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>
