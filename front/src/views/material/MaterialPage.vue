@@ -210,5 +210,5 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-tr.cur { background: var(--vio-wash); }
+tr.cur td { background: var(--vio2-panel-2); }
 </style>

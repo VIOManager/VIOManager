@@ -1,52 +1,62 @@
 /**
- * 业务页面通用版式（图纸档案）——页头/面板/台账表/筛选条/状态戳/按钮
- * 对应方案：《前端ABC模块页面开发-优化方案》§5（图纸档案定调，禁止组件库默认样式兜底）
+ * 业务页面通用版式（S3 粗野重涂 · 2026-10-15 方案 E 样张）——页头/面板/台账表/筛选条/状态戳/按钮
+ * 对应方案：《主站视觉重设计-双主题-优化方案》S3；《前端ABC模块页面开发-优化方案》§5 类名不变只换皮
  * 用法：各业务页 template 直接用这些类；页面特有样式仍写自己的 scoped 块
+ * 全部走 --vio2-* 双主题令牌，浅色图纸白 / 深色深空黑自动翻转
  */
 
-/* 页头：大标题 + 右侧批注元信息（源自概览页图签指标带语言） */
+/* 页头：DIN 大标题 + 右侧贴纸元信息 */
 .dossier-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   padding-bottom: 14px;
-  border-bottom: 2px solid var(--vio-ink);
+  border-bottom: 3px solid var(--vio2-bd);
   margin-bottom: 18px;
 }
-.dossier-head h3 { font-family: var(--vio-serif); font-size: 26px; letter-spacing: 0.1em; font-weight: 700; }
-.dossier-meta { display: flex; gap: 22px; font-size: 11.5px; color: var(--vio-ink-3); align-items: center; }
+.dossier-head h3 { font-family: var(--vio2-din); font-size: 30px; letter-spacing: 0.02em; font-weight: 900; color: var(--vio2-ink); }
+.dossier-head h5 { font-family: var(--vio2-din); font-size: 17px; letter-spacing: 0.04em; font-weight: 900; color: var(--vio2-ink); }
+.dossier-meta { display: flex; gap: 8px; font-size: 10px; color: var(--vio2-ink-2); align-items: center; }
+.dossier-meta span {
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-panel);
+  padding: 2px 9px 3px;
+  letter-spacing: 0.06em;
+}
 
-/* 面板卡 */
-.panel { background: var(--vio-sheet); border: 1px solid var(--vio-rule); padding: 16px 20px; }
+/* 面板卡：粗边 + 硬投影 */
+.panel { background: var(--vio2-panel); border: 3px solid var(--vio2-bd); box-shadow: 6px 6px 0 var(--vio2-shadow); padding: 14px 18px; }
 .panel-h {
-  font-family: var(--vio-serif);
+  font-family: var(--vio2-din);
   font-size: 15px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.06em;
+  font-weight: 900;
+  color: var(--vio2-ink);
   padding-bottom: 9px;
-  border-bottom: 1px solid var(--vio-ink);
+  border-bottom: 3px solid var(--vio2-bd);
   margin-bottom: 6px;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
-.panel-h .sub { font-family: var(--vio-body); font-size: 12px; color: var(--vio-ink-3); letter-spacing: 0; font-weight: 400; }
+.panel-h .sub { font-family: var(--vio-body); font-size: 12px; color: var(--vio2-ink-3); letter-spacing: 0; font-weight: 400; }
 
-/* 台账表：业务列表统一表格语言 */
+/* 台账表：粗表头线 + 硬行线 */
 .ledger { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .ledger th {
   text-align: left;
-  font-family: var(--vio-fangsong);
-  font-weight: 400;
-  font-size: 11.5px;
-  color: var(--vio-ink-3);
-  letter-spacing: 0.1em;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--vio-rule);
+  font-family: var(--vio-mono);
+  font-weight: 700;
+  font-size: 10px;
+  color: var(--vio2-ink-3);
+  letter-spacing: 0.14em;
+  padding: 9px 10px 7px;
+  border-bottom: 3px solid var(--vio2-bd);
 }
-.ledger td { padding: 9px 10px; border-bottom: 1px solid var(--vio-rule-soft); color: var(--vio-ink-2); }
+.ledger td { padding: 10px 10px; border-bottom: 2px solid var(--vio2-row-line); color: var(--vio2-ink-2); }
 .ledger tr:last-child td { border-bottom: none; }
-.ledger .num { text-align: right; }
-.ledger tbody tr:hover td { background: var(--vio-wash); }
+.ledger .num { text-align: right; font-family: var(--vio-mono); }
+.ledger tbody tr:hover td { background: var(--vio2-panel-2); }
 .ledger tbody tr.linkrow { cursor: pointer; }
 /* 窄列防竖排挤压：姓名/学号/手机号/时间等列加 nowrap */
 .ledger .nw { white-space: nowrap; }
@@ -54,66 +64,112 @@
 /* 筛选条 */
 .fbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 
-/* 状态戳（印章式小标签） */
-.stamp { display: inline-block; font-size: 11px; padding: 1px 8px; letter-spacing: 0.06em; border: 1px solid; white-space: nowrap; }
-.stamp.ok { color: var(--vio-ok); border-color: var(--vio-ok); }
-.stamp.warn { color: var(--vio-warn); border-color: var(--vio-warn); }
-.stamp.bad { color: var(--vio-seal); border-color: var(--vio-seal); }
-.stamp.dim { color: var(--vio-ink-3); border-color: var(--vio-rule); }
-.stamp.blue { color: var(--vio-blue-ink); border-color: var(--vio-blue-ink); }
+/* 状态戳：贴纸色块（黑字 + 粗边，双主题填色不变） */
+.stamp {
+  display: inline-block;
+  font-family: var(--vio-mono);
+  font-weight: 700;
+  font-size: 10.5px;
+  padding: 1px 8px 2px;
+  letter-spacing: 0.06em;
+  border: 2px solid var(--vio2-bd);
+  color: #101010;
+  white-space: nowrap;
+}
+.stamp.ok { background: var(--vio2-green); }
+.stamp.warn { background: var(--vio2-yellow); }
+.stamp.bad { background: var(--vio2-pink); }
+.stamp.blue { background: var(--vio2-blue); }
+.stamp.dim { background: var(--vio2-panel-2); color: var(--vio2-ink-3); }
 
-/* 行内文字操作按钮 */
-.btn-act { background: none; border: none; color: var(--vio-blue-ink); font-size: 12.5px; cursor: pointer; padding: 2px 6px; }
-.btn-act:hover { text-decoration: underline; }
-.btn-act.danger { color: var(--vio-seal); }
-.btn-act:disabled { color: var(--vio-ink-3); cursor: not-allowed; text-decoration: none; }
+/* 行内文字操作按钮：小贴纸块 */
+.btn-act {
+  background: var(--vio2-panel-2);
+  border: 2px solid var(--vio2-bd);
+  color: var(--vio2-ink);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 1px 8px 2px;
+  border-radius: 0;
+}
+.btn-act:hover { background: var(--vio2-yellow); color: #101010; }
+.btn-act.danger:hover { background: var(--vio2-pink); }
+.btn-act:disabled { color: var(--vio2-ink-3); cursor: not-allowed; background: var(--vio2-panel-2); }
 
-/* 实心主按钮 / 描边次按钮 */
+/* 实心主按钮（黄块）/ 描边次按钮 */
 .btn-ink {
   padding: 7px 18px;
-  background: var(--vio-blue-ink);
-  color: #F6F7F2;
-  border: none;
+  background: var(--vio2-yellow);
+  color: #101010;
+  border: 3px solid var(--vio2-bd);
+  box-shadow: 4px 4px 0 var(--vio2-shadow);
+  font-family: var(--vio2-din);
   font-size: 13px;
-  letter-spacing: 0.1em;
+  font-weight: 900;
+  letter-spacing: 0.08em;
   border-radius: 0;
   cursor: pointer;
-  transition: background 0.25s var(--vio-ease);
+  transition: transform 0.15s var(--vio-ease), box-shadow 0.15s var(--vio-ease);
 }
-.btn-ink:hover:not(:disabled) { background: var(--vio-blue-deep); }
+.btn-ink:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 6px 6px 0 var(--vio2-shadow); }
+.btn-ink:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--vio2-shadow); }
 .btn-ink:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn-line {
-  padding: 7px 16px;
-  background: none;
-  border: 1px solid var(--vio-rule);
-  color: var(--vio-ink-2);
+  padding: 6px 15px;
+  background: var(--vio2-panel);
+  border: 2px solid var(--vio2-bd);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  color: var(--vio2-ink-2);
   font-size: 12.5px;
+  font-weight: 700;
   border-radius: 0;
   cursor: pointer;
-  transition: all 0.25s var(--vio-ease);
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.btn-line:hover:not(:disabled) { border-color: var(--vio-ink); color: var(--vio-ink); }
+.btn-line:hover:not(:disabled) { background: var(--vio2-lilac); color: #101010; transform: translate(-1px, -1px); }
 .btn-line:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* 线框输入框（与 Element 表单区分的原生轻量输入） */
 .input-line {
-  border: 1px solid var(--vio-rule);
-  background: var(--vio-sheet);
-  padding: 7px 10px;
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-panel);
+  padding: 6px 10px;
   font-size: 13px;
   border-radius: 0;
-  color: var(--vio-ink);
+  color: var(--vio2-ink);
 }
-.input-line:focus { outline: none; border-color: var(--vio-blue-ink); }
+.input-line:focus { outline: none; box-shadow: 3px 3px 0 var(--vio2-yellow); }
+select.input-line { padding-right: 26px; }
 
 /* 空状态 */
-.empty-note { padding: 34px 0; text-align: center; color: var(--vio-ink-3); font-family: var(--vio-fangsong); font-size: 13px; letter-spacing: 0.1em; }
+.empty-note {
+  padding: 30px 0;
+  text-align: center;
+  color: var(--vio2-ink-3);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  border: 2px dashed var(--vio2-bd);
+  margin: 10px 0 4px;
+}
 
-/* 分页条 */
-.pager { display: flex; gap: 14px; align-items: center; justify-content: flex-end; margin-top: 12px; font-size: 12px; color: var(--vio-ink-3); }
-.pager button { background: none; border: 1px solid var(--vio-rule); padding: 3px 10px; cursor: pointer; font-size: 12px; color: var(--vio-ink-2); border-radius: 0; }
-.pager button:hover:not(:disabled) { border-color: var(--vio-ink); }
-.pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+/* EP 页签（材料页等用 el-tabs）：贴纸块页签 */
+.ink-tabs .el-tabs__nav-wrap::after { display: none; }
+.ink-tabs .el-tabs__active-bar { display: none; }
+.ink-tabs .el-tabs__item {
+  font-family: var(--vio-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--vio2-ink-2);
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-panel);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  padding: 0 16px;
+  margin-right: 8px;
+  height: 34px;
+  line-height: 30px;
+}
+.ink-tabs .el-tabs__item.is-active { background: var(--vio2-yellow); color: #101010; }
 
 /* ⚠️ 兼容：所有遮罩层（el-dialog / ElMessageBox / el-drawer）禁用过渡动画——个别 webview 环境
    transitionend 不触发会导致关闭后 DOM 残留遮罩并挡住整页点击（实测内置浏览器复现，

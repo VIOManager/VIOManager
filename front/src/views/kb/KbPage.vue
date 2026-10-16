@@ -179,22 +179,24 @@ onMounted(load)
 </template>
 
 <style scoped>
-.kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-.kb-card { background: var(--vio-sheet); border: 1px solid var(--vio-rule); padding: 16px 18px; cursor: pointer; transition: border-color 0.2s var(--vio-ease); }
-.kb-card:hover { border-color: var(--vio-blue-ink); }
+.kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.kb-card { background: var(--vio2-panel); border: 2px solid var(--vio2-bd); box-shadow: 4px 4px 0 var(--vio2-shadow); padding: 15px 17px; cursor: pointer; transition: transform 0.15s var(--vio-ease), box-shadow 0.15s var(--vio-ease); }
+.kb-card:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--vio2-shadow); }
 .kb-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.kb-cat { font-size: 11px; color: var(--vio-blue-ink); border: 1px solid var(--vio-blue-ink); padding: 1px 8px; }
-.kb-pin { font-size: 10px; color: var(--vio-seal); border: 1px solid var(--vio-seal); padding: 1px 6px; }
-.kb-card h4 { font-size: 15px; color: var(--vio-ink); margin-bottom: 6px; font-weight: 700; }
-.kb-card p { font-size: 12.5px; color: var(--vio-ink-2); line-height: 1.7; margin-bottom: 10px; }
-.kb-file { font-size: 11.5px; color: var(--vio-ink-3); margin: -4px 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kb-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--vio-ink-3); }
+.kb-cat { font-family: var(--vio-mono); font-size: 10px; font-weight: 700; color: #101010; background: var(--vio2-blue); border: 2px solid var(--vio2-bd); padding: 0 7px 1px; }
+.kb-pin { font-size: 10px; font-weight: 700; color: #101010; background: var(--vio2-pink); border: 2px solid var(--vio2-bd); padding: 0 6px 1px; }
+.kb-card h4 { font-family: var(--vio2-din); font-size: 15px; color: var(--vio2-ink); margin-bottom: 6px; font-weight: 900; }
+.kb-card p { font-size: 12.5px; color: var(--vio2-ink-2); line-height: 1.7; margin-bottom: 10px; }
+.kb-file { font-size: 11.5px; color: var(--vio2-ink-3); margin: -4px 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-meta { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--vio2-ink-3); border-top: 2px solid var(--vio2-row-line); padding-top: 8px; }
 .form-col { display: flex; flex-direction: column; gap: 6px; }
-.form-col label { font-size: 12px; color: var(--vio-ink-3); margin-top: 6px; }
+.form-col label { font-size: 12px; color: var(--vio2-ink-2); margin-top: 6px; }
 .type-row { display: flex; gap: 8px; }
 .type-btn {
-  padding: 7px 20px; border: 1px solid var(--vio-rule); background: var(--vio-sheet);
-  color: var(--vio-ink-2); font-size: 13px; cursor: pointer; transition: all 0.2s var(--vio-ease);
+  padding: 6px 18px; border: 2px solid var(--vio2-bd); background: var(--vio2-panel);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  color: var(--vio2-ink-2); font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.type-btn.active { border-color: var(--vio-ink); color: var(--vio-ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--vio-ink); }
+.type-btn.active { background: var(--vio2-yellow); color: #101010; }
 </style>

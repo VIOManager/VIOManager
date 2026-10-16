@@ -166,16 +166,18 @@ onMounted(load)
 <style scoped>
 .vtabs { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .vtab {
-  padding: 7px 18px;
-  border: 1px solid var(--vio-rule);
-  background: var(--vio-sheet);
-  color: var(--vio-ink-2);
+  padding: 5px 16px;
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-panel);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  color: var(--vio2-ink-2);
   font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s var(--vio-ease);
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.vtab.active { border-color: var(--vio-ink); color: var(--vio-ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--vio-ink); }
-.stamp.dim { color: var(--vio-ink-3); border-color: var(--vio-rule); }
+.vtab:hover { transform: translate(-1px, -1px); color: var(--vio2-ink); }
+.vtab.active { background: var(--vio2-yellow); color: #101010; }
 .form-col { display: flex; flex-direction: column; gap: 6px; }
-.form-col label { font-size: 12px; color: var(--vio-ink-3); margin-top: 6px; }
+.form-col label { font-size: 12px; color: var(--vio2-ink-2); margin-top: 6px; }
 </style>

@@ -156,7 +156,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.stamp.bad { color: var(--vio-danger); border-color: var(--vio-danger); }
 .err-text { color: var(--vio-danger); font-size: 12px; }
 .sheet div { display: flex; padding: 7px 0; border-bottom: 1px dashed var(--vio-rule-soft); font-size: 13px; }
 .sheet dt { width: 76px; color: var(--vio-ink-3); flex-shrink: 0; }

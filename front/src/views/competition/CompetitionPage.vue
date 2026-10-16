@@ -162,10 +162,18 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--vio-rule); margin-bottom: 18px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 18px; }
 .tab {
-  background: none; border: none; padding: 6px 2px 10px; font-size: 14px; color: var(--vio-ink-3);
-  cursor: pointer; letter-spacing: 0.08em; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: var(--vio2-panel);
+  border: 2px solid var(--vio2-bd);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  padding: 5px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--vio2-ink-2);
+  cursor: pointer;
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.tab.on { color: var(--vio-ink); font-weight: 600; border-bottom-color: var(--vio-blue-ink); }
+.tab:hover { transform: translate(-1px, -1px); color: var(--vio2-ink); }
+.tab.on { background: var(--vio2-yellow); color: #101010; }
 </style>

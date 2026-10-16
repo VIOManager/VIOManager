@@ -163,8 +163,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.stamp.bad { color: var(--vio-danger); border-color: var(--vio-danger); }
-
 /* 行勾选圆圈（图纸档案风：图线圆圈，选中实心墨蓝带白对勾；input 隐藏 + label 绘制） */
 .pk { display: none; }
 .pick { display: inline-block; position: relative; width: 16px; height: 16px; border: 1.5px solid var(--vio-rule); border-radius: 50%; cursor: pointer; vertical-align: middle; box-sizing: border-box; }
