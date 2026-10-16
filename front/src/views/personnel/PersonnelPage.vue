@@ -8,7 +8,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { apiMembers } from '@/api/member'
 import type { MemberListItem } from '@/api/member'
-import { apiOrgTree } from '@/api/org'
+import { apiOrgTreeSafe } from '@/api/org'
 import type { OrgNode } from '@/api/org'
 import { useDict } from '@/composables/useDict'
 import { debounce } from '@/utils/debounce'
@@ -115,10 +115,16 @@ function openEdit(id: string) {
 
 onMounted(async () => {
   void load()
-  const tree = await apiOrgTree()
-  const out: { id: string; name: string; level: number }[] = []
-  flatten(tree, out)
-  orgOptions.value = out
+  // 组织树降级：O 线组织模块未交付前接口 1004，catch 掉避免未处理拒绝——
+  // 列表不受影响，组织筛选下拉暂时只有"全部"，O01 落地后自动恢复
+  try {
+    const tree = await apiOrgTreeSafe()
+    const out: { id: string; name: string; level: number }[] = []
+    flatten(tree, out)
+    orgOptions.value = out
+  } catch {
+    /* 组织接口未就绪，筛选降级为空 */
+  }
 })
 </script>
 

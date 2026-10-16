@@ -37,6 +37,19 @@ export function apiOrgTree(): Promise<OrgNode[]> {
   return get('/api/orgs/tree')
 }
 
+/**
+ * 组织树静默版（2026-10-16 联调降级）：A 线后端尚未实现 /api/orgs/tree（返回 1004），
+ * 辅助场景（筛选下拉/绩效/排班）调它不该弹"资源不存在"吓人——静默失败回空数组，
+ * 组织管理页（主数据）仍走 apiOrgTree 保留报错。A 线上线后两者行为一致。
+ */
+export async function apiOrgTreeSafe(): Promise<OrgNode[]> {
+  try {
+    return await get<OrgNode[]>('/api/orgs/tree', undefined, { silent: true })
+  } catch {
+    return []
+  }
+}
+
 export function apiOrgDetail(id: string): Promise<OrgNode> {
   return get('/api/orgs/' + id)
 }
