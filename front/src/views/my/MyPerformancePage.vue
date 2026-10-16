@@ -213,7 +213,7 @@ onMounted(load)
 .mb-cell b { display: block; font-family: var(--vio-disp-latin); font-size: 30px; margin: 2px 0; font-variant-numeric: tabular-nums; }
 .mb-cell span { font-size: 11px; color: var(--vio-ink-3); }
 .mb-cell.warn b { color: var(--vio-seal); }
-.tag { display: inline-block; font-size: 11px; border: 1px solid var(--vio-blue-ink); color: var(--vio-blue-ink); padding: 1px 7px; margin-right: 4px; }
+.tag { display: inline-block; font-family: var(--vio-mono); font-size: 10.5px; font-weight: 700; border: 2px solid var(--vio2-bd); background: var(--vio2-lilac); color: #101010; padding: 0 7px 1px; margin-right: 4px; }
 .form-col { display: flex; flex-direction: column; gap: 6px; }
 .form-col label { font-size: 12px; color: var(--vio-ink-3); margin-top: 6px; }
 .wc { font-size: 13px; line-height: 1.8; color: var(--vio-ink-2); background: var(--vio-wash); padding: 10px 12px; margin-top: 12px; }

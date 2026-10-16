@@ -171,6 +171,33 @@ select.input-line { padding-right: 26px; }
 }
 .ink-tabs .el-tabs__item.is-active { background: var(--vio2-yellow); color: #101010; }
 
+/* EP 弹窗 / 抽屉 / 消息框：粗野外框（挂在 body 下 scoped 够不着，只能走全局） */
+.el-dialog {
+  border: 3px solid var(--vio2-bd);
+  box-shadow: 8px 8px 0 var(--vio2-shadow);
+  border-radius: 0;
+  background: var(--vio2-panel);
+}
+.el-dialog__header { border-bottom: 3px solid var(--vio2-bd); margin-right: 0; padding: 13px 20px; }
+.el-dialog__title { font-family: var(--vio2-din); font-weight: 900; color: var(--vio2-ink); letter-spacing: 0.04em; }
+.el-dialog__body { padding: 18px 20px; color: var(--vio2-ink-2); }
+.el-dialog__footer { border-top: 2px solid var(--vio2-row-line); padding: 12px 20px; }
+.el-overlay-dialog { display: grid; place-items: center; } /* 居中改网格防溢出滚动错位 */
+
+/* 抽屉（本站全部默认右侧滑出） */
+.el-drawer {
+  border-left: 3px solid var(--vio2-bd);
+  box-shadow: -8px 0 0 var(--vio2-shadow) !important; /* 覆盖 EP 自带软影 */
+  background: var(--vio2-panel);
+}
+.el-drawer__header { border-bottom: 3px solid var(--vio2-bd); margin-bottom: 0; padding: 13px 20px; }
+.el-drawer__title { font-family: var(--vio2-din); font-weight: 900; color: var(--vio2-ink); letter-spacing: 0.04em; }
+.el-drawer__body { padding: 18px 20px; color: var(--vio2-ink-2); }
+
+/* ElMessageBox（删除确认等） */
+.el-message-box { border-radius: 0; border: 3px solid var(--vio2-bd); box-shadow: 8px 8px 0 var(--vio2-shadow); background: var(--vio2-panel); }
+.el-message-box__title { font-family: var(--vio2-din); font-weight: 900; color: var(--vio2-ink); }
+
 /* ⚠️ 兼容：所有遮罩层（el-dialog / ElMessageBox / el-drawer）禁用过渡动画——个别 webview 环境
    transitionend 不触发会导致关闭后 DOM 残留遮罩并挡住整页点击（实测内置浏览器复现，
    且过渡类挂在 .el-overlay 元素自身，必须对该元素本身生效）。

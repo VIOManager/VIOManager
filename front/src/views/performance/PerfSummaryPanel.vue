@@ -106,11 +106,14 @@ onMounted(async () => {
 <style scoped>
 .tag {
   display: inline-block;
-  font-size: 11px;
-  border: 1px solid var(--vio-blue-ink);
-  color: var(--vio-blue-ink);
-  padding: 1px 7px;
+  font-family: var(--vio-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-lilac);
+  color: #101010;
+  padding: 0 7px 1px;
   margin-right: 4px;
 }
-.dim { color: var(--vio-ink-3); }
+.dim { color: var(--vio2-ink-3); }
 </style>
