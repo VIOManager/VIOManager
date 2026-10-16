@@ -1,26 +1,28 @@
 <script setup lang="ts">
 /**
  * 人员档案列表页（/personnel，A 线 M01）
- * 对应方案：《前端ABC模块页面开发-优化方案》PA2
- * 筛选：关键词（300ms 防抖）/组织/类型/技能（useDict）/账号绑定状态；分页 page/size
+ * 对应方案：《前端ABC模块页面开发-优化方案》PA2；《列表分页-优化方案》ST2 改滚动分页
+ * 筛选：关键词（300ms 防抖）/组织/类型/技能（useDict）/账号绑定状态；滚动加载每批 20 条（追加模式）
  * ⚠️ 隐私：列表只展示裁剪后字段（身份证只显后 4 位）；邮箱/证件照等进详情（M02/M10）
  */
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { apiMembers } from '@/api/member'
 import type { MemberListItem } from '@/api/member'
-import type { PageResult } from '@/api/types'
 import { apiOrgTree } from '@/api/org'
 import type { OrgNode } from '@/api/org'
 import { useDict } from '@/composables/useDict'
 import { debounce } from '@/utils/debounce'
 import { MEMBER_TYPE_LABEL } from '@/config/labels'
 import MaskField from '@/components/MaskField.vue'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import MemberDetailDrawer from './MemberDetailDrawer.vue'
 import MemberFormDialog from './MemberFormDialog.vue'
 import ImportDialog from './ImportDialog.vue'
 
-const query = reactive({ page: 1, size: 20, keyword: '', orgId: '', memberType: '', skill: '', hasAccount: '' })
-const data = ref<PageResult<MemberListItem>>({ list: [], total: 0, page: 1, size: 20 })
+const query = reactive({ size: 20, keyword: '', orgId: '', memberType: '', skill: '', hasAccount: '' })
+const rows = ref<MemberListItem[]>([])
+const total = ref(0)
+const page = ref(1)
 const loading = ref(false)
 
 const { selectable: skillOptions } = useDict('SKILL')
@@ -32,11 +34,16 @@ const detailId = ref('')
 const formVisible = ref(false)
 const editingId = ref('')
 
+/** 已加载条数达到总数即到底（total 可能随筛选变化，动态算不存变量） */
+const noMore = computed(() => rows.value.length >= total.value)
+
+/** 首次加载 / 筛选变化 / 增删改后刷新：清空回第 1 批 */
 async function load() {
   loading.value = true
   try {
-    data.value = await apiMembers({
-      page: query.page,
+    page.value = 1
+    const r = await apiMembers({
+      page: 1,
       size: query.size,
       keyword: query.keyword || undefined,
       orgId: query.orgId || undefined,
@@ -44,20 +51,42 @@ async function load() {
       skill: query.skill || undefined,
       hasAccount: query.hasAccount || undefined
     })
+    rows.value = r.list
+    total.value = r.total
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 滚动到底追加下一批（ScrollLoader 的 reach 回调） */
+async function loadMore() {
+  if (loading.value || noMore.value) return
+  loading.value = true
+  try {
+    page.value++
+    const r = await apiMembers({
+      page: page.value,
+      size: query.size,
+      keyword: query.keyword || undefined,
+      orgId: query.orgId || undefined,
+      memberType: query.memberType || undefined,
+      skill: query.skill || undefined,
+      hasAccount: query.hasAccount || undefined
+    })
+    rows.value = rows.value.concat(r.list)
+    total.value = r.total
   } finally {
     loading.value = false
   }
 }
 
 const onKeywordInput = debounce(() => {
-  query.page = 1
   void load()
 }, 300)
 
 watch(
   () => [query.orgId, query.memberType, query.skill, query.hasAccount],
   () => {
-    query.page = 1
     void load()
   }
 )
@@ -84,13 +113,6 @@ function openEdit(id: string) {
   formVisible.value = true
 }
 
-function pageTo(p: number) {
-  const maxPage = Math.max(1, Math.ceil(data.value.total / query.size))
-  if (p < 1 || p > maxPage) return
-  query.page = p
-  void load()
-}
-
 onMounted(async () => {
   void load()
   const tree = await apiOrgTree()
@@ -105,7 +127,7 @@ onMounted(async () => {
     <div class="dossier-head">
       <h3>人员档案</h3>
       <div class="dossier-meta mono">
-        <span>共 {{ data.total }} 人</span>
+        <span>共 {{ total }} 人</span>
         <span>A 线 · M01–M13</span>
       </div>
     </div>
@@ -143,7 +165,7 @@ onMounted(async () => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="m in data.list" :key="m.id" class="linkrow" @click="openDetail(m.id)">
+          <tr v-for="m in rows" :key="m.id" class="linkrow" @click="openDetail(m.id)">
             <td class="nw" style="color: var(--vio-ink); font-weight: 600">{{ m.name }}</td>
             <td class="mono nw">{{ m.studentNo || '—' }}</td>
             <td class="nw">{{ MEMBER_TYPE_LABEL[m.memberType] }}</td>
@@ -161,12 +183,8 @@ onMounted(async () => {
           </tr>
         </tbody>
       </table>
-      <p v-if="!loading && data.list.length === 0" class="empty-note">没有匹配的人员</p>
-      <div class="pager">
-        <span class="mono">第 {{ data.page }} 页 / 共 {{ data.total }} 条</span>
-        <button :disabled="data.page <= 1" @click="pageTo(data.page - 1)">上一页</button>
-        <button :disabled="data.page * data.size >= data.total" @click="pageTo(data.page + 1)">下一页</button>
-      </div>
+      <p v-if="!loading && rows.length === 0" class="empty-note">没有匹配的人员</p>
+      <ScrollLoader :loading="loading" :no-more="noMore" :loaded="rows.length" :total="total" @reach="loadMore" />
     </div>
 
     <MemberDetailDrawer v-model="drawerVisible" :member-id="detailId" @edit="openEdit" @deleted="load" />

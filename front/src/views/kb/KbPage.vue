@@ -4,19 +4,24 @@
  * lzh 2026-10-14 拍板先行简化：条目 = 外部链接或上传文件二选一，分类与正文暂不做
  * PRD §3.14：浏览/收藏/评论全角色；发布/编辑/置顶/删除仅管理员
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiCreateKbItem, apiKbItems } from '@/api/kb'
 import type { KbItem, KbSourceType } from '@/api/kb'
 import { KB_SOURCE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
 import UploadField from '@/components/UploadField.vue'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import KbDetailDrawer from './KbDetailDrawer.vue'
 
 const user = useUserStore()
 const isAdmin = user.role !== 'STUDENT'
 
-const list = ref<KbItem[]>([])
+const all = ref<KbItem[]>([])
+/** 本地滚动分页：后端 KB01 返回全量数组，前端切片显示（每批 20 条） */
+const loadedCount = ref(20)
+const visible = computed(() => all.value.slice(0, loadedCount.value))
+const noMore = computed(() => loadedCount.value >= all.value.length)
 const keyword = ref('')
 const loading = ref(false)
 
@@ -26,10 +31,17 @@ const detailId = ref('')
 async function load() {
   loading.value = true
   try {
-    list.value = await apiKbItems({ keyword: keyword.value || undefined })
+    all.value = await apiKbItems({ keyword: keyword.value || undefined })
+    loadedCount.value = 20
   } finally {
     loading.value = false
   }
+}
+
+/** 滚动到底扩大切片（ScrollLoader 的 reach 回调） */
+function loadMore() {
+  if (loading.value || noMore.value) return
+  loadedCount.value += 20
 }
 
 function openDetail(id: string) {
@@ -111,7 +123,7 @@ onMounted(load)
     </div>
 
     <div class="kb-grid">
-      <div v-for="it in list" :key="it.id" class="kb-card" @click="openDetail(it.id)">
+      <div v-for="it in visible" :key="it.id" class="kb-card" @click="openDetail(it.id)">
         <div class="kb-top">
           <span class="kb-cat">{{ KB_SOURCE_LABEL[it.sourceType] }}</span>
           <span v-if="it.pinned" class="kb-pin mono">置顶</span>
@@ -125,7 +137,8 @@ onMounted(load)
         </div>
       </div>
     </div>
-    <p v-if="!loading && list.length === 0" class="empty-note">暂无内容</p>
+    <p v-if="!loading && all.length === 0" class="empty-note">暂无内容</p>
+    <ScrollLoader :loading="loading" :no-more="noMore" :loaded="visible.length" :total="all.length" @reach="loadMore" />
 
     <el-dialog v-model="formVisible" title="发布知识库内容" width="520px">
       <div class="form-col">
