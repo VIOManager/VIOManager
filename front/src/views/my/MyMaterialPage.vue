@@ -133,13 +133,14 @@ onMounted(load)
 <style scoped>
 .tm-card { margin-bottom: 18px; padding: 16px 18px; }
 .tm-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.tm-head b { font-size: 15px; color: var(--vio-ink); }
-.tm-deadline { font-size: 12px; color: var(--vio-ink-2); }
-.tm-deadline.urgent { color: var(--vio-seal); }
+.tm-head b { font-family: var(--vio2-din); font-size: 16px; font-weight: 900; color: var(--vio2-ink); }
+.tm-deadline { font-size: 12px; color: var(--vio2-ink-2); }
+.tm-deadline.urgent { color: #101010; background: var(--vio2-pink); border: 2px solid var(--vio2-bd); padding: 0 6px 1px; font-weight: 700; }
 .rate-line { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.rate-bar { flex: 1; height: 6px; background: var(--vio-rule-soft); }
-.rate-bar i { display: block; height: 100%; background: var(--vio-blue-ink); transition: width 0.3s var(--vio-ease); }
-.batch-zone { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--vio-rule); }
-.batch-result { margin-top: 10px; padding: 10px 12px; background: var(--vio-wash); font-size: 12.5px; }
+/* 进度条：黄斜纹填充 + 粗描边（与概览学期刻度尺同语言） */
+.rate-bar { flex: 1; height: 14px; background: var(--vio2-panel-2); border: 2px solid var(--vio2-bd); }
+.rate-bar i { display: block; height: 100%; background: repeating-linear-gradient(-45deg, var(--vio2-yellow) 0 8px, var(--vio2-panel-2) 8px 16px); transition: width 0.3s var(--vio-ease); }
+.batch-zone { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding-top: 12px; border-top: 2px solid var(--vio2-bd); }
+.batch-result { margin-top: 10px; padding: 10px 12px; background: var(--vio2-panel-2); border: 2px solid var(--vio2-bd); font-size: 12.5px; }
 .batch-result p { line-height: 1.9; }
 </style>
