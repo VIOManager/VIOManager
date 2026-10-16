@@ -26,8 +26,6 @@
     <modules>
         <module>vio-common</module>
         <module>vio-management</module>
-        <!-- 知识库微服务（feature/kb 新增；父 pom 属公共文件，PR 前群里报备） -->
-        <module>vio-kb</module>
     </modules>
 
     <properties>
