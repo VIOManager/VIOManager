@@ -1,0 +1,24 @@
+# 前端主站容器化运行：一条命令起站点，不需要本机装 Node。
+# 用法：cd front && docker compose up -d --build → 浏览器开 http://localhost:8090
+# 开发联调仍推荐 npm run dev（热更新）；本文件面向预览、给组员跑起来看、服务器部署预演。
+# 后端默认指向宿主机 8088（Windows/Mac 走 host.docker.internal；Linux 靠 extra_hosts 兜底）；
+# 全容器化部署时把 BACKEND_ORIGIN 改成 compose 网络里的服务名（如 http://backend:8088）。
+name: vio-front
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        # 侧边栏"VIO 论坛"入口指向容器版论坛站（默认本机 8092；8091 被 vio-kb 微服务占用）
+        FORUM_URL: ${FORUM_URL:-http://localhost:8092}
+    container_name: vio-front-web
+    ports:
+      - "${FRONT_PORT:-8090}:80"
+    environment:
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://host.docker.internal:8088}
+      # 知识库微服务（vio-kb）地址，本地默认宿主机 8091
+      KB_ORIGIN: ${KB_ORIGIN:-http://host.docker.internal:8091}
+    extra_hosts:
+      # Linux 发行版没有内置 host.docker.internal，显式映射到宿主机网关
+      - "host.docker.internal:host-gateway"

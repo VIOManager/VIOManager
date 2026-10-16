@@ -1,0 +1,23 @@
+# 论坛站容器化运行：一条命令起站点，不需要本机装 Node。
+# 用法：cd forum && docker compose up -d --build → 浏览器开 http://localhost:8092（8091 被 vio-kb 微服务占用）
+# ⚠️ 论坛后端未实现：默认 USE_MOCK=true 烘焙演示数据（不依赖后端即可完整浏览）；
+#    后端就绪后把 USE_MOCK 改成 false 再 up -d --build 切真实接口。
+# 开发联调仍推荐 npm run dev（热更新）。
+name: vio-forum
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        USE_MOCK: ${USE_MOCK:-true}
+        # 未登录引导回主站登录页（容器版主站默认 8090）
+        MAIN_URL: ${MAIN_URL:-http://localhost:8090/login}
+    container_name: vio-forum-web
+    ports:
+      - "${FORUM_PORT:-8092}:80"
+    environment:
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://host.docker.internal:8088}
+    extra_hosts:
+      # Linux 发行版没有内置 host.docker.internal，显式映射到宿主机网关
+      - "host.docker.internal:host-gateway"

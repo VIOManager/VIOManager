@@ -1,12 +1,11 @@
 <script setup lang="ts">
 /**
  * 概览统计页（三端共用壳，数据范围由后端按角色裁剪 —— PRD §3.16）
- * 对应方案：Step 2 大框阶段先落地版式；视觉样张：frame.html F1
+ * 对应方案：Step 2 大框阶段先落地版式；S2 粗野重涂（2026-10-15 方案 E 样张）
  * 学生端（/my/overview）：指标带五格全部接真（聚合 我的赛队/成果/材料/审批红点，零新增契约）
  * 管理端（/overview）：指标带与部门数据卡仍为静态演示（全平台/部门统计接口未出，骨架遗留），
  *    待办审批卡已接审批中心 P01；学期刻度尺三端接真（S01 列表），异常时静态兜底
- * ⚠️ 注意：PRD §3.16 要求"HUD 风格"，定调为图纸档案后以"图签指标带 + 学期刻度尺"表达，
- *    若 lzh 改选 HUD 特例皮肤，本页单独换皮，不影响全站
+ * ⚠️ 注意：PRD §3.16 要求"HUD 风格"，定调为粗野贴纸后以"指标贴纸带 + 学期刻度尺"表达
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
@@ -152,18 +151,21 @@ const depts = computed(() => {
 
 <template>
   <div>
-    <div class="dossier-head">
-      <h3>{{ user.role === 'STUDENT' ? '我的概览' : '概览统计' }}</h3>
-      <div class="dossier-meta mono">
-        <span>数据范围：{{ user.role === 'SUPER_ADMIN' ? '全平台' : user.role === 'DEPT_ADMIN' ? '本部门' : '仅本人参与' }}</span>
-        <span>{{ semName }} · 第 {{ semWeek }} 周</span>
+    <div class="ov-head">
+      <div class="ov-title">
+        <h3>{{ user.role === 'STUDENT' ? '我的概览' : '概览统计' }}</h3>
+        <span class="tag mono">OVERVIEW · 2026F</span>
+      </div>
+      <div class="ov-meta mono">
+        <span class="chip">数据范围：{{ user.role === 'SUPER_ADMIN' ? '全平台' : user.role === 'DEPT_ADMIN' ? '本部门' : '仅本人参与' }}</span>
+        <span class="chip">{{ semName }} · 第 {{ semWeek }} 周</span>
       </div>
     </div>
 
-    <!-- 图签指标带 -->
+    <!-- 指标贴纸带 -->
     <div class="metric-block">
-      <div v-for="m in metrics" :key="m.label" class="mb-cell" :class="{ warn: m.warn }">
-        <i>{{ m.label }}</i>
+      <div v-for="(m, i) in metrics" :key="m.label" class="mb-cell" :class="{ warn: m.warn, tiltL: i % 2 === 0, tiltR: i % 2 === 1 }">
+        <i class="mono">{{ m.label }}</i>
         <b class="mono">{{ m.value }}</b>
         <span class="mono">{{ m.sub }}</span>
       </div>
@@ -189,21 +191,21 @@ const depts = computed(() => {
     <!-- 待办 + 部门数据（学生端隐藏部门数据卡） -->
     <div class="ov-grid" :class="{ single: user.role === 'STUDENT' }">
       <div class="ov-card">
-        <h5>{{ user.role === 'STUDENT' ? '我的待办' : '待办审批' }} <router-link to="/approval">进入审批中心</router-link></h5>
+        <h5><span>{{ user.role === 'STUDENT' ? '我的待办' : '待办审批' }}</span><router-link class="btn-mini" to="/approval">进入审批中心 →</router-link></h5>
         <table class="mini-ledger">
           <tbody>
             <tr v-for="t in todos" :key="t.text">
-              <td class="mono" style="width: 64px">{{ t.type }}</td>
+              <td class="mono" style="width: 72px"><em class="pill">{{ t.type }}</em></td>
               <td>{{ t.text }}</td>
               <td class="mono dim" style="width: 110px">{{ t.time }}</td>
-              <td style="width: 92px"><router-link to="/approval">处理</router-link></td>
+              <td style="width: 74px"><router-link class="btn-mini" to="/approval">处理</router-link></td>
             </tr>
           </tbody>
         </table>
         <p v-if="todos.length === 0" class="dim" style="font-size: 12.5px; padding: 10px">暂无待办，去审批中心看看历史单据</p>
       </div>
-      <div v-if="user.role !== 'STUDENT'" class="ov-card">
-        <h5>各部门数据 <router-link to="/org">组织管理</router-link></h5>
+      <div v-if="user.role !== 'STUDENT'" class="ov-card tilt">
+        <h5><span>各部门数据</span><router-link class="btn-mini" to="/org">组织管理 →</router-link></h5>
         <table class="mini-ledger">
           <thead>
             <tr><th>子组织</th><th class="num">成员</th><th class="num">赛队</th><th class="num">待办</th></tr>
@@ -223,52 +225,144 @@ const depts = computed(() => {
 </template>
 
 <style scoped>
-.dossier-head { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 14px; border-bottom: 2px solid var(--vio-ink); }
-.dossier-head h3 { font-family: var(--vio-serif); font-size: 26px; letter-spacing: 0.1em; font-weight: 700; }
-.dossier-meta { display: flex; gap: 22px; font-size: 11.5px; color: var(--vio-ink-3); align-items: center; }
-.metric-block {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  border: 2px solid var(--vio-ink);
-  background: var(--vio-sheet);
-  margin: 20px 0 18px;
+.ov-head { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.ov-title { display: flex; align-items: center; gap: 14px; }
+.ov-head h3 {
+  font-family: var(--vio2-din);
+  font-weight: 900;
+  font-size: 34px;
+  letter-spacing: 0.02em;
+  color: var(--vio2-ink);
 }
-.mb-cell { border-right: 1px solid var(--vio-rule); padding: 14px 18px 12px; }
-.mb-cell:last-child { border-right: none; }
-.mb-cell i { display: block; font-style: normal; font-family: var(--vio-fangsong); font-size: 12px; letter-spacing: 0.14em; color: var(--vio-ink-3); }
-.mb-cell b { display: block; font-family: var(--vio-disp-latin); font-size: 33px; margin: 2px 0; font-variant-numeric: tabular-nums; }
-.mb-cell span { font-size: 11px; color: var(--vio-ink-3); }
-.mb-cell.warn b { color: var(--vio-seal); }
-.ruler-card { background: var(--vio-sheet); border: 1px solid var(--vio-rule); padding: 16px 20px 14px; margin-bottom: 18px; }
-.ruler-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 12px; }
-.ruler-head span:last-child { color: var(--vio-ink-3); font-size: 11.5px; }
-.ruler { position: relative; height: 22px; background: var(--vio-wash); border: 1px solid var(--vio-rule); }
-.ruler-fill { position: absolute; inset: 0 auto 0 0; background: repeating-linear-gradient(-45deg, rgba(29, 58, 143, 0.35) 0 4px, rgba(29, 58, 143, 0.18) 4px 8px); }
-.ruler .now { position: absolute; top: -7px; width: 0; height: 36px; border-left: 2px solid var(--vio-seal); }
-.ruler .now b { position: absolute; top: -20px; left: -14px; font-size: 11px; color: var(--vio-seal); }
-.ruler .milestone { position: absolute; top: 0; width: 0; height: 22px; border-left: 1px dashed var(--vio-ink-3); }
-.ruler .milestone b { position: absolute; top: -19px; left: -14px; font-size: 10px; color: var(--vio-ink-2); }
-.ruler .milestone span { position: absolute; top: 26px; left: -24px; font-size: 10px; color: var(--vio-ink-3); white-space: nowrap; font-style: normal; }
-.ruler-scale { display: flex; justify-content: space-between; margin-top: 22px; font-size: 10px; color: var(--vio-ink-3); }
-.ov-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; }
+.tag {
+  background: var(--vio2-yellow);
+  color: #101010;
+  border: 2px solid var(--vio2-bd);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 2px 9px 3px;
+  transform: rotate(-2deg);
+}
+.ov-meta { display: flex; gap: 8px; align-items: center; }
+.ov-meta .chip {
+  font-size: 10.5px;
+  color: var(--vio2-ink-2);
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-panel);
+  padding: 3px 10px;
+  letter-spacing: 0.06em;
+}
+/* 指标贴纸带：五格贴纸，交替微倾 */
+.metric-block { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin: 22px 0 20px; }
+.mb-cell {
+  background: var(--vio2-panel);
+  border: 3px solid var(--vio2-bd);
+  box-shadow: 5px 5px 0 var(--vio2-shadow);
+  padding: 12px 15px 11px;
+  position: relative;
+  overflow: hidden;
+}
+.mb-cell::after {
+  content: "";
+  position: absolute;
+  right: -18px;
+  top: -18px;
+  width: 38px;
+  height: 38px;
+  transform: rotate(45deg);
+  background: var(--vio2-yellow);
+  border-left: 3px solid var(--vio2-bd);
+  border-bottom: 3px solid var(--vio2-bd);
+}
+.tiltL { transform: rotate(-0.5deg); }
+.tiltR { transform: rotate(0.5deg); }
+.mb-cell i { display: block; font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: 0.16em; color: var(--vio2-ink-3); }
+.mb-cell b { display: block; font-family: var(--vio2-din); font-size: 34px; font-weight: 900; margin: 2px 0 1px; color: var(--vio2-ink); }
+.mb-cell span { font-size: 10.5px; color: var(--vio2-ink-3); }
+.mb-cell.warn { background: var(--vio2-pink); }
+.mb-cell.warn i, .mb-cell.warn span { color: #101010; }
+.mb-cell.warn b { color: #101010; }
+.mb-cell.warn::after { background: var(--vio2-panel); }
+/* 学期刻度尺 */
+.ruler-card {
+  background: var(--vio2-panel);
+  border: 3px solid var(--vio2-bd);
+  box-shadow: 6px 6px 0 var(--vio2-shadow);
+  padding: 18px 22px 14px;
+  margin-bottom: 20px;
+}
+.ruler-head { display: flex; justify-content: space-between; font-size: 13.5px; font-weight: 700; color: var(--vio2-ink); margin-bottom: 14px; }
+.ruler-head span:last-child { color: var(--vio2-ink-3); font-size: 11px; font-weight: 400; }
+.ruler { position: relative; height: 24px; background: var(--vio2-panel-2); border: 2px solid var(--vio2-bd); }
+.ruler-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: repeating-linear-gradient(-45deg, var(--vio2-yellow) 0 8px, var(--vio2-panel-2) 8px 16px);
+  border-right: 2px solid var(--vio2-bd);
+}
+.ruler .now { position: absolute; top: -9px; width: 0; height: 42px; border-left: 3px solid var(--vio2-pink); }
+.ruler .now b { position: absolute; top: -22px; left: -16px; font-size: 11px; font-weight: 900; color: var(--vio2-pink); }
+.ruler .milestone { position: absolute; top: 0; width: 0; height: 24px; border-left: 2px dashed var(--vio2-ink-3); }
+.ruler .milestone b { position: absolute; top: -20px; left: -14px; font-size: 10px; font-weight: 700; color: var(--vio2-ink-2); }
+.ruler .milestone span { position: absolute; top: 28px; left: -26px; font-size: 10px; color: var(--vio2-ink-3); white-space: nowrap; font-style: normal; }
+.ruler-scale { display: flex; justify-content: space-between; margin-top: 24px; font-size: 9.5px; color: var(--vio2-ink-3); }
+/* 待办 / 部门卡 */
+.ov-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; }
 .ov-grid.single { grid-template-columns: 1fr; }
-.ov-card { background: var(--vio-sheet); border: 1px solid var(--vio-rule); padding: 16px 20px; }
+.ov-card {
+  background: var(--vio2-panel);
+  border: 3px solid var(--vio2-bd);
+  box-shadow: 6px 6px 0 var(--vio2-shadow);
+  padding: 16px 20px 12px;
+}
+.ov-card.tilt { transform: rotate(0.4deg); }
 .ov-card h5 {
-  font-family: var(--vio-serif);
-  font-size: 15px;
-  letter-spacing: 0.14em;
-  padding-bottom: 9px;
-  border-bottom: 1px solid var(--vio-ink);
-  margin-bottom: 6px;
+  font-family: var(--vio2-din);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: var(--vio2-ink);
+  padding-bottom: 10px;
+  border-bottom: 3px solid var(--vio2-bd);
+  margin-bottom: 4px;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
-.ov-card h5 a { font-family: var(--vio-body); font-size: 12px; font-weight: 400; }
+.btn-mini {
+  font-family: var(--vio-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--vio2-ink);
+  text-decoration: none;
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-yellow);
+  padding: 2px 9px 3px;
+}
+.btn-mini:hover { background: var(--vio2-lilac); }
 .mini-ledger { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.mini-ledger th { text-align: left; font-family: var(--vio-fangsong); font-weight: 400; font-size: 11.5px; color: var(--vio-ink-3); letter-spacing: 0.1em; padding: 8px 10px; border-bottom: 1px solid var(--vio-rule); }
-.mini-ledger td { padding: 9px 10px; border-bottom: 1px solid var(--vio-rule-soft); color: var(--vio-ink-2); }
+.mini-ledger th {
+  text-align: left;
+  font-weight: 700;
+  font-size: 10px;
+  color: var(--vio2-ink-3);
+  letter-spacing: 0.14em;
+  padding: 9px 10px 7px;
+  border-bottom: 2px solid var(--vio2-bd);
+}
+.mini-ledger td { padding: 10px 10px; border-bottom: 2px solid var(--vio2-row-line); color: var(--vio2-ink-2); }
 .mini-ledger tr:last-child td { border-bottom: none; }
 .mini-ledger .num { text-align: right; }
-.dim { color: var(--vio-ink-3); }
+.pill {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--vio2-ink);
+  background: var(--vio2-panel-2);
+  border: 2px solid var(--vio2-bd);
+  padding: 1px 6px;
+}
+.dim { color: var(--vio2-ink-3); }
 </style>

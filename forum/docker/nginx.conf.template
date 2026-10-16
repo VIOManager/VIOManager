@@ -1,0 +1,27 @@
+# nginx 配置模板：官方镜像启动时把 ${BACKEND_ORIGIN} 替换为环境变量值；
+# $uri / $host 等 nginx 自有变量不在环境变量里，不会被误替换
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SPA 路由兜底：vue-router history 模式，直接访问/刷新非根路径不 404
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 接口同源反代到后端（演示模式下不请求；切真实接口后由这里转发）
+    location /api/ {
+        proxy_pass ${BACKEND_ORIGIN};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        client_max_body_size 30m;
+    }
+
+    # vite 产物文件名带内容哈希，静态资源可放心长缓存
+    location /assets/ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+}

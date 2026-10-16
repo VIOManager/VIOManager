@@ -1,17 +1,20 @@
 <script setup lang="ts">
 /**
- * 论坛站布局壳：通栏白顶栏 + 内容区 + 简版页脚（V2EX 范式）
- * 视觉基准：.agentdocs/design-preview/forum-v2ex/ 样张；《论坛V2EX风格重设计-优化方案》§3
- * ⚠️ 冲突：图签页脚已按 2026-10-09 lzh 拍板废弃（改居中灰字简版），图纸档案语汇禁止回潮论坛站
+ * 论坛站布局壳：黑条顶栏 + 内容区 + mono 页脚（新粗野双主题，2026-10-16 重涂）
+ * 视觉基准：.agentdocs/design-preview/2026-10-15-forum-redesign/ 样张（lzh 已拍板）
+ * ⚠️ 冲突：旧 V2EX 皮肤（白顶栏/圆角/柔阴影）整体退场；图纸档案语汇仍禁止回潮论坛站
  * 搜索：回车跳首页带 q 关键词（F01 keyword 参数），首页读取 route.query.q
+ * 主题：顶栏 ☾/☀ 钮切 图纸白/深空黑（stores/theme.ts，偏好存 localStorage vio_theme）
  */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useThemeStore } from '@/stores/theme'
 import { avatarOf } from '@/config/avatars'
 import PostDialog from '@/components/PostDialog.vue'
 
 const user = useUserStore()
+const theme = useThemeStore()
 const router = useRouter()
 const mainSite = import.meta.env.VITE_MAIN_SITE_URL ?? 'http://localhost:5174'
 const year = new Date().getFullYear()
@@ -33,10 +36,14 @@ function onPosted() {
 
 <template>
   <div class="page">
-    <!-- 通栏白顶栏：全宽白底下缘 1px 灰线，内容列宽 1080 -->
-    <header class="topbar">
-      <div class="wrap bar-in">
-        <router-link to="/" class="logo">VIO<em>论坛</em></router-link>
+    <div class="orb"></div>
+
+    <!-- 恒黑顶栏：黄块 logo + mono 面包屑 + 搜索 + 导航 + 发帖黄钮 + 主题钮 + 方头像 -->
+    <header class="bar">
+      <div class="bar-in">
+        <router-link to="/" class="lg">VIO</router-link>
+        <span class="lg2">论坛</span>
+        <span class="crumb">FORUM / 团队技术集散地</span>
         <span class="search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="20.5" y1="20.5" x2="16.2" y2="16.2"/></svg>
           <input v-model="searchWord" aria-label="搜索" placeholder="搜索主题与标签" @keyup.enter="doSearch">
@@ -46,22 +53,25 @@ function onPosted() {
           <router-link to="/" exact-active-class="on">首页</router-link>
           <router-link to="/feed" active-class="on">技术交流</router-link>
         </nav>
-        <button class="btn-post" type="button" @click="postVisible = true">创作新主题</button>
-        <span class="who"><img :src="avatarOf(user.realName, 26)" alt="">{{ user.realName }}</span>
+        <button class="btn-bar" type="button" @click="postVisible = true">＋ 创作新主题</button>
+        <button class="tg" type="button" :aria-label="theme.current === 'light' ? '切换到深色' : '切换到浅色'" @click="theme.toggle()">
+          {{ theme.current === 'light' ? '☾' : '☀' }}
+        </button>
+        <img class="av" :src="avatarOf(user.realName, 34)" :alt="user.realName" :title="user.realName">
       </div>
     </header>
 
-    <main class="wrap content">
+    <main class="wrap">
       <router-view />
     </main>
 
-    <!-- 简版页脚：居中灰字 -->
+    <!-- mono 页脚 -->
     <footer class="foot">
       <div>
         <a href="#" @click.prevent>关于</a>
         <a :href="mainSite">主站</a>
       </div>
-      VIO Manager · 团队论坛 · 内部站点 · {{ year }} 秋
+      VIO MANAGER · 团队论坛 · 内部站点 · {{ year }} 秋
     </footer>
 
     <!-- 全站发帖入口（成功后回首页看新帖） -->
@@ -70,28 +80,50 @@ function onPosted() {
 </template>
 
 <style scoped>
-.page { min-height: 100vh; display: flex; flex-direction: column; }
-.wrap { max-width: 1080px; margin: 0 auto; padding: 0 10px; }
-.bar-in { display: flex; align-items: center; gap: 22px; height: 58px; }
-.logo { font-size: 22px; font-weight: 800; color: #222; letter-spacing: -0.02em; }
-.logo em { font-style: normal; color: var(--fade); font-weight: 600; font-size: 15px; margin-left: 2px; }
-.search { display: flex; align-items: center; width: 230px; height: 31px; background: var(--box); border: 1px solid #D4D4D4; border-radius: 999px; padding: 0 13px; }
-.search:focus-within { border-color: #AAA; }
-.search svg { width: 14px; height: 14px; color: var(--fade); flex: none; }
-.search input { flex: 1; min-width: 0; border: none; background: transparent; font-size: 12.5px; margin-left: 7px; color: var(--body); }
+.page { min-height: 100vh; display: flex; flex-direction: column; position: relative; z-index: 1; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 26px 10px 0; width: 100%; }
+
+/* 顶栏：恒黑条（深色态加下缘线），内容列宽 1080 */
+.bar { position: sticky; top: 0; z-index: 10; background: var(--vio2-head); color: #FFF; }
+:root[data-theme='dark'] .bar { border-bottom: var(--vio2-bd-main); }
+.bar-in { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 16px; height: 60px; padding: 0 10px; }
+.lg { background: var(--vio2-yellow); color: #101010; font-weight: 900; font-size: 16px; padding: 4px 11px; }
+.lg:hover { color: #101010; }
+.lg2 { font-weight: 900; font-size: 15px; letter-spacing: 0.06em; color: #FFF; }
+.crumb { font-family: var(--vio2-mono); font-size: 11px; letter-spacing: 0.14em; color: #8F8A7A; border-left: 3px solid #4A463A; padding-left: 16px; }
+:root[data-theme='dark'] .crumb { color: var(--vio2-ink-3); border-left-color: var(--vio2-bd); }
+
+.search { display: flex; align-items: center; gap: 7px; width: 230px; padding: 7px 13px; border: 3px solid #000; background: #FFF; color: #7A7562; font-size: 12.5px; box-shadow: 3px 3px 0 rgba(255, 255, 255, 0.25); }
+:root[data-theme='dark'] .search { background: var(--vio2-panel); border-color: var(--vio2-bd); color: var(--vio2-ink-3); box-shadow: 3px 3px 0 #04060B; }
+.search svg { width: 14px; height: 14px; flex: none; }
+.search input { flex: 1; min-width: 0; border: none; background: transparent; font-size: 12.5px; color: inherit; font-family: var(--vio2-din); }
 .search input:focus { outline: none; }
+:root[data-theme='dark'] .search input { color: var(--vio2-ink); }
+
 .sp { flex: 1; }
-.topnav a { font-size: 13px; color: var(--body); margin-left: 18px; }
-.topnav a:hover, .topnav a.on { color: #000; }
-.btn-post { font-size: 13px; color: var(--ink); background: var(--box); border: 1px solid #CCC; border-radius: var(--radius-box); padding: 5px 14px; margin-left: 18px; cursor: pointer; }
-.btn-post:hover { border-color: #999; }
-.who { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--body); margin-left: 18px; }
-.who img { width: 26px; height: 26px; border-radius: var(--radius-ava); }
+.topnav a { color: #C9C4B4; font-size: 13px; font-weight: 800; margin-left: 18px; }
+.topnav a:hover { color: #FFF; }
+.topnav a.on { color: var(--vio2-yellow); }
 
-.content { flex: 1; padding-top: 18px; padding-bottom: 20px; }
+/* 发帖黄钮：白/黑投影随主题，按压下沉 */
+.btn-bar { background: var(--vio2-yellow); color: #101010; border: 3px solid #000; box-shadow: 3px 3px 0 rgba(255, 255, 255, 0.25); font: inherit; font-size: 13px; font-weight: 900; padding: 8px 16px; cursor: pointer; letter-spacing: 0.06em; margin-left: 4px; transition: transform 0.12s, box-shadow 0.12s; }
+.btn-bar:hover { transform: translate(1px, 1px); box-shadow: 2px 2px 0 rgba(255, 255, 255, 0.25); }
+.btn-bar:active { transform: translate(3px, 3px); box-shadow: none; }
+:root[data-theme='dark'] .btn-bar { border-color: #04060B; box-shadow: 3px 3px 0 #04060B; }
+:root[data-theme='dark'] .btn-bar:hover { box-shadow: 2px 2px 0 #04060B; }
 
-.foot { text-align: center; font-size: 12px; color: var(--fade); padding: 22px 0 30px; }
-.foot a { color: var(--fade); margin: 0 8px; }
-.foot a:hover { color: var(--ink); }
-.foot div { margin-bottom: 4px; }
+/* 主题切换钮：浅色白块 / 深色面板块黄字 */
+.tg { width: 40px; height: 36px; border: 3px solid #000; background: #FFF; color: #101010; font-size: 15px; cursor: pointer; box-shadow: 3px 3px 0 rgba(255, 255, 255, 0.25); }
+:root[data-theme='dark'] .tg { background: var(--vio2-panel); border-color: var(--vio2-bd); color: var(--vio2-yellow); box-shadow: 3px 3px 0 #04060B; }
+
+/* 头像：方形粗边（brutalist 不做圆角） */
+.av { width: 34px; height: 34px; border: 3px solid #000; object-fit: cover; }
+:root[data-theme='dark'] .av { border-color: #04060B; }
+
+main.wrap { flex: 1; padding-bottom: 20px; }
+
+@media (max-width: 900px) {
+  .search { display: none; }
+  .crumb { display: none; }
+}
 </style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 技术交流（每日推送内容流）——与首页同一套行式语言
- * 视觉基准：.agentdocs/design-preview/forum-v2ex/feed.html（v3 样张，lzh 已过目）
+ * 视觉基准：.agentdocs/design-preview/2026-10-15-forum-redesign/feed.html（新粗野双主题，lzh 已拍板）
  * 数据：T01 列表（category 筛选）、T03 收藏、T04 订阅标签
  * 管理侧（仅超管可见）：T10 录入弹窗、T11 置顶/撤顶、T12 撤回（幂等）
  * 订阅口径（清单 §3 拍板）：订阅关系本期不落库，前端 localStorage 保存；
@@ -10,7 +10,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { FEED_CATEGORIES, feedCategoryOf } from '@/config/feedCategories'
-import { avatarOf } from '@/config/avatars'
 import { SOURCE_TYPE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
 import { apiTechList, apiTechTags, apiCollectTechPost, apiPinTechPost, apiWithdrawTechPost, type TechPostItem } from '@/api/tech'
@@ -164,70 +163,78 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="grid">
-    <div class="box">
-      <!-- 频道行第一行：七分类 tab + 右端来源说明 -->
-      <div class="tabs">
-        <a href="#" :class="{ on: activeCat === 'ALL' }" @click.prevent="switchCat('ALL')">全部</a>
-        <a
-          v-for="c in FEED_CATEGORIES"
-          :key="c.code"
-          href="#"
-          :class="{ on: activeCat === c.code }"
-          @click.prevent="switchCat(c.code)"
-        >{{ c.name }}</a>
-        <span class="right">管理员录入 / 外部收录 / AI 摘要</span>
-      </div>
-      <!-- 频道行第二行：订阅标签（点击切换订阅，已订阅的列表按交集过滤） -->
-      <div class="tabs2">
-        <b>订阅标签</b>
-        <a v-for="t in allTags" :key="t" href="#" :class="{ 'sub-on': subs.indexOf(t) >= 0 }" @click.prevent="toggleSub(t)">{{ t }}</a>
-        <a v-if="subs.length > 0" href="#" class="clear" @click.prevent="subs = []; saveSubs()">清除订阅</a>
-      </div>
-      <!-- 管理员入口：录入推送（T10） -->
-      <div v-if="user.isAdmin" class="admin-bar">
-        <span>共 {{ total }} 条推送</span>
-        <button class="btn-admin" type="button" @click="createVisible = true">+ 录入推送</button>
-      </div>
-
-      <!-- 推送行：左 48px 分类色块字 + 标题/摘要单行截断/meta + 右收藏数胶囊 -->
-      <div v-for="f in shownFeeds" :key="f.id" class="cell">
-        <span class="cat" :class="feedCategoryOf(f.category).classKey">{{ feedCategoryOf(f.category).short }}</span>
-        <div class="mid">
-          <div class="f-title">
-            <span v-if="f.pinned" class="pin">置顶</span>
-            <a href="#" @click.prevent>{{ f.title }}</a>
-          </div>
-          <div class="f-sum">{{ f.summary }}</div>
-          <div class="f-meta">
-            <span class="node">{{ feedCategoryOf(f.category).name }}</span>{{ SOURCE_TYPE_LABEL[f.sourceType] ?? f.sourceType }} · {{ f.publishAt }} · 阅读 {{ f.viewCount }} · {{ f.tags.join(' · ') }}
-            <!-- 管理操作（仅超管）：置顶/撤顶、撤回 -->
-            <span v-if="user.isAdmin" class="mg">
-              <a href="#" @click.prevent="togglePin(f)">{{ f.pinned ? '撤顶' : '置顶' }}</a>
-              <a href="#" @click.prevent="withdraw(f)">撤回</a>
-            </span>
-          </div>
-        </div>
-        <span class="collect" :class="{ on: f.collected }" role="button" @click="toggleCollect(f)">{{ f.collected ? '已收藏' : '⭐' }} {{ f.collectCount }}</span>
-      </div>
-      <div v-if="!loading && shownFeeds.length === 0" class="empty">这个分类下暂时没有推送</div>
+  <div>
+    <div class="p-head">
+      <h1><span>TECH FEED / 每日推送内容流</span>技术交流</h1>
+      <span class="sticker">共 {{ total }} 条推送</span>
     </div>
 
-    <div class="side">
+    <div class="grid">
       <div class="box">
-        <h5>今日热议主题</h5>
-        <ul class="hot">
-          <li v-for="h in hotRank" :key="h.id">
-            <img class="hava" :src="avatarOf(h.author, 24)" :alt="h.author">
-            <router-link :to="`/topic/${h.id}`">{{ h.title }}</router-link>
-          </li>
-        </ul>
+        <!-- 频道行第一行：六分类 chips -->
+        <div class="tabs">
+          <a href="#" :class="{ on: activeCat === 'ALL' }" @click.prevent="switchCat('ALL')">全部</a>
+          <a
+            v-for="c in FEED_CATEGORIES"
+            :key="c.code"
+            href="#"
+            :class="{ on: activeCat === c.code }"
+            @click.prevent="switchCat(c.code)"
+          >{{ c.name }}</a>
+        </div>
+        <!-- 频道行第二行：订阅标签（点击切换订阅，已订阅紫底，列表按交集过滤） -->
+        <div class="tabs2 subs">
+          <b>订阅标签</b>
+          <a v-for="t in allTags" :key="t" href="#" :class="{ 'sub-on': subs.indexOf(t) >= 0 }" @click.prevent="toggleSub(t)">{{ t }}</a>
+          <a v-if="subs.length > 0" href="#" class="clear" @click.prevent="subs = []; saveSubs()">清除订阅</a>
+        </div>
+        <!-- 管理员入口：录入推送（T10） -->
+        <div v-if="user.isAdmin" class="admin-bar">
+          <span>共 {{ total }} 条推送 · ADMIN</span>
+          <button class="btn-admin" type="button" @click="createVisible = true">＋ 录入推送</button>
+        </div>
+
+        <!-- 推送行：左 48px 分类色块字 + 标题/摘要单行截断/mono meta + 右收藏数块 -->
+        <div v-for="f in shownFeeds" :key="f.id" class="cell">
+          <span class="cat" :class="feedCategoryOf(f.category).classKey">{{ feedCategoryOf(f.category).short }}</span>
+          <div class="mid">
+            <div class="t-title">
+              <span v-if="f.pinned" class="pin">置顶</span>
+              <a href="#" @click.prevent>{{ f.title }}</a>
+            </div>
+            <div class="f-sum">{{ f.summary }}</div>
+            <div class="t-meta">
+              <span class="node">{{ feedCategoryOf(f.category).name }}</span>{{ SOURCE_TYPE_LABEL[f.sourceType] ?? f.sourceType }} · {{ f.publishAt }} · 阅读 {{ f.viewCount }} · {{ f.tags.join(' · ') }}
+              <!-- 管理操作（仅超管）：置顶/撤顶、撤回 -->
+              <span v-if="user.isAdmin" class="mg">
+                <a href="#" @click.prevent="togglePin(f)">{{ f.pinned ? '撤顶' : '置顶' }}</a>
+                <a href="#" @click.prevent="withdraw(f)">撤回</a>
+              </span>
+            </div>
+          </div>
+          <span class="collect" :class="{ on: f.collected }" role="button" @click="toggleCollect(f)">{{ f.collected ? '已收藏' : '⭐' }} {{ f.collectCount }}</span>
+        </div>
+        <div v-if="!loading && shownFeeds.length === 0" class="empty">这个分类下暂时没有推送</div>
       </div>
-      <div class="box">
-        <h5>推送统计</h5>
-        <div class="stat">
-          <div><span>推送总数</span><b>{{ total }}</b></div>
-          <div><span>单篇被收藏最多</span><b>{{ maxCollect }}</b></div>
+
+      <div class="side">
+        <div class="box">
+          <div class="box-h"><b>今日热议主题</b><span>HOT / 24H</span></div>
+          <div class="bd">
+            <ul class="hot">
+              <li v-for="(h, i) in hotRank" :key="h.id">
+                <span class="rk">{{ String(i + 1).padStart(2, '0') }}</span>
+                <router-link :to="`/topic/${h.id}`">{{ h.title }}</router-link>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="box">
+          <div class="box-h"><b>推送统计</b><span>WEEK</span></div>
+          <div class="bd stat">
+            <div><span>推送总数</span><b>{{ total }}</b></div>
+            <div><span>单篇被收藏最多</span><b>{{ maxCollect }}</b></div>
+          </div>
         </div>
       </div>
     </div>
@@ -238,63 +245,37 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.grid { display: grid; grid-template-columns: 1fr 270px; gap: 20px; align-items: start; }
-.box { background: var(--box); border-radius: var(--radius-box); box-shadow: var(--shadow-box); }
+/* 页面差异：双列网格 + 分类色块 + 订阅 chips + 管理条 + 收藏钮；行骨架走 skin.css */
+.grid { display: grid; grid-template-columns: 1fr 270px; gap: 22px; align-items: start; }
+.mid { flex: 1; min-width: 0; }
 
-/* 频道行 */
-.tabs { padding: 10px 14px 8px; border-bottom: 1px solid var(--line); }
-.tabs a { font-size: 13px; color: var(--body); padding: 3px 9px; border-radius: 4px; margin-right: 2px; }
-.tabs a.on { background: var(--tab-dark); color: #FFF; }
-.tabs a:not(.on):hover { background: #F2F2F2; color: #000; }
-.tabs .right { float: right; font-size: 12px; color: var(--fade); padding-top: 4px; }
-.tabs2 { padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--fade); }
-.tabs2 b { font-weight: 400; margin-right: 10px; }
-.tabs2 a { color: var(--fade); margin-right: 12px; }
-.tabs2 a.sub-on { color: var(--ink); font-weight: 600; }
-.tabs2 a:hover { color: var(--ink); }
-.tabs2 a.clear { margin-left: auto; text-decoration: underline; }
+/* 订阅标签 chips（覆盖 skin.css 的纯文字链形态） */
+.subs b { font-weight: 700; }
+.subs a { border: var(--vio2-bd-row); background: var(--vio2-panel); color: var(--vio2-ink-2); padding: 2px 10px; font-weight: 700; box-shadow: 2px 2px 0 var(--vio2-shadow); }
+.subs a:hover { color: var(--vio2-ink); transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--vio2-shadow); }
+.subs a.sub-on { background: var(--vio2-lilac); color: var(--vio2-on-ac); border-color: var(--vio2-shadow); }
+.subs a.clear { border: none; background: none; box-shadow: none; text-decoration: underline; margin-left: auto; }
 
 /* 管理条 */
-.admin-bar { display: flex; align-items: center; padding: 7px 14px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--fade); }
-.btn-admin { margin-left: auto; font-size: 12px; color: var(--ink); background: var(--box); border: 1px solid #CCC; border-radius: var(--radius-box); padding: 3px 12px; cursor: pointer; }
-.btn-admin:hover { border-color: #999; }
+.admin-bar { display: flex; align-items: center; padding: 9px 16px; border-bottom: 2px solid var(--vio2-row-line); font-family: var(--vio2-mono); font-size: 11px; color: var(--vio2-ink-3); letter-spacing: 0.08em; }
+.btn-admin { margin-left: auto; border: var(--vio2-bd-row); background: var(--vio2-blue); color: #FFF; font: inherit; font-size: 12px; font-weight: 900; padding: 5px 14px; cursor: pointer; box-shadow: var(--vio2-hard-xs); }
+.btn-admin:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--vio2-shadow); }
 
-/* 推送行 */
-.cell { display: flex; gap: 13px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
-.cell:last-child { border-bottom: none; }
-.cat { width: 48px; height: 48px; flex: none; border-radius: var(--radius-ava); display: grid; place-items: center; font-size: 15px; font-weight: 600; }
-/* 六分类浅底深字配色（classKey 与 feedCategories.ts 一一对应） */
-.k-ee { background: #DCE7F5; color: #3D5A80; }
-.k-mo { background: #E2EFDA; color: #4F6F4A; }
-.k-ai { background: #E8E2F5; color: #5A4A8A; }
-.k-vd { background: #F5D9E0; color: #8A3D5A; }
-.k-dev { background: #DDEFF0; color: #3D6E80; }
-.k-etc { background: #EFEFEF; color: #666; }
-.mid { flex: 1; min-width: 0; }
-.f-title { font-size: 16px; line-height: 1.3; font-weight: 400; }
-.f-title a { color: var(--ink); }
-.f-title a:hover { color: #000; text-decoration: underline; }
-.pin { font-size: 11px; color: var(--fade); border: 1px solid #DDD; border-radius: 3px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
-.f-sum { font-size: 13px; color: #888; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.f-meta { margin-top: 4px; font-size: 12px; color: var(--fade); }
-.node { background: #F5F5F5; color: var(--fade); border-radius: 10px; padding: 1px 8px; margin-right: 8px; }
+/* 分类色块：六分类对应五强调色 + 面板灰（classKey 与 feedCategories.ts 一一对应） */
+.cat { width: 48px; height: 48px; flex: none; border: var(--vio2-bd-acc); display: grid; place-items: center; font-size: 15px; font-weight: 900; color: var(--vio2-on-ac); }
+.k-ee { background: var(--vio2-blue); }
+.k-mo { background: var(--vio2-green); }
+.k-ai { background: var(--vio2-lilac); }
+.k-vd { background: var(--vio2-pink); }
+.k-dev { background: var(--vio2-yellow); }
+.k-etc { background: var(--vio2-panel-2); color: var(--vio2-ink-2); }
+
+.f-sum { font-size: 13px; color: var(--vio2-ink-2); font-weight: 600; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mg { margin-left: 10px; }
-.mg a { color: #B0B0B0; margin-right: 8px; text-decoration: underline; }
-.mg a:hover { color: var(--ink); }
-.collect { flex: none; align-self: center; background: #F5F5F5; color: var(--meta); font-size: 12px; border-radius: 10px; padding: 1px 9px; cursor: pointer; }
-.collect.on { background: var(--pill); color: #FFF; }
-.empty { padding: 30px 14px; font-size: 13px; color: var(--fade); text-align: center; }
+.mg a { color: var(--vio2-ink-3); text-decoration: underline; margin-right: 9px; }
+.mg a:hover { color: var(--vio2-pink); }
 
-/* 右栏 */
-.side .box { padding: 12px 14px; margin-bottom: 18px; }
-.side h5 { font-size: 12.5px; color: var(--fade); font-weight: 400; border-bottom: 1px solid var(--line-soft); padding-bottom: 8px; margin-bottom: 4px; }
-.hot { margin: 0; padding: 0; }
-.hot li { list-style: none; display: flex; gap: 9px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #F4F4F4; }
-.hot li:last-child { border: none; padding-bottom: 2px; }
-.hava { width: 24px; height: 24px; flex: none; border-radius: var(--radius-ava); object-fit: cover; margin-top: 1px; }
-.hot a { font-size: 12.5px; color: var(--body); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.hot a:hover { color: #000; }
-.stat div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #F7F7F7; font-size: 12.5px; color: var(--fade); }
-.stat div:last-child { border: none; }
-.stat b { color: var(--body); font-weight: 600; }
+/* 收藏钮：描边块，已收藏黄底 */
+.collect { flex: none; align-self: center; border: var(--vio2-bd-row); background: var(--vio2-panel); color: var(--vio2-ink-2); font-family: var(--vio2-mono); font-size: 12px; font-weight: 700; padding: 4px 10px; cursor: pointer; box-shadow: var(--vio2-hard-xs); }
+.collect.on { background: var(--vio2-yellow); color: var(--vio2-on-ac); border-color: var(--vio2-shadow); }
 </style>

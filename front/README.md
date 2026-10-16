@@ -20,6 +20,18 @@ npm run dev                        # http://localhost:5174
 > 地址由 `VITE_FORUM_URL` 配置（默认 5175）；开发期两站不同源，论坛首次进入走引导页补调试 token，
 > 生产环境同网关下共享登录态。
 
+## 容器化运行（可选，不需要装 Node）
+
+只想看效果/给别人演示时用，开发请继续 `npm run dev`（热更新）：
+
+```bash
+docker compose up -d --build    # http://localhost:8090
+```
+
+- 容器 = nginx 托管构建产物，`/api` 同源反代到宿主机 8088 后端（`BACKEND_ORIGIN` 可改）
+- 论坛入口默认指向容器版论坛站 8092（`forum/` 同样 `docker compose up -d --build`；8091 被 vio-kb 微服务占用）
+- 收场：`docker compose down`（改代码后重新 `up -d --build`）
+
 ## mock 假数据与真实后端的切换（重要）
 
 前端自带一套"假后端"（`src/api/mock/`），开发期不依赖任何服务就能跑通全部页面：

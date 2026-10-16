@@ -1,7 +1,7 @@
 # VIOManager 团队论坛（forum/）
 
 > 独立站：社区三模块（团队论坛 / 技术交流 / 知识库）2026-10-08 拍板迁出主站，本工程是其前端
-> 视觉：图纸档案家族（与主站 front/ 同源令牌）；设计稿见 `.agentdocs/design-preview/forum-site/`
+> 视觉：新粗野双主题「图纸白 / 深空黑」（2026-10-15 重涂，与主站 front/ 同源 --vio2-* 令牌，html[data-theme] 切换）；设计稿见 `.agentdocs/design-preview/2026-10-15-forum-redesign/`
 
 ## 环境
 
@@ -13,6 +13,16 @@
 npm i
 cp .env.example .env.development
 npm run dev   # http://localhost:5175
+```
+
+## 容器化运行（可选，不需要装 Node）
+
+只想看效果/给别人演示时用；论坛后端尚未实现，容器默认烘焙演示数据（`USE_MOCK=true`），
+不依赖后端即可完整浏览，后端就绪后 compose 里改 `false` 重建切真实接口：
+
+```bash
+docker compose up -d --build    # http://localhost:8092  # 8091 被 vio-kb 微服务占用
+docker compose down             # 收场
 ```
 
 ## 与主站的关系
