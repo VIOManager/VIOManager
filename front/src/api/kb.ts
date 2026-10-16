@@ -1,11 +1,13 @@
 /**
- * 知识库接口——已对齐后端权威契约（feature/kb，/api/kb/docs 系列）
- * 联调对齐四项（2026-10-15 随 feature/kb 提交，PR 中请 lzh 按正式清单复核）：
- *   ① 路径 items→docs；② 置顶/收藏对齐后端端点语义；③ 评论列表解包后端分页壳；
- *   ④ 发评论补 X-Idempotency-Key（全站写操作规范，原实现漏带）
- * 字段模型：lzh 2026-10-14 拍板简化（链接或文件二选一），后端已吸收，双方一致
+ * 知识库接口（KB01–KB08 暂定）
+ * 依据：PRD §3.14；lzh 2026-10-14 拍板先行简化——条目 = 外部链接或上传文件二选一，
+ *    分类与正文暂不做，待正式需求加回
+ * ⚠️ 暂定契约：知识库接口清单未出（9xxx 段预留给知识库与 AI），本文件按前端先行口径约定，
+ *    待后端清单入库后对齐；TODO(联调)：以正式清单为准
+ * 权限：发布/编辑/置顶/删除仅管理员（1003）；浏览/收藏/评论登录即可
+ * 文件两段式：先走文件服务 apiUploadFile 拿 fileId/fileName，再带进本模块建条目（与佐证/材料同模式）
  */
-import { del, download, get, postIdem, put } from './http'
+import { del, download, get, post, postIdem, put } from './http'
 
 /** 条目形态：外部链接 / 上传文件 */
 export type KbSourceType = 'LINK' | 'FILE'
@@ -44,13 +46,13 @@ export interface KbComment {
   mine: boolean
 }
 
-export async function apiKbItems(q?: { keyword?: string }): Promise<KbItem[]> {
-  return get('/api/kb/docs', (q ?? {}) as Record<string, unknown>)
+export function apiKbItems(q?: { keyword?: string }): Promise<KbItem[]> {
+  return get('/api/kb/items', (q ?? {}) as Record<string, unknown>)
 }
 
-/** KB03 详情（浏览量 +1，含 favorited） */
+/** KB03 详情（浏览量 +1） */
 export function apiKbDetail(id: string): Promise<KbDetail> {
-  return get('/api/kb/docs/' + id)
+  return get('/api/kb/items/' + id)
 }
 
 export interface CreateKbBody {
@@ -66,49 +68,38 @@ export interface CreateKbBody {
 
 /** KB02 发布（仅管理员；幂等头） */
 export function apiCreateKbItem(body: CreateKbBody): Promise<{ id: string }> {
-  return postIdem('/api/kb/docs', body, crypto.randomUUID())
+  return postIdem('/api/kb/items', body, crypto.randomUUID())
 }
 
 export function apiUpdateKbItem(id: string, body: { title?: string; summary?: string; linkUrl?: string }): Promise<null> {
-  return put('/api/kb/docs/' + id, body)
+  return put('/api/kb/items/' + id, body)
 }
 
-/** 附件下载：走文件服务流下载（GET /api/files/{fileId}/download；KB_FILE 全员可下，2026-10-15 实测链路正常） */
+/** 附件下载：走文件服务流下载（后端已实现 GET /api/files/{fileId}/download） */
 export function apiDownloadKbFile(fileId: string, fileName: string): Promise<void> {
   return download('/api/files/' + fileId + '/download', fileName)
 }
 
 export function apiDeleteKbItem(id: string): Promise<null> {
-  return del('/api/kb/docs/' + id)
+  return del('/api/kb/items/' + id)
 }
 
-/** KB06 置顶切换（仅管理员；后端为翻转语义，目标态由调用方按当前态取反保证一致） */
-export function apiPinKbItem(id: string, _pinned: boolean): Promise<null> {
-  return put('/api/kb/docs/' + id + '/top')
+/** KB06 置顶切换（仅管理员） */
+export function apiPinKbItem(id: string, pinned: boolean): Promise<null> {
+  return put('/api/kb/items/' + id + '/pin', { pinned })
 }
 
-/**
- * KB07 收藏/取消收藏（登录；返回操作后状态）。
- * 后端为 collect/uncollect 两个端点，按调用方传入的当前态取反。
- */
-export async function apiToggleKbFavorite(id: string, favorited: boolean): Promise<{ favorited: boolean }> {
-  if (favorited) {
-    await del('/api/kb/docs/' + id + '/collect')
-  } else {
-    await postIdem('/api/kb/docs/' + id + '/collect', {}, crypto.randomUUID())
-  }
-  return { favorited: !favorited }
+/** KB07 收藏/取消收藏（登录；返回当前状态） */
+export function apiToggleKbFavorite(id: string): Promise<{ favorited: boolean }> {
+  return post('/api/kb/items/' + id + '/favorite', {})
 }
 
-/** 后端评论列表是分页壳 { list, total }，这里解包成数组（当前页数据量小，直取第一页） */
-export async function apiKbComments(id: string): Promise<KbComment[]> {
-  const page = await get<{ list: KbComment[] }>('/api/kb/docs/' + id + '/comments')
-  return page.list
+export function apiKbComments(id: string): Promise<KbComment[]> {
+  return get('/api/kb/items/' + id + '/comments')
 }
 
 export function apiAddKbComment(id: string, content: string): Promise<{ id: string }> {
-  // 写操作必须带幂等头（全站规范 §6，原实现漏带会被后端 1001 拦下）
-  return postIdem('/api/kb/docs/' + id + '/comments', { content }, crypto.randomUUID())
+  return post('/api/kb/items/' + id + '/comments', { content })
 }
 
 /** 删评论：本人或管理员 */

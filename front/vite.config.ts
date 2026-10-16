@@ -5,8 +5,6 @@
  * - 端口 5174（避开本机常见占用；后端对外 8088）
  * - 联调代理：开发期浏览器请求 /api/** 由 dev server 服务端转发到 8088，
  *   绕开浏览器跨域（后端未配 CORS）；生产部署在 Nginx 后同源，无需代理
- * - 知识库微服务：/api/kb/** 转发 8091（vio-kb 独立进程，对齐其 application.yml 网关约定），
- *   本地联调增量，入库需报备
  */
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -20,10 +18,6 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
-      '/api/kb': {
-        target: 'http://localhost:8091',
-        changeOrigin: true
-      },
       '/api': {
         target: 'http://localhost:8088',
         changeOrigin: true

@@ -40,8 +40,7 @@ async function load() {
 
 async function onFavorite() {
   if (!detail.value) return
-  // 本地联调改动：后端收藏是 collect/uncollect 两端点，需传当前态（待 lzh 复核）
-  const r = await apiToggleKbFavorite(detail.value.id, detail.value.favorited)
+  const r = await apiToggleKbFavorite(detail.value.id)
   detail.value.favorited = r.favorited
   detail.value.favoriteCount += r.favorited ? 1 : -1
   emit('changed')
