@@ -4,11 +4,12 @@
  * 视觉基准：.agentdocs/design-preview/2026-10-15-forum-redesign/home.html（新粗野双主题，lzh 已拍板）
  * 数据：F01 帖子列表（board/sort/keyword/分页）、F02 今日热议、F03 社区统计
  * 搜索：顶栏搜索框回车跳 ?q=关键词，本页 watch route.query 联动查询
- * TODO(联调-论坛清单)：F01–F03 路径与字段为前端预设，清单出稿后对齐；
- *    热门标签行暂为静态展示（标签接口待清单）
+ * 标签行（接口方案回迁）：按当前版块全量主题单独聚合（size=50 封顶），
+ *    翻页/排序/关键词变化不影响标签行——导航入口保持稳定；
+ *    点击即按该关键词搜索（F01 keyword 含标题与标签）
  */
 import { ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { BOARDS, boardName } from '@/config/boards'
 import { avatarOf } from '@/config/avatars'
 import { apiTopicList, apiHotTopics, apiForumStats, type TopicItem, type HotTopicItem } from '@/api/forum'
@@ -24,8 +25,30 @@ const SORTS = [
   { code: 'hot', name: '最热' }
 ] as const
 
-/** 第二行热门标签；TODO(联调-论坛清单)：由标签接口下发 */
-const hotTags = ['STM32', '电机控制', 'CAD', 'GLM', 'PCB', 'RoboMaster', '招新']
+/**
+ * 标签行：按当前版块全量主题聚合（独立请求，size=50 = F01 页上限封顶，演示量全覆盖）。
+ * 独立于主列表的翻页/排序/关键词——标签是导航入口，不能跟着当前页内容漂移
+ */
+const allTags = ref<string[]>([])
+async function loadTags() {
+  const res = await apiTopicList({
+    // 'ALL' 为前端"全部"伪选项，同 load() 的归一口径
+    board: activeBoard.value === 'ALL' ? '' : activeBoard.value,
+    page: 1,
+    size: 50
+  })
+  const set = new Set<string>()
+  for (const t of res.list) {
+    for (const g of t.tags) set.add(g)
+  }
+  allTags.value = Array.from(set)
+}
+
+/** 点击标签 = 关键词搜索（复用顶栏搜索链路：跳 ?q= 由 watch 联动查询） */
+const router = useRouter()
+function searchTag(tag: string) {
+  router.push({ path: '/', query: tag ? { q: tag } : {} })
+}
 
 const topics = ref<TopicItem[]>([])
 const total = ref(0)
@@ -47,7 +70,8 @@ async function load() {
   loading.value = true
   try {
     const res = await apiTopicList({
-      board: activeBoard.value,
+      // 'ALL' 是前端"全部"伪选项，后端只认真实版块码（未知码按空结果处理），上线路前归一为空串
+      board: activeBoard.value === 'ALL' ? '' : activeBoard.value,
       sort: activeSort.value,
       keyword: keyword.value,
       page: page.value,
@@ -78,6 +102,8 @@ function switchBoard(code: string) {
   activeBoard.value = code
   page.value = 1
   load()
+  // 标签行跟着版块走（与翻页/排序/关键词无关）
+  loadTags()
 }
 
 function switchSort(code: 'latest' | 'hot') {
@@ -98,6 +124,7 @@ async function loadSide() {
   stats.value = await apiForumStats()
 }
 loadSide()
+loadTags()
 </script>
 
 <template>
@@ -131,7 +158,8 @@ loadSide()
           </span>
         </div>
         <div class="tabs2">
-          <a v-for="t in hotTags" :key="t" href="#" @click.prevent>#{{ t }}</a>
+          <a href="#" :class="{ on: !keyword }" title="清除关键词，显示全部主题" @click.prevent="searchTag('')">全部</a>
+          <a v-for="t in allTags" :key="t" href="#" :class="{ on: keyword === t }" @click.prevent="searchTag(t)">#{{ t }}</a>
           <span v-if="keyword" class="kw">关键词：{{ keyword }}</span>
         </div>
 

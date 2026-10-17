@@ -174,6 +174,7 @@ async function submitReply() {
     await loadFloors()
   } catch {
     // 失败：内容与 formKey 都保留，改完再点是同一次提交
+  } finally {
     submitting.value = false
   }
 }

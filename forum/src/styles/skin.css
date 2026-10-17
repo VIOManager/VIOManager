@@ -27,6 +27,7 @@
 .tabs2 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 16px; border-bottom: 2px solid var(--vio2-row-line); font-family: var(--vio2-mono); font-size: 11.5px; color: var(--vio2-ink-3); }
 .tabs2 a { color: var(--vio2-ink-3); cursor: pointer; }
 .tabs2 a:hover { color: var(--vio2-blue); }
+.tabs2 a.on { color: var(--vio2-blue); font-weight: 700; }
 
 /* ── 行式列表（主题行 / 推送行共用骨架）── */
 .cell { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-bottom: 2px solid var(--vio2-row-line); }

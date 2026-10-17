@@ -61,7 +61,15 @@ http.interceptors.response.use(
     ElMessage.error(body.message || '操作失败')
     return Promise.reject(new BizError(body.code, body.message))
   },
-  () => {
+  (err) => {
+    // 401 + code=1002（规范 §5.1 契约）：后端登录失效按 HTTP 401 返回，axios 把非 2xx
+    // 归入本分支——必须在这里清 token 引导回主站登录，否则过期用户卡死在"网络异常"页
+    if (err?.response?.status === 401) {
+      sessionStorage.removeItem(TOKEN_KEY)
+      ElMessage.error(err.response?.data?.message || '登录已失效，请回主站重新登录')
+      window.location.assign(import.meta.env.VITE_MAIN_SITE_URL ?? 'http://localhost:5174/login')
+      return Promise.reject(new BizError(1002, '登录已失效'))
+    }
     // 断网/超时/5xx 兜底：不吞错也不改本地状态，用户看到原列表，重试安全
     ElMessage.error('网络异常，请稍后重试')
     return Promise.reject(new Error('network-error'))

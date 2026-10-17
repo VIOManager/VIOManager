@@ -81,10 +81,10 @@ export function currentLoginName(): string {
 export function currentRole(): string {
   return sessionStorage.getItem(DEV_ROLE_KEY) ?? 'SUPER_ADMIN'
 }
-/** 管理操作权限口径：仅超管（对齐技术交流清单 9002 口径） */
+/** 管理操作权限口径：仅超管（对齐后端口径：通用 1003，ForumErrorCode 无专用码） */
 export function requireAdmin(): void {
   if (currentRole() !== 'SUPER_ADMIN') {
-    throw new MockBizError(9002, '无权执行管理操作（录入/置顶/撤回仅管理员）')
+    throw new MockBizError(1003, '无权执行管理操作（仅管理员）')
   }
 }
 
