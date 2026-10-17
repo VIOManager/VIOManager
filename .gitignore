@@ -39,6 +39,9 @@ venv/
 logs/
 tmp/
 temp/
+# 后端本地运行的 stdout/stderr 重定向输出（.agentdocs/tmp-smoke 测试副产物）
+run-*.out
+run-*.err
 
 # Env & secrets（密钥/密码一律不入库）
 .env
