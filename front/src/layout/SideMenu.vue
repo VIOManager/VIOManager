@@ -28,6 +28,15 @@ function badgeOf(m: MenuEntry): number {
 /** 论坛站入口（独立站，JWT 与主站共享）：地址走环境变量，开发期默认 5175；新标签打开主站会话不丢 */
 const forumUrl = import.meta.env.VITE_FORUM_URL ?? 'http://localhost:5175'
 
+/**
+ * dev 模式两端口 sessionStorage 隔离，论坛入口追加 ?token= 交接 JWT（方案 §7.1）；
+ * 生产同域部署 sessionStorage 天然共享，免交接不带 token
+ */
+const forumHref = computed(() => {
+  if (!import.meta.env.DEV || !user.token) return forumUrl
+  return forumUrl + '?token=' + encodeURIComponent(user.token)
+})
+
 /** 按角色过滤后保持分组顺序收拢 */
 const groups = computed<MenuGroup[]>(() => {
   const list = menuOf(user.role)
@@ -70,7 +79,7 @@ const seq = computed(() => {
       </template>
     </nav>
     <div class="catalog-foot">
-      <a class="forum-link mono" :href="forumUrl" target="_blank" rel="noopener">论坛 FORUM ↗</a>
+      <a class="forum-link mono" :href="forumHref" target="_blank" rel="noopener">论坛 FORUM ↗</a>
       <span class="mono">VOL.2026F</span>
     </div>
   </aside>

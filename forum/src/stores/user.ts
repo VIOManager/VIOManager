@@ -71,6 +71,20 @@ export const useUserStore = defineStore('forum-user', {
       sessionStorage.setItem(TOKEN_KEY, this.token)
       sessionStorage.setItem(DEV_NAME_KEY, n)
       sessionStorage.setItem(DEV_ROLE_KEY, r)
+    },
+    /**
+     * dev token 交接（方案 §7.1）：主站入口以 ?token= 带来真 JWT，落库并解析载荷；
+     * 门页调试登录换到的真 token 同走这里。载荷解析失败（桩 token）时保留现有展示身份
+     */
+    acceptToken(token: string) {
+      this.token = token
+      const claims = claimsFromJwt(token)
+      if (claims.realName !== null) {
+        this.realName = claims.realName
+        this.initials = claims.realName.slice(0, 1)
+      }
+      if (claims.role !== null) this.role = claims.role
+      sessionStorage.setItem(TOKEN_KEY, token)
     }
   }
 })

@@ -31,6 +31,13 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const user = useUserStore()
+  // dev token 交接：主站跳转带 ?token=<jwt>，落库后重定向去掉 query（防地址栏/历史记录残留）
+  if (import.meta.env.DEV && typeof to.query.token === 'string' && to.query.token.length > 0) {
+    user.acceptToken(to.query.token)
+    const query = { ...to.query }
+    delete query.token
+    return { path: to.path, query, replace: true }
+  }
   if (to.path !== '/gate' && !user.loggedIn) return '/gate'
   return true
 })
