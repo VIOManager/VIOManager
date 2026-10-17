@@ -13,6 +13,7 @@ import java.io.IOException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.cors.CorsUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -43,6 +44,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        //跨域预检请求不带 Authorization（浏览器契约），放行给 Spring 的 CORS 处理链，
+        //否则受保护接口的预检先死在 401，前端联调全挂
+        if (CorsUtils.isPreFlightRequest(request)) {
+            return true;
+        }
         String uri = request.getRequestURI();
         String[] paths = skipPaths.split(",");
         for (String p : paths) {
