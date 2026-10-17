@@ -13,9 +13,9 @@ let seq = 10
 let taskSeq = 1
 
 export const semesters: Semester[] = [
-  { id: 's1', name: '2026春季学期', startDate: '2026-03-02', endDate: '2026-07-10', weekCount: 18, status: 'ARCHIVED' },
-  { id: 's2', name: '2026秋季学期', startDate: '2026-08-31', endDate: '2027-01-09', weekCount: 18, status: 'ACTIVE' },
-  { id: 's3', name: '2027春季学期', startDate: '2027-03-01', endDate: '2027-07-09', weekCount: 18, status: 'PLANNED' }
+  { id: 's1', name: '2026春季学期', startDate: '2026-03-02', endDate: '2026-07-10', totalWeeks: 18, status: 'ARCHIVED' },
+  { id: 's2', name: '2026秋季学期', startDate: '2026-08-31', endDate: '2027-01-09', totalWeeks: 18, status: 'ACTIVE' },
+  { id: 's3', name: '2027春季学期', startDate: '2027-03-01', endDate: '2027-07-09', totalWeeks: 18, status: 'PLANNED' }
 ]
 
 const tasks: SwitchTask[] = []
@@ -117,7 +117,7 @@ registerMock({
       name,
       startDate: String(ctx.body.startDate ?? ''),
       endDate: String(ctx.body.endDate ?? ''),
-      weekCount: Number(ctx.body.weekCount ?? 16),
+      totalWeeks: Number(ctx.body.totalWeeks ?? 16),
       status: 'PLANNED'
     }
     semesters.push(s)
@@ -140,7 +140,7 @@ registerMock({
       }
       s.startDate = String(ctx.body.startDate ?? s.startDate)
       s.endDate = String(ctx.body.endDate ?? s.endDate)
-      s.weekCount = Number(ctx.body.weekCount ?? s.weekCount)
+      s.totalWeeks = Number(ctx.body.totalWeeks ?? s.totalWeeks)
       return ok(s)
     }
     return fail(1004, '学期不存在')
