@@ -248,7 +248,9 @@ public class OrgServiceImpl implements OrgService {
                 .distinct()
                 .toList();
         if (ids.isEmpty()) {
-            return Map.of();
+            // 必须用 HashMap 而不是 Map.of()：不可变空 Map 的 get(null) 抛 NPE，
+            // 而组织没配管理员（manager_id 为 null）是常态——演示数据全是 null，O01 因此 1000
+            return new HashMap<>();
         }
         String placeholders = ids.stream().map(i -> "?").collect(Collectors.joining(","));
         return jdbcTemplate.query(
