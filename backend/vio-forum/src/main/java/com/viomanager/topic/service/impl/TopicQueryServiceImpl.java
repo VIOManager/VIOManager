@@ -104,6 +104,8 @@ public class TopicQueryServiceImpl implements ITopicQueryService {
             vo.setLastActiveAt(t.getLastReplyAt());
             vo.setLastReplyBy(t.getLastReplyByName());
             vo.setPinned(t.getPinned() != null && t.getPinned() == 1);
+            // 状态透出（归档③）：前端 locked 守卫与管理端列表标记依赖此字段
+            vo.setStatus(t.getStatus());
             vo.setHot(hotIds.contains(t.getId()));
             vos.add(vo);
         }
@@ -166,6 +168,8 @@ public class TopicQueryServiceImpl implements ITopicQueryService {
         vo.setLiked(liked);
         vo.setCollected(collected);
         vo.setPinned(t.getPinned() != null && t.getPinned() == 1);
+        // 状态透出（归档③）：前端 locked 守卫依赖此字段（F12 锁帖后回复框置灰）
+        vo.setStatus(t.getStatus());
         vo.setPublishAt(t.getCreatedAt());
         vo.setBody(splitBody(t.getBody()));
         vo.setAttach(new ArrayList<>());

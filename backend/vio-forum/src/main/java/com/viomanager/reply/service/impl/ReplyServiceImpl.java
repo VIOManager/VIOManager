@@ -21,6 +21,7 @@ import com.viomanager.user.service.IForumUserService;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -128,25 +129,42 @@ public class ReplyServiceImpl implements IReplyService {
         }
         //3.快照冻结
         ForumUser snapshot = forumUserService.touch(user, authHeader);
+        //3.5 二级评论父校验（V4）：父须同主题、必须一级（两级封顶 9106）、未隐藏未删（deleted 由 @TableLogic 过滤）
+        if (dto.getParentReplyId() != null) {
+            ForumReply parent = forumReplyMapper.selectById(dto.getParentReplyId());
+            if (parent == null || !parent.getTopicId().equals(topicId) || "HIDDEN".equals(parent.getStatus())) {
+                throw new BizException(ForumErrorCode.PARENT_REPLY_INVALID);
+            }
+            if (parent.getParentReplyId() != null) {
+                throw new BizException(ForumErrorCode.REPLY_LEVEL_INVALID);
+            }
+        }
         //4.楼层取号：MAX+1（行锁串行后无竞争）；uk 兜底重试保留作残余防线
+        //  二级也取号占位（保住 uk_forum_reply_floor 与取号逻辑），前端对二级不展示楼层号
         ForumReply reply = new ForumReply()
                 .setTopicId(topicId)
                 .setContent(dto.getText())
+                .setParentReplyId(dto.getParentReplyId())
                 .setAuthorUserId(user.getUserId())
                 .setAuthorName(snapshot.getRealName())
                 .setAuthorGroup(snapshot.getOrgName())
                 .setLikeCount(0)
-                .setStatus("NORMAL");
+                .setStatus("NORMAL")
+                .setEdited(0);
         fillQuote(reply, topicId, dto.getQuoteReplyId());
         insertWithFloorRetry(reply);
-        //5.主题计数与最后活跃刷新（与楼层同事务，防计数漂移）
-        forumTopicMapper.update(null, new UpdateWrapper<ForumTopic>()
-                .eq("id", topicId)
-                .setSql("reply_count = reply_count + 1")
-                .set("last_reply_at", LocalDateTime.now())
-                .set("last_reply_user_id", user.getUserId())
-                .set("last_reply_by_name", snapshot.getRealName()));
-        return Map.of("id", reply.getId(), "floorNo", reply.getFloorNo());
+        //5.主题计数与最后活跃刷新（与楼层同事务，防计数漂移）——仅一级：
+        //  reply_count 是楼层口径（V4 拍板：热榜/最后回复语义保持一级），二级不刷
+        if (dto.getParentReplyId() == null) {
+            forumTopicMapper.update(null, new UpdateWrapper<ForumTopic>()
+                    .eq("id", topicId)
+                    .setSql("reply_count = reply_count + 1")
+                    .set("last_reply_at", LocalDateTime.now())
+                    .set("last_reply_user_id", user.getUserId())
+                    .set("last_reply_by_name", snapshot.getRealName()));
+        }
+        return Map.of("id", reply.getId(), "floorNo", reply.getFloorNo(),
+                "level", dto.getParentReplyId() == null ? 1 : 2);
     }
 
     @Override
@@ -223,14 +241,20 @@ public class ReplyServiceImpl implements IReplyService {
         return (Integer) (max.isEmpty() || max.get(0) == null ? null : ((Number) max.get(0)).intValue());
     }
 
-    private ReplyItemVO toVO(ForumReply r, boolean liked) {
+    /** 论坛权限两档（2026-10-17 拍板）：管理档 = 超管或部门管理员，仅做身份识别不再细分 */
+    private boolean isAdmin(CurrentUser user) {
+        return user != null && ("SUPER_ADMIN".equals(user.getRole()) || "DEPT_ADMIN".equals(user.getRole()));
+    }
+
+    private ReplyItemVO toVO(ForumReply r, boolean liked, boolean adminView) {
         ReplyItemVO vo = new ReplyItemVO();
         vo.setId(r.getId());
         vo.setFloorNo(r.getFloorNo());
         vo.setAuthor(r.getAuthorName());
         vo.setAuthorGroup(r.getAuthorGroup());
         vo.setPublishAt(r.getCreatedAt());
-        vo.setText("HIDDEN".equals(r.getStatus()) ? "该楼层已被隐藏" : r.getContent());
+        //HIDDEN：学生看占位、管理员看原文（恢复操作需要看到被隐藏内容）
+        vo.setText("HIDDEN".equals(r.getStatus()) && !adminView ? "该楼层已被隐藏" : r.getContent());
         vo.setLikeCount(r.getLikeCount());
         vo.setLiked(liked);
         if (r.getQuoteReplyId() != null) {
@@ -240,6 +264,10 @@ public class ReplyServiceImpl implements IReplyService {
             quote.setText(r.getQuoteDigest());
             vo.setQuote(quote);
         }
+        vo.setParentReplyId(r.getParentReplyId());
+        vo.setStatus(r.getStatus());
+        vo.setEdited(r.getEdited() != null && r.getEdited() == 1);
+        vo.setChildren(new ArrayList<>());
         return vo;
     }
 
