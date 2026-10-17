@@ -66,6 +66,7 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
         if (!"REGISTERING".equals(ctx.getStatus())) {
             throw new BizException(TeamErrorCode.CONTEST_STATE_NOT_ALLOWED);
         }
+        cmdSupport.lockContest(dto.getContestId()); // 先锁比赛行再做查重：并发同名申请串行化（K4）
         cmdSupport.ensureNameUnique(dto.getContestId(), dto.getName(), null);
         List<Long> prefill = new ArrayList<>();
         if (dto.getPrefillMemberIds() != null) {

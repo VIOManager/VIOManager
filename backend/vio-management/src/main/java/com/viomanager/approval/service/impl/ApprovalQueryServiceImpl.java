@@ -162,8 +162,8 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
         //3.结果数：我发起的申请已出结果但我没看
         Long resultCount = approvalMapper.selectCount(new QueryWrapper<Approval>()
                 .eq("applicant_id", memberId).ne("status", "PENDING").eq("applicant_read", 0));
-        vo.setTodoCount(todoCount == null ? 0 : todoCount);
-        vo.setResultCount(resultCount == null ? 0 : resultCount);
+        vo.setTodoCount(todoCount == null ? 0 : todoCount.intValue());
+        vo.setResultCount(resultCount == null ? 0 : resultCount.intValue());
         return Result.ok(vo);
     }
 

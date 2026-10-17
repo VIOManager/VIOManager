@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,6 +73,9 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
 
     @Resource
     private MemberIdSupport memberIdSupport;
+
+    @Resource
+    private JdbcTemplate jdbcTemplate;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -139,7 +143,11 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (dto.getFileSize() > limitMb * 1024L * 1024L) {
             throw new BizException(MaterialErrorCode.FILE_TOO_LARGE);
         }
-        //覆盖上传：同一事务内先失效旧版再插新版本（并发封口说明见 MaterialSubmissionMapper 注释）
+        //覆盖上传：先锁要求行把同要求提交串行化——RR 下空范围 UPDATE 的间隙锁会让并发覆盖提交互等成死锁
+        //（2026-10-16 并发套件 K6 抓出：5 路并发 4 路死锁 1000）。锁要求行不影响不同要求并行。
+        jdbcTemplate.queryForObject(
+                "SELECT id FROM material_requirement WHERE id = ? AND deleted = 0 FOR UPDATE", Long.class, requirementId);
+        //同一事务内先失效旧版再插新版本（并发封口说明见 MaterialSubmissionMapper 注释）
         submissionMapper.invalidateCurrent(requirementId, dto.getTeamId());
         Integer maxVersion = submissionMapper.selectMaxVersionNo(requirementId, dto.getTeamId());
         int newVersion = (maxVersion == null ? 0 : maxVersion) + 1;
