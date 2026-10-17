@@ -1,6 +1,9 @@
-# 本地开发环境：三容器（MySQL + MinIO + ClamAV）。
+# 本地开发环境：四件套（MySQL + MinIO + ClamAV + Redis）默认启动；后端两个服务挂 app profile 按需带起。
 # 生产 6 容器口径（含前端 nginx、AI 服务）属部署层，不在此文件（骨架方案 K5 结论）。
-# 用法：cd backend && docker compose up -d；推倒重建用 docker compose down -v（本地库重建零成本）。
+# 用法：cd backend && docker compose up -d（日常四件套，应用跑 IDEA）；
+#      一键全套演示/冒烟：docker compose --profile app up -d --build
+#      （8088 被 IDEA 占着时：要么先停 IDEA，要么 APP_PORT=18088 起容器版并行跑）；
+#      推倒重建用 docker compose down -v（本地库重建零成本，kb 库由 mysql-init 自动建）。
 name: vio-backend
 
 services:
@@ -22,6 +25,8 @@ services:
       - "${MYSQL_PORT:-3307}:3306"
     volumes:
       - vio-mysql-data:/var/lib/mysql
+      # 新卷首次初始化自动建 kb 独立库（老卷不会执行，见脚本内注释的手工补建命令）
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 5s
@@ -47,6 +52,79 @@ services:
     ports:
       - "3310:3310"   # ClamD 协议端口，Step 8 文件服务接入
 
+  # Redis：知识库推荐位缓存（feature/kb 合入 main 后属后端基础设施，不可用时 kb 自动降级直查库）；
+  # 后续审批中心升级（组织树缓存/未读红点）复用此容器，不再另起。
+  redis:
+    image: redis:7-alpine
+    container_name: vio-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"   # 宿主联调可直连；容器内服务用 REDIS_HOST=redis
+    volumes:
+      - vio-redis-data:/data
+
+  # 后端应用本体：镜像由 backend/Dockerfile 多阶段构建（构建层 Maven 打包，运行层仅 JRE）。
+  # 刻意挂 profiles：默认 up 只起四件套，开发期应用照旧跑 IDEA 可热调；
+  # 要一条命令起全套（演示/冒烟/部署演练）再 --profile app。
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vio-backend-app:dev
+    container_name: vio-app
+    profiles: ["app"]
+    environment:
+      # 容器网络内用服务名 + 容器原端口直连（MySQL 是 3306，不是宿主映射的 3307）
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-viomanager}
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev-root-123}
+      # MinIO 凭据与上方 minio 服务共用同一套环境变量，改一处两端同步；桶由应用启动后自建
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-vio-minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev-minio-123}
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      # 必须与下方 kb 服务同值（kb 不设此变量会走默认值，主服务签发的 token 到 kb 全 401）
+      JWT_SECRET: ${JWT_SECRET:-viomanager-local-dev-secret-key-32bytes-minimum}
+      TZ: Asia/Shanghai
+    ports:
+      # 宿主端口可用 APP_PORT 覆盖：IDEA 实例占着 8088 时 APP_PORT=18088 起容器版并行
+      - "${APP_PORT:-8088}:8088"
+    depends_on:
+      mysql:
+        condition: service_healthy   # Flyway 建表赶在库就绪前会启动失败，等健康检查过了再起
+      minio:
+        condition: service_started
+      clamav:
+        condition: service_started
+
+  # 知识库微服务（8091）：与 app 同一镜像、构建一次，command 换跑 kb.jar。
+  # 独立库 viomanager_kb（新卷由 mysql-init 自动建，老卷手工补建一次）；token 由主服务签发。
+  kb:
+    image: vio-backend-app:dev
+    container_name: vio-kb-app
+    profiles: ["app"]
+    command: ["kb.jar"]
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      KB_DATABASE: viomanager_kb
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev-root-123}
+      REDIS_HOST: redis   # 推荐位缓存；连不上自动降级直查库（短超时熔断，见 kb application.yml）
+      JWT_SECRET: ${JWT_SECRET:-viomanager-local-dev-secret-key-32bytes-minimum}
+      TZ: Asia/Shanghai
+    ports:
+      - "8091:8091"
+    depends_on:
+      mysql:
+        condition: service_healthy   # kb 自己的 Flyway 建 kb 库三表两基座，同样要等库就绪
+      redis:
+        condition: service_started
+
 volumes:
   vio-mysql-data:
   vio-minio-data:
+  vio-redis-data:

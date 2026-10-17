@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Docker 镜像构建专用 Maven 配置：替换 maven 官方镜像内的全局 settings，
+  让容器内依赖下载走阿里云（与宿主 D:/apache-maven-3.9.13/conf/settings.xml 同源）。
+  只镜像 central：本项目依赖全部在 central 上（Spring Boot 3.5.5 已 GA），不引入额外仓库。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>aliyunmaven</id>
+      <mirrorOf>central</mirrorOf>
+      <name>aliyun maven</name>
+      <url>https://maven.aliyun.com/repository/public</url>
+    </mirror>
+  </mirrors>
+</settings>
