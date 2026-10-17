@@ -3,7 +3,7 @@
 # 用法：cd backend && docker compose up -d（日常四件套，应用跑 IDEA）；
 #      一键全套演示/冒烟：docker compose --profile app up -d --build
 #      （8088 被 IDEA 占着时：要么先停 IDEA，要么 APP_PORT=18088 起容器版并行跑）；
-#      推倒重建用 docker compose down -v（本地库重建零成本，kb 库由 mysql-init 自动建）。
+#      推倒重建用 docker compose down -v（本地库重建零成本，kb 与论坛 vioforum 库由 mysql-init 自动建）。
 name: vio-backend
 
 services:
@@ -25,7 +25,7 @@ services:
       - "${MYSQL_PORT:-3307}:3306"
     volumes:
       - vio-mysql-data:/var/lib/mysql
-      # 新卷首次初始化自动建 kb 独立库（老卷不会执行，见脚本内注释的手工补建命令）
+      # 新卷首次初始化自动建 kb / 论坛 vioforum 独立库（老卷不会执行，见脚本内注释的手工补建命令）
       - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
