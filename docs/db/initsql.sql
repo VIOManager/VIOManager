@@ -1,7 +1,9 @@
 -- ============================================================================
 -- VIOManager 数据库建表脚本（完整合集）
--- 52 张表，可一次性执行。改表结构需组长批准后直接修改本文件 docs/db/initsql.sql，
+-- 49 张表，可一次性执行。改表结构需组长批准后直接修改本文件 docs/db/initsql.sql，
 -- 全项目仅此一份表结构定义，避免漂移。
+-- 技术交流域三张表已于 2026-10-15 迁至论坛独立库 vioforum
+-- （建表脚本：backend/vio-forum/src/main/resources/db/migration/V1__forum_init.sql）。
 -- 执行： mysql -uroot -p < 数据库建表脚本合集.sql
 -- ============================================================================
 
@@ -931,63 +933,8 @@ CREATE TABLE IF NOT EXISTS schedule_rule (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '子组织排班规则';
 
 -- ############################################################################
--- 六、技术交流域 + 知识库域（6 张）
+-- 六、知识库域（3 张）（技术交流域已迁论坛库 vioforum，见文件头注）
 -- ############################################################################
-
-CREATE TABLE IF NOT EXISTS tech_post (
-    id                  BIGINT       NOT NULL            COMMENT '主键',
-    title               VARCHAR(300) NOT NULL            COMMENT '标题',
-    category            VARCHAR(64)  NOT NULL            COMMENT '分类，对应字典 TECH_CATEGORY',
-    content_type        VARCHAR(32)  NOT NULL DEFAULT 'ARTICLE' COMMENT '内容形态：VIDEO 视频 / ARTICLE 文章 / TUTORIAL 教程链接',
-    summary             VARCHAR(1000) NULL               COMMENT '摘要',
-    content             TEXT         NULL                COMMENT '正文内容（文章类）',
-    cover_file_id       BIGINT       NULL                COMMENT '封面图文件 ID',
-    source_url          VARCHAR(1000) NULL               COMMENT '原始链接（视频/教程/外部文章）',
-    source_name         VARCHAR(200) NULL                COMMENT '来源名称，如「B站」「公众号XXX」',
-    source_type         VARCHAR(32)  NOT NULL DEFAULT 'MANUAL' COMMENT '来源：MANUAL 管理员录入 / RSS 外部订阅 / AI_GENERATED AI 生成 / CRAWLER 抓取',
-    dedup_key           VARCHAR(300) NULL                COMMENT '去重键：source_url 的哈希（手工录入为空）',
-    tags                VARCHAR(300) NULL                COMMENT '标签，逗号分隔，用于订阅推送与筛选',
-    status              VARCHAR(32)  NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING 待审核 / PUBLISHED 已发布 / WITHDRAWN 已撤回',
-    top_flag            TINYINT      NOT NULL DEFAULT 0  COMMENT '是否置顶：1 是 0 否',
-    view_count          INT          NOT NULL DEFAULT 0  COMMENT '浏览数',
-    collect_count       INT          NOT NULL DEFAULT 0  COMMENT '收藏数',
-    published_at        DATETIME     NULL                COMMENT '发布时间',
-    ai_model            VARCHAR(100) NULL                COMMENT 'AI 生成时使用的模型名',
-    org_id              BIGINT       NULL                COMMENT '归属组织',
-    deleted             TINYINT      NOT NULL DEFAULT 0  COMMENT '逻辑删除',
-    created_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    created_by          BIGINT       NULL                 COMMENT '创建人',
-    updated_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    updated_by          BIGINT       NULL                 COMMENT '更新人',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_tech_post_dedup (dedup_key, deleted),
-    KEY idx_tech_post_status (status, top_flag, published_at, deleted),
-    KEY idx_tech_post_category (category, status, deleted),
-    KEY idx_tech_post_type (content_type, status, deleted)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '技术交流内容';
-
-CREATE TABLE IF NOT EXISTS tech_collect (
-    id              BIGINT       NOT NULL                COMMENT '主键',
-    post_id         BIGINT       NOT NULL                COMMENT '内容 ID',
-    member_id       BIGINT       NOT NULL                COMMENT '收藏人人员 ID',
-    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '收藏时间',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_tech_collect (post_id, member_id),
-    KEY idx_tech_collect_member (member_id, created_at)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '技术交流收藏';
-
-CREATE TABLE IF NOT EXISTS tech_subscription (
-    id              BIGINT       NOT NULL                COMMENT '主键',
-    member_id       BIGINT       NOT NULL                COMMENT '订阅人人员 ID',
-    category        VARCHAR(64)  NOT NULL                COMMENT '订阅分类',
-    tag             VARCHAR(64)  NULL                    COMMENT '订阅标签，为空表示订阅整个分类',
-    enabled         TINYINT      NOT NULL DEFAULT 1      COMMENT '是否启用：1 启用 0 关闭',
-    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_tech_subscription (member_id, category, tag),
-    KEY idx_tech_subscription_member (member_id, enabled)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '技术交流订阅';
 
 CREATE TABLE IF NOT EXISTS kb_doc (
     id                  BIGINT       NOT NULL            COMMENT '主键',
