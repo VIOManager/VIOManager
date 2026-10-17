@@ -143,7 +143,7 @@ public class FileServiceImpl implements IFileService {
     public void download(Long fileId, HttpServletResponse response) {
         //1.查记录（不存在或已删一律 1004，不给人试探空间）
         FileObject record = streamSupport.requireFile(fileId);
-        //2.权限：超管全放行；部门管理员限本部门子树；学生仅本人上传
+        //2.权限：超管全放行；知识库附件公共放行；部门管理员限本部门子树；学生仅本人上传
         checkDownloadPermission(record);
         //3.病毒闸门 + MinIO 流式回写 + 计数（业务侧口子 streamFile 复用同一段）
         streamSupport.requireNotInfected(record);
@@ -181,7 +181,7 @@ public class FileServiceImpl implements IFileService {
 
     /**
      * 下载权限矩阵（骨架口径，材料细则由 C 线在业务层叠加）：
-     * 超管全放行；部门管理员 = 文件所属组织在自己子树内；学生 = 仅本人上传。
+     * 超管全放行；知识库附件（KB_FILE）= 公共资源登录即可下；部门管理员 = 文件所属组织在自己子树内；学生 = 仅本人上传。
      * 子树判断用 sys_org.path 前缀匹配（/0/1/ 前缀 = 本部门及其下级）。
      */
     private void checkDownloadPermission(FileObject record) {
@@ -191,14 +191,18 @@ public class FileServiceImpl implements IFileService {
         if ("SUPER_ADMIN".equals(role)) {
             return;
         }
-        //2.学生：仅本人上传
+        //2.公共资源：知识库附件随条目全员可见，登录即可下载——条目可见性（PUBLISHED）由知识库服务把关
+        if ("KB_FILE".equals(record.getBizType())) {
+            return;
+        }
+        //3.学生：仅本人上传
         if ("STUDENT".equals(role)) {
             if (user.getUserId() != null && user.getUserId().equals(record.getCreatedBy())) {
                 return;
             }
             throw new BizException(CommonErrorCode.FORBIDDEN, "无权下载该文件");
         }
-        //3.部门管理员：文件的组织在自己子树内；查询异常一律按拒绝处理（宁可误拒不可误放）
+        //4.部门管理员：文件的组织在自己子树内；查询异常一律按拒绝处理（宁可误拒不可误放）
         try {
             String adminPath = jdbcTemplate.queryForObject(
                     "SELECT path FROM sys_org WHERE id = ? AND deleted = 0", String.class, user.getOrgId());
