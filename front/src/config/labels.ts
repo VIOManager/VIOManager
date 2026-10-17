@@ -314,3 +314,10 @@ export const ORG_TYPE_LABEL: Record<string, string> = {
   OTHER: '其他',
   ROOT: '根节点'
 }
+
+/** 性别（A 线 M03/M04 gender，与后端 PersonCreateDTO @Pattern 一致：只有这三个值，没有"其他"） */
+export const GENDER_LABEL: Record<string, string> = {
+  MALE: '男',
+  FEMALE: '女',
+  UNKNOWN: '未知'
+}

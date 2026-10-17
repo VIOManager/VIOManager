@@ -11,18 +11,19 @@ import type { CollegeItem } from '@/api/org'
 import { apiCreateMember, apiMemberDetail, apiUpdateMember } from '@/api/member'
 import type { MemberType } from '@/api/member'
 import { useDict } from '@/composables/useDict'
-import { MEMBER_TYPE_LABEL } from '@/config/labels'
+import { MEMBER_TYPE_LABEL, GENDER_LABEL } from '@/config/labels'
 
 const visible = defineModel<boolean>({ required: true })
 /** 空串=新建；有值=编辑 */
 const props = defineProps<{ memberId: string; orgOptions: { id: string; name: string; level: number }[] }>()
 const emit = defineEmits<{ saved: [] }>()
 
-const GENDER_OPTIONS = ['男', '女', '其他']
+/** 性别枚举值与后端 PersonCreateDTO @Pattern 一致（MALE/FEMALE/UNKNOWN），中文翻译走 GENDER_LABEL */
+const GENDER_OPTIONS = ['MALE', 'FEMALE', 'UNKNOWN']
 
 const empty = () => ({
   name: '', studentNo: '', phone: '', college: '', major: '', className: '',
-  gender: '', nation: '', email: '', memberType: 'STUDENT' as MemberType, orgId: '', skills: [] as string[]
+  gender: 'UNKNOWN', nation: '', email: '', memberType: 'STUDENT' as MemberType, orgId: '', skills: [] as string[]
 })
 
 const form = reactive(empty())
@@ -44,7 +45,7 @@ watch(visible, async (v) => {
     form.college = d.college
     form.major = d.major ?? ''
     form.className = d.className
-    form.gender = d.gender ?? ''
+    form.gender = d.gender ?? 'UNKNOWN'
     form.nation = d.nation ?? ''
     form.email = d.email ?? ''
     form.memberType = d.memberType
@@ -116,7 +117,7 @@ async function onSubmit() {
       <el-form-item label="性别 / 民族">
         <div style="display: flex; gap: 8px; width: 100%">
           <el-select v-model="form.gender" style="width: 40%">
-            <el-option v-for="g in GENDER_OPTIONS" :key="g" :value="g" :label="g" />
+            <el-option v-for="g in GENDER_OPTIONS" :key="g" :value="g" :label="GENDER_LABEL[g]" />
           </el-select>
           <el-input v-model="form.nation" placeholder="民族" style="width: 60%" />
         </div>
