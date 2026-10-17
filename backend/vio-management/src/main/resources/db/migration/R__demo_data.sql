@@ -2,8 +2,8 @@
 -- R__demo_data.sql —— 演示数据（Flyway repeatable：校验和变化即重跑）
 --
 -- ⚠️ 幂等是生死线：本文件每次改动都会整段重跑，全部用固定 ID +
---    INSERT ... AS new ON DUPLICATE KEY UPDATE（MySQL 8.0.19+ 写法，
---    老写法 VALUES() 已废弃），第二次跑走更新分支，绝不撞主键。
+--    INSERT ... ON DUPLICATE KEY UPDATE ... = VALUES(col)（MySQL 8.0/8.4 全兼容：
+--    VALUES() 在 8.0.20+ 标记废弃但仍受支持），第二次跑走更新分支，绝不撞主键。
 -- ⚠️ 生产环境禁用：上线部署前删除本文件或清空内容（见上线检查清单）。
 --
 -- 演示账号（BCrypt 散列与明文对照，改密码须重新生成散列）：
@@ -26,11 +26,10 @@ VALUES
     (3, 1, '电子信息学院',       'EE',       'DEPARTMENT', 0, 2, '/0/1/3/',   2, 1),
     (4, 2, '智能软件工作室',     'AI_LAB',   'SUB_ORG',    1, 1, '/0/1/2/4/', 3, 1),
     (5, 3, '嵌入式创客空间',     'EMBED_LAB','SUB_ORG',    1, 1, '/0/1/3/5/', 3, 1)
-AS new
 ON DUPLICATE KEY UPDATE
-    parent_id = new.parent_id, name = new.name, code = new.code, org_type = new.org_type,
-    is_sub_org = new.is_sub_org, sort_no = new.sort_no, path = new.path,
-    level = new.level, status = new.status;
+    parent_id = VALUES(parent_id), name = VALUES(name), code = VALUES(code), org_type = VALUES(org_type),
+    is_sub_org = VALUES(is_sub_org), sort_no = VALUES(sort_no), path = VALUES(path),
+    level = VALUES(level), status = VALUES(status);
 
 -- ---------------- 人员档案：2 教师 + 3 学生（105 故意不绑账号，演示"有档案无账号"） ----------------
 INSERT INTO member (id, name, member_type, student_no, college, class_name, org_id, has_account, status)
@@ -40,11 +39,10 @@ VALUES
     (103, '王小明', 'STUDENT', '2023010001',  '计算机学院', '软件2301班',  4,    1, 1),
     (104, '赵晓亮', 'STUDENT', '2023020002',  '电子信息学院', '电信2302班', 5,   1, 1),
     (105, '孙小雨', 'STUDENT', '2023020003',  '电子信息学院', '电信2302班', 5,   0, 1)
-AS new
 ON DUPLICATE KEY UPDATE
-    name = new.name, member_type = new.member_type, student_no = new.student_no,
-    college = new.college, class_name = new.class_name, org_id = new.org_id,
-    has_account = new.has_account, status = new.status;
+    name = VALUES(name), member_type = VALUES(member_type), student_no = VALUES(student_no),
+    college = VALUES(college), class_name = VALUES(class_name), org_id = VALUES(org_id),
+    has_account = VALUES(has_account), status = VALUES(status);
 
 -- ---------------- 登录账号 5 个（密码列刻意不参与重跑更新：改过密码不被演示数据冲掉） ----------------
 INSERT INTO sys_user (id, member_id, login_name, password, role, org_id, real_name, default_password, status)
@@ -54,75 +52,66 @@ VALUES
     (203, 102,  'dept_liu',  '$2a$10$qBft5NRU6teDwhlbdQr3z.TLEasgrOLUmnDNXeHByG5IO/I4ZmvlO', 'DEPT_ADMIN',  3,    '刘慧',       0, 1),
     (204, 103,  'stu_wang',  '$2a$10$fKAcAgbQ.hboh5iVxtGS2O8Rh7IGIAyMAM5oK5tnzPTPVLSmi8IiW', 'STUDENT',     2,    '王小明',     0, 1),
     (205, 104,  'stu_zhao',  '$2a$10$fKAcAgbQ.hboh5iVxtGS2O8Rh7IGIAyMAM5oK5tnzPTPVLSmi8IiW', 'STUDENT',     3,    '赵晓亮',     0, 1)
-AS new
 ON DUPLICATE KEY UPDATE
-    member_id = new.member_id, role = new.role, org_id = new.org_id,
-    real_name = new.real_name, default_password = new.default_password, status = new.status;
+    member_id = VALUES(member_id), role = VALUES(role), org_id = VALUES(org_id),
+    real_name = VALUES(real_name), default_password = VALUES(default_password), status = VALUES(status);
 
 -- ---------------- 材料类型字典（避开 SKILL：字典测试用 SKILL 造数） ----------------
 INSERT INTO sys_dict_type (id, dict_code, dict_name, remark)
 VALUES (901, 'MATERIAL_TYPE', '材料类型', '比赛材料分类')
-AS new
-ON DUPLICATE KEY UPDATE dict_name = new.dict_name, remark = new.remark;
+ON DUPLICATE KEY UPDATE dict_name = VALUES(dict_name), remark = VALUES(remark);
 
 INSERT INTO sys_dict_item (id, dict_code, item_value, item_label, source, audit_status, sort_no, status)
 VALUES
     (902, 'MATERIAL_TYPE', 'photo',      '证件照',   'PRESET', 'APPROVED', 1, 1),
     (903, 'MATERIAL_TYPE', 'form',       '报名表',   'PRESET', 'APPROVED', 2, 1),
     (904, 'MATERIAL_TYPE', 'certificate','获奖证书', 'PRESET', 'APPROVED', 3, 1)
-AS new
 ON DUPLICATE KEY UPDATE
-    item_label = new.item_label, source = new.source, audit_status = new.audit_status,
-    sort_no = new.sort_no, status = new.status;
+    item_label = VALUES(item_label), source = VALUES(source), audit_status = VALUES(audit_status),
+    sort_no = VALUES(sort_no), status = VALUES(status);
 
 -- ---------------- 学期：当前学期 ----------------
 INSERT INTO semester (id, name, status, is_current, total_weeks)
 VALUES (301, '2026-2027学年第一学期', 'ACTIVE', 1, 20)
-AS new
 ON DUPLICATE KEY UPDATE
-    name = new.name, status = new.status, is_current = new.is_current, total_weeks = new.total_weeks;
+    name = VALUES(name), status = VALUES(status), is_current = VALUES(is_current), total_weeks = VALUES(total_weeks);
 
 -- ---------------- 比赛模板 + 比赛（报名中） ----------------
 INSERT INTO contest_template (id, name, status, sort_no)
 VALUES (401, '软件类竞赛通用模板', 1, 1)
-AS new
-ON DUPLICATE KEY UPDATE name = new.name, status = new.status, sort_no = new.sort_no;
+ON DUPLICATE KEY UPDATE name = VALUES(name), status = VALUES(status), sort_no = VALUES(sort_no);
 
 INSERT INTO contest (id, name, semester_id, status, source_type)
 VALUES (402, '第十六届蓝桥杯程序设计大赛', 301, 'REGISTERING', 'MANUAL')
-AS new
 ON DUPLICATE KEY UPDATE
-    name = new.name, semester_id = new.semester_id, status = new.status, source_type = new.source_type;
+    name = VALUES(name), semester_id = VALUES(semester_id), status = VALUES(status), source_type = VALUES(source_type);
 
 -- ---------------- 两支赛队：一支材料已交、一支未开始 ----------------
 INSERT INTO team (id, name, contest_id, semester_id, org_id, status, material_status, material_complete_rate)
 VALUES
     (501, '代码先锋队', 402, 301, 2, 'ACTIVE', 'SUBMITTED',  100.00),
     (502, '芯火电子队', 402, 301, 3, 'ACTIVE', 'NOT_STARTED',  0.00)
-AS new
 ON DUPLICATE KEY UPDATE
-    name = new.name, contest_id = new.contest_id, semester_id = new.semester_id,
-    org_id = new.org_id, status = new.status, material_status = new.material_status,
-    material_complete_rate = new.material_complete_rate;
+    name = VALUES(name), contest_id = VALUES(contest_id), semester_id = VALUES(semester_id),
+    org_id = VALUES(org_id), status = VALUES(status), material_status = VALUES(material_status),
+    material_complete_rate = VALUES(material_complete_rate);
 
 INSERT INTO team_member (id, team_id, member_id, member_name, is_leader, status)
 VALUES
     (601, 501, 103, '王小明', 1, 'CONFIRMED'),
     (602, 501, 104, '赵晓亮', 0, 'UNCONFIRMED'),
     (603, 502, 105, '孙小雨', 1, 'UNCONFIRMED')
-AS new
 ON DUPLICATE KEY UPDATE
-    member_id = new.member_id, member_name = new.member_name,
-    is_leader = new.is_leader, status = new.status;
+    member_id = VALUES(member_id), member_name = VALUES(member_name),
+    is_leader = VALUES(is_leader), status = VALUES(status);
 
 -- ---------------- 一条已生效的获奖记录（PRD §5 演示要求） ----------------
 INSERT INTO achievement (id, semester_id, org_id, owner_member_id, achievement_type, name, status, submit_channel)
 VALUES (701, 301, 2, 103, 'AWARD', '蓝桥杯省赛软件类一等奖', 'APPROVED', 'USER')
-AS new
 ON DUPLICATE KEY UPDATE
-    semester_id = new.semester_id, org_id = new.org_id, owner_member_id = new.owner_member_id,
-    achievement_type = new.achievement_type, name = new.name, status = new.status,
-    submit_channel = new.submit_channel;
+    semester_id = VALUES(semester_id), org_id = VALUES(org_id), owner_member_id = VALUES(owner_member_id),
+    achievement_type = VALUES(achievement_type), name = VALUES(name), status = VALUES(status),
+    submit_channel = VALUES(submit_channel);
 
 -- ---------------- 审批中心演示单：覆盖三视角与主要状态 ----------------
 -- 故事线：801/804 呼应赛队 501 代码先锋队的由来；802 的目标人 105 有待处理邀请红点；
@@ -175,16 +164,15 @@ VALUES
      'PENDING', 105, '孙小雨', NULL, NULL, 3, NULL, NULL, NULL, NULL, 301, 3,
      '想参考该项目的传感器选型方案，申请限时查看', NULL, NULL,
      DATE_ADD(NOW(), INTERVAL 7 DAY), 0, 0, 0, '2026-10-12 08:30:00')
-AS new
 ON DUPLICATE KEY UPDATE
-    biz_type = new.biz_type, biz_id = new.biz_id, biz_title = new.biz_title, biz_payload = new.biz_payload,
-    status = new.status, applicant_id = new.applicant_id, applicant_name = new.applicant_name,
-    target_member_id = new.target_member_id, target_member_name = new.target_member_name,
-    approver_org_id = new.approver_org_id, approver_id = new.approver_id, approver_name = new.approver_name,
-    team_id = new.team_id, contest_id = new.contest_id, semester_id = new.semester_id, org_id = new.org_id,
-    apply_reason = new.apply_reason, handle_comment = new.handle_comment, handled_at = new.handled_at,
-    expire_at = new.expire_at, applicant_read = new.applicant_read,
-    target_read = new.target_read, approver_read = new.approver_read, created_at = new.created_at;
+    biz_type = VALUES(biz_type), biz_id = VALUES(biz_id), biz_title = VALUES(biz_title), biz_payload = VALUES(biz_payload),
+    status = VALUES(status), applicant_id = VALUES(applicant_id), applicant_name = VALUES(applicant_name),
+    target_member_id = VALUES(target_member_id), target_member_name = VALUES(target_member_name),
+    approver_org_id = VALUES(approver_org_id), approver_id = VALUES(approver_id), approver_name = VALUES(approver_name),
+    team_id = VALUES(team_id), contest_id = VALUES(contest_id), semester_id = VALUES(semester_id), org_id = VALUES(org_id),
+    apply_reason = VALUES(apply_reason), handle_comment = VALUES(handle_comment), handled_at = VALUES(handled_at),
+    expire_at = VALUES(expire_at), applicant_read = VALUES(applicant_read),
+    target_read = VALUES(target_read), approver_read = VALUES(approver_read), created_at = VALUES(created_at);
 
 -- ---------------- 审批操作流水：每张单至少一条 SUBMIT，已处理的补对应动作 ----------------
 INSERT INTO approval_record (id, approval_id, action, operator_id, operator_name, operator_role,
@@ -200,9 +188,8 @@ VALUES
     (818, 806, 'SUBMIT', 205, '赵晓亮', 'APPLICANT', '嵌入式方向缺人，邀请入队', NULL, 'PENDING', '2026-10-10 14:50:00'),
     (819, 806, 'CANCEL', 205, '赵晓亮', 'APPLICANT', '改邀请其他同学，先取消', 'PENDING', 'CANCELLED', '2026-10-10 15:10:00'),
     (820, 807, 'SUBMIT', NULL, '孙小雨', 'APPLICANT', '参考传感器方案，限时查看', NULL, 'PENDING', '2026-10-12 08:30:00')
-AS new
 ON DUPLICATE KEY UPDATE
-    approval_id = new.approval_id, action = new.action, operator_id = new.operator_id,
-    operator_name = new.operator_name, operator_role = new.operator_role,
-    comment_text = new.comment_text, from_status = new.from_status,
-    to_status = new.to_status, created_at = new.created_at;
+    approval_id = VALUES(approval_id), action = VALUES(action), operator_id = VALUES(operator_id),
+    operator_name = VALUES(operator_name), operator_role = VALUES(operator_role),
+    comment_text = VALUES(comment_text), from_status = VALUES(from_status),
+    to_status = VALUES(to_status), created_at = VALUES(created_at);
