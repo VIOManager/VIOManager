@@ -58,12 +58,12 @@ registerMock({
     const node: OrgNode = {
       id: 'o' + seq++,
       name,
-      orgType: 'DEPARTMENT',
+      orgType: String(ctx.body.orgType ?? 'SUB_ORG'),
       isSubOrg: true,
       managerName: String(ctx.body.leaderName ?? ''),
       leaderName: String(ctx.body.leaderName ?? ''),
       sortNo: Number(ctx.body.sortNo ?? 99),
-      status: 'ENABLED',
+      status: 1,
       level: parent ? parent.level + 1 : 1,
       children: []
     }

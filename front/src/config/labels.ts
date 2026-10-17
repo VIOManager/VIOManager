@@ -303,3 +303,14 @@ export const KB_SOURCE_LABEL: Record<string, string> = {
   LINK: '外部链接',
   FILE: '文件'
 }
+
+/** 组织类型（A 线 O02 orgType，与后端 OrgSaveDTO 枚举一致；ROOT 仅 mock 根节点数据使用） */
+export const ORG_TYPE_LABEL: Record<string, string> = {
+  COLLEGE: '学院',
+  DEPARTMENT: '部门',
+  CLASS: '班级',
+  CLUB: '社团',
+  SUB_ORG: '子组织',
+  OTHER: '其他',
+  ROOT: '根节点'
+}

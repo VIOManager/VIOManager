@@ -13,18 +13,18 @@ export const tree: OrgNode[] = [
     managerName: '李明',
     leaderName: '李明',
     sortNo: 1,
-    status: 'ENABLED',
+    status: 1,
     level: 1,
     children: [
       {
         id: 'o11', name: '数媒协会', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '陈志远', leaderName: '陈志远',
-        sortNo: 1, status: 'ENABLED', level: 2,
+        sortNo: 1, status: 1, level: 2,
         children: [
-          { id: 'o111', name: '数媒二楼', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '周子墨', leaderName: '周子墨', sortNo: 1, status: 'ENABLED', level: 3, children: [] }
+          { id: 'o111', name: '数媒二楼', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '周子墨', leaderName: '周子墨', sortNo: 1, status: 1, level: 3, children: [] }
         ]
       },
-      { id: 'o12', name: '电控工作室', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '赵天宇', leaderName: '赵天宇', sortNo: 2, status: 'ENABLED', level: 2, children: [] },
-      { id: 'o13', name: '建模组', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '陈子昂', leaderName: '陈子昂', sortNo: 3, status: 'ENABLED', level: 2, children: [] }
+      { id: 'o12', name: '电控工作室', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '赵天宇', leaderName: '赵天宇', sortNo: 2, status: 1, level: 2, children: [] },
+      { id: 'o13', name: '建模组', orgType: 'DEPARTMENT', isSubOrg: true, managerName: '陈子昂', leaderName: '陈子昂', sortNo: 3, status: 1, level: 2, children: [] }
     ]
   }
 ]
