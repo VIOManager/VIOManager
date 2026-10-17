@@ -51,7 +51,6 @@ function onPosted() {
         <span class="sp"></span>
         <nav class="topnav">
           <router-link to="/" exact-active-class="on">首页</router-link>
-          <router-link to="/feed" active-class="on">技术交流</router-link>
         </nav>
         <button class="btn-bar" type="button" @click="postVisible = true">＋ 创作新主题</button>
         <button class="tg" type="button" :aria-label="theme.current === 'light' ? '切换到深色' : '切换到浅色'" @click="theme.toggle()">

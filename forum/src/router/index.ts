@@ -9,7 +9,6 @@ import { useUserStore } from '@/stores/user'
 const ForumLayout = () => import('@/layout/ForumLayout.vue')
 const HomePage = () => import('@/views/home/HomePage.vue')
 const TopicPage = () => import('@/views/topic/TopicPage.vue')
-const FeedPage = () => import('@/views/feed/FeedPage.vue')
 const GatePage = () => import('@/views/gate/GatePage.vue')
 
 const router = createRouter({
@@ -21,8 +20,8 @@ const router = createRouter({
       component: ForumLayout,
       children: [
         { path: '', component: HomePage, meta: { title: '首页' } },
-        { path: 'topic/:id', component: TopicPage, meta: { title: '帖子详情' } },
-        { path: 'feed', component: FeedPage, meta: { title: '技术交流' } }
+        { path: 'topic/:id', component: TopicPage, meta: { title: '帖子详情' } }
+        // 技术交流 2026-10-15 并入论坛（后端 V2 退役 tech 域，前端 feed 页同批移除）
         // 知识库 2026-10-13 迁回主站（/kb 由主站承载）
       ]
     },
