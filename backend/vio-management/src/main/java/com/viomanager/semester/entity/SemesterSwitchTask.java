@@ -1,24 +1,42 @@
 package com.viomanager.semester.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.viomanager.common.mybatis.BaseEntity;
 import java.time.LocalDateTime;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
 /**
  * 学期切换任务实体，对应表 semester_switch_task。
+ * 刻意不继承 BaseEntity：本表审计列只有 created_at/updated_at（无 created_by/updated_by，
+ * 谁发起谁取消已经用 initiated_by/cancelled_by 业务列表达），继承会把不存在的列写进 INSERT。
  * 乐观锁刻意用手工条件更新（service 层 UPDATE ... WHERE version=?），
  * 不挂 MP 的 @Version 插件——S08 的占位语义（PENDING_EXECUTE + version 双条件）
  * 比插件自增更严，且不依赖全局插件配置。
  * impact_snapshot 是 JSON 字符串（待归档比赛数/待继承赛队数/成员关系数），只在发起时拍快照。
  */
 @Data
-@EqualsAndHashCode(callSuper = true)
 @Accessors(chain = true)
 @TableName("semester_switch_task")
-public class SemesterSwitchTask extends BaseEntity {
+public class SemesterSwitchTask {
+
+    /** 雪花 ID，JSON 出参按字符串序列化（JacksonConfig） */
+    @TableId(type = IdType.ASSIGN_ID)
+    private Long id;
+
+    /** 逻辑删除标记（手写 SQL 需显式带 deleted = 0） */
+    @TableLogic
+    private Integer deleted;
+
+    @TableField(fill = FieldFill.INSERT)
+    private LocalDateTime createdAt;
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updatedAt;
 
     /** 源学期 ID（发起时的当前学期） */
     private Long fromSemesterId;
