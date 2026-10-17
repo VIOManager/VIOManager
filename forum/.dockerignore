@@ -1,0 +1,9 @@
+# 构建上下文裁剪：镜像不带入本地依赖与产物，加快构建
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+docker-compose.yml
+Dockerfile

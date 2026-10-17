@@ -3,9 +3,9 @@ package com.viomanager.contest.support;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.enums.TeamErrorCode;
 import com.viomanager.common.exception.BizException;
+import com.viomanager.datascop.OrgScopeSupport;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -18,9 +18,11 @@ import org.springframework.stereotype.Component;
 public class ContestCommandSupport {
 
     private final JdbcTemplate jdbcTemplate;
+    private final OrgScopeSupport orgScopeSupport;
 
-    public ContestCommandSupport(JdbcTemplate jdbcTemplate) {
+    public ContestCommandSupport(JdbcTemplate jdbcTemplate, OrgScopeSupport orgScopeSupport) {
         this.jdbcTemplate = jdbcTemplate;
+        this.orgScopeSupport = orgScopeSupport;
     }
 
     /** 模板被比赛引用计数（>0 时禁止删除 4012） */
@@ -98,43 +100,14 @@ public class ContestCommandSupport {
         }
     }
 
-    /** 管理员组织子树内的组织 ID 列表（sys_org.path 前缀匹配） */
+    /** 管理员组织子树内的组织 ID 列表——判定收口到 OrgScopeSupport（插入点①，Redis cache-aside + 降级直查库） */
     public List<Long> querySubtreeOrgIds(Long orgId) {
-        if (orgId == null) {
-            throw new BizException(CommonErrorCode.FORBIDDEN, "部门管理员未配置所属组织");
-        }
-        try {
-            String path = jdbcTemplate.queryForObject(
-                    "SELECT path FROM sys_org WHERE id = ? AND deleted = 0", String.class, orgId);
-            if (path == null) {
-                throw new BizException(CommonErrorCode.FORBIDDEN, "组织不存在或已删除");
-            }
-            return jdbcTemplate.queryForList(
-                    "SELECT id FROM sys_org WHERE path LIKE CONCAT(?, '%') AND deleted = 0",
-                    Long.class, path);
-        } catch (BizException e) {
-            throw e;
-        } catch (DataAccessException e) {
-            log.warn("子树组织查询失败，按无权限处理：{}", e.getMessage());
-            throw new BizException(CommonErrorCode.FORBIDDEN);
-        }
+        return orgScopeSupport.subtreeIds(orgId);
     }
 
-    /** 判断组织是否在管理员子树内 */
+    /** 判断组织是否在管理员子树内——判定收口到 OrgScopeSupport（插入点①） */
     public boolean isOrgInSubtree(Long adminOrgId, Long orgId) {
-        if (adminOrgId == null || orgId == null) return false;
-        try {
-            String adminPath = jdbcTemplate.queryForObject(
-                    "SELECT path FROM sys_org WHERE id = ? AND deleted = 0", String.class, adminOrgId);
-            if (adminPath == null) return false;
-            Integer c = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM sys_org WHERE id = ? AND deleted = 0 AND path LIKE CONCAT(?, '%')",
-                    Integer.class, orgId, adminPath);
-            return c != null && c > 0;
-        } catch (DataAccessException e) {
-            log.warn("子树校验查询失败：{}", e.getMessage());
-            return false;
-        }
+        return orgScopeSupport.inSubtree(adminOrgId, orgId);
     }
 
     /** 比赛状态机：按序流转不可跳转（4011） */

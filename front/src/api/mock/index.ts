@@ -44,6 +44,12 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
   const body: Result = hit
     ? hit.h.reply({ params: hit.params, query: (config.params as Record<string, unknown>) ?? {}, body: (bodyData as Record<string, unknown>) ?? {}, token, idemKey: readIdemKey(config) })
     : fail(1404, `mock 未注册：${method} ${url}`)
+  // blob 下载请求（http.ts download() 专用）：mock 没有真实文件流，
+  // 把处理器结果包成演示文件流返回；不设 content-disposition，让 download() 用前端传入的兜底文件名
+  if (config.responseType === 'blob') {
+    const blob = new Blob([JSON.stringify(body, null, 2)], { type: 'application/octet-stream' })
+    return { data: blob, status: 200, statusText: 'OK', headers: {}, config: config as never }
+  }
   return { data: body, status: 200, statusText: 'OK', headers: {}, config: config as never }
 }
 

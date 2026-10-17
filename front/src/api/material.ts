@@ -1,17 +1,21 @@
 /**
- * 材料接口（C 线 MT01–MR03 任务与要求 / MS01–MS06 提交与下载）
+ * 材料接口（C 线 MT/MR 任务与要求 + MS 提交下载）
  * 对应方案：《前端ABC模块页面开发-优化方案》PC1+PC2；PRD §3.7
- * 关键约束：提交记录存在则要求/任务禁删（5005/5006）；覆盖上传版本号 +1 旧版失效；
- *    齐全率与队伍 material_status 由提交动作触发重算（B 线赛队列表联动展示）
- * ⚠️ 上传权限暂定"在队在册成员"（PRD §3.7），是否收紧为仅队长待联调确认
+ * 2026-10-14 联调对齐：路径统一改为后端实现的 /api/materials/** 前缀
+ *    （后端 MaterialXxxController 实测路由，与前端对接文档旧路径不同）
+ * 关键约束：提交记录存在则要求/任务禁删（5005/5006）；覆盖上传版本号 +1 旧版失效
+ * ⚠️ apiTaskOverview 契约分歧：后端 MS01 只有按队伍查的单对象概览
+ *    （GET /api/materials/teams/{teamId}/overview），前端管理端"一任务一矩阵"无对应接口，
+ *    待 C 线确认形状后前端改造——本函数暂保留旧调用，联调期该区块会报资源不存在
  */
-import { del, get, post, put } from './http'
+import { get, post, postIdem, putIdem, delIdem, download } from './http'
 
 export interface MaterialTask {
   id: string
   contestId: string
   contestName: string
-  title: string
+  /** 任务名（后端字段 name，2026-10-14 联调对齐） */
+  name: string
   /** 截止时间 yyyy-MM-dd HH:mm；过截止后提交报 5002 */
   deadline: string
   requirementCount: number
@@ -24,11 +28,12 @@ export interface MaterialTask {
 export interface MaterialRequirement {
   id: string
   taskId: string
-  /** 12 种预设类型之一（config/labels.ts MATERIAL_TYPES） */
-  type: string
-  required: boolean
-  /** 允许扩展名小写白名单，如 ['pdf','docx'] */
-  formats: string[]
+  /** 12 种预设类型之一（后端 materialType；中文名用 materialTypeLabel 或前端字典翻译） */
+  materialType: string
+  /** 后端为 0/1 整数（1=必传） */
+  requiredFlag: number
+  /** 允许扩展名小写白名单，如 ['pdf','docx']（后端 allowedFormats） */
+  allowedFormats: string[]
   /** 命名规则（可选展示给队长） */
   namingRule: string
   maxSizeMb: number
@@ -68,67 +73,66 @@ export interface MyTeamMaterial {
 
 /** zip 批量上传解析结果（MS05：不匹配文件清单展示） */
 export interface BatchMatchResult {
-  matched: Array<{ requirementId: string; type: string }>
+  matched: Array<{ requirementId: string; materialType: string }>
   unmatched: string[]
 }
 
 // ── 任务与要求（管理端，MT/MR）──
 export function apiMaterialTasks(contestId?: string): Promise<MaterialTask[]> {
-  return get('/api/material-tasks', contestId ? { contestId } : {})
+  return get('/api/materials/tasks', contestId ? { contestId } : {})
 }
-export function apiCreateTask(body: { contestId: string; title: string; deadline: string }): Promise<MaterialTask> {
-  return post('/api/material-tasks', body)
+export function apiCreateTask(body: { contestId: string; name: string; deadline: string }): Promise<MaterialTask> {
+  return postIdem('/api/materials/tasks', body, crypto.randomUUID())
 }
-export function apiUpdateTask(id: string, body: { title: string; deadline: string }): Promise<null> {
-  return put('/api/material-tasks/' + id, body)
+export function apiUpdateTask(id: string, body: { name: string; deadline: string }): Promise<null> {
+  return putIdem('/api/materials/tasks/' + id, body, crypto.randomUUID())
 }
 /** 删除任务：任务下任一要求已有提交记录则拒删（5006） */
 export function apiDeleteTask(id: string): Promise<null> {
-  return del('/api/material-tasks/' + id)
+  return delIdem('/api/materials/tasks/' + id, crypto.randomUUID())
 }
 export function apiRequirements(taskId: string): Promise<MaterialRequirement[]> {
-  return get('/api/material-tasks/' + taskId + '/requirements')
+  return get('/api/materials/tasks/' + taskId + '/requirements')
 }
 export function apiCreateRequirement(
   taskId: string,
-  body: { type: string; required: boolean; formats: string[]; namingRule: string; maxSizeMb: number }
+  body: { materialType: string; requiredFlag: number; allowedFormats: string[]; namingRule: string; maxSizeMb: number }
 ): Promise<MaterialRequirement> {
-  return post('/api/material-tasks/' + taskId + '/requirements', body)
+  return postIdem('/api/materials/tasks/' + taskId + '/requirements', body, crypto.randomUUID())
 }
 export function apiUpdateRequirement(
   id: string,
-  body: { type: string; required: boolean; formats: string[]; namingRule: string; maxSizeMb: number }
+  body: { materialType: string; requiredFlag: number; allowedFormats: string[]; namingRule: string; maxSizeMb: number }
 ): Promise<null> {
-  return put('/api/requirements/' + id, body)
+  return putIdem('/api/materials/requirements/' + id, body, crypto.randomUUID())
 }
 /** 删除要求：已有提交记录则拒删（5005） */
 export function apiDeleteRequirement(id: string): Promise<null> {
-  return del('/api/requirements/' + id)
+  return delIdem('/api/materials/requirements/' + id, crypto.randomUUID())
 }
 
 // ── 提交与下载（MS）──
-/** 管理端队伍提交概览（MS03）：一任务一矩阵 */
+/** 管理端队伍提交概览：⚠️ 契约分歧见文件头注——后端仅按队伍查单对象，矩阵接口待 C 线定 */
 export function apiTaskOverview(taskId: string): Promise<TeamMaterialRow[]> {
-  return get('/api/material-tasks/' + taskId + '/overview')
+  return get('/api/materials/tasks/' + taskId + '/overview')
 }
-/** 学生端我的材料：本人所在每支队伍的任务/要求/提交状态（MS04） */
+/** 学生端我的材料：本人所在每支队伍的任务/要求/提交状态（仅学生角色） */
 export function apiMyMaterials(): Promise<MyTeamMaterial[]> {
-  return get('/api/my/materials')
+  return get('/api/materials/my')
 }
-/** 单条提交/覆盖上传（MS01）：5002 过截止 / 5003 非在队成员 / 5004 格式不符 */
-export function apiSubmitMaterial(body: {
-  requirementId: string
+/** 单条提交/覆盖上传（后端 MS02：覆盖式提交天然幂等不要求幂等头）：5002 过截止 / 5003 非在队成员 / 5004 格式不符 */
+export function apiSubmitMaterial(requirementId: string, body: {
   teamId: string
   fileId: string
   fileName: string
 }): Promise<{ version: number }> {
-  return post('/api/material-submissions', body)
+  return post('/api/materials/requirements/' + requirementId + '/submit', body)
 }
-/** zip 批量上传（MS05）：返回匹配要求与不匹配文件清单 */
+/** zip 批量上传（后端 MS03）：返回匹配要求与不匹配文件清单 */
 export function apiBatchUpload(body: { teamId: string; taskId: string; fileId: string; fileName: string }): Promise<BatchMatchResult> {
-  return post('/api/material-submissions/batch', body)
+  return post('/api/materials/submissions/batch', body)
 }
-/** 打包下载队伍全部材料（MS06）：mock 返回提示；真实后端为文件流 */
-export function apiExportTeamPackage(taskId: string, teamId: string): Promise<{ note: string }> {
-  return post('/api/material-tasks/' + taskId + '/export', { teamId })
+/** 打包下载队伍全部材料（后端 MS05）：GET 文件流，浏览器直接保存 zip */
+export function apiExportTeamPackage(teamId: string): Promise<void> {
+  return download('/api/materials/teams/' + teamId + '/package', '材料打包.zip')
 }

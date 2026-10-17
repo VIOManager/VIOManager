@@ -8,7 +8,7 @@ import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiConfirmPoolItem, apiContestDetail, apiCreateContest, apiTemplates, apiUpdateContest } from '@/api/contest'
 import type { ContestTemplate, RulesMap } from '@/api/contest'
-import { apiSemesters } from '@/api/semester'
+import { apiSemestersSafe } from '@/api/semester'
 import type { Semester } from '@/api/semester'
 import RulesEditor from '@/components/RulesEditor.vue'
 
@@ -38,7 +38,7 @@ watch(visible, async (v) => {
   if (!v) return
   Object.assign(form, empty())
   if (templates.value.length === 0) templates.value = await apiTemplates()
-  if (semesters.value.length === 0) semesters.value = await apiSemesters()
+  if (semesters.value.length === 0) semesters.value = await apiSemestersSafe()
   if (props.contestId) {
     const d = await apiContestDetail(props.contestId)
     Object.assign(form, {

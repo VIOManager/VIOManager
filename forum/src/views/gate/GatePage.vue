@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 未登录引导页（论坛不设登录页，JWT 与主站共享）：白盒居中 + 一句引导 + 白底描边按钮
- * 依据：《论坛V2EX风格重设计-优化方案》§5.5（废图签装饰与蓝图网格背景）
+ * 未登录引导页（论坛不设登录页，JWT 与主站共享）：粗野卡片居中 + 一句引导 + 黄色主按钮
+ * 视觉基准：新粗野双主题（2026-10-15 重涂，与主站 front/ 同源 --vio2-* 令牌）
  * 对应：架构方案 §4——论坛服务只验签不查库，登录一律回主站
  * ⚠️ 安全：开发调试按钮仅为骨架/演示阶段放行用（与主站登录桩同性质），
  *    联调后必须移除；正式环境未登录只能回主站
@@ -24,24 +24,38 @@ function devEnter() {
 
 <template>
   <div class="gate">
-    <div class="box card">
-      <h1>VIO 论坛</h1>
-      <p class="desc">论坛与主站共用一套账号。请先回主站完成登录，再回到本站。</p>
-      <a class="btn-post" :href="mainSite">回主站登录</a>
-      <button class="btn-dev" type="button" @click="devEnter">调试进入（开发环境）</button>
-      <p class="annot">※ 登录态有效期 2 小时，过期后回到本页重新引导；调试按钮仅开发环境可见，联调后移除。</p>
+    <div class="card">
+      <!-- 黑条卡头：与全站 .box-h 同一语言 -->
+      <div class="card-h"><b>VIO FORUM</b><span>LOGIN REQUIRED</span></div>
+      <div class="in">
+        <h1>团队论坛</h1>
+        <p class="desc">论坛与主站共用一套账号。<br>请先回主站完成登录，再回到本站。</p>
+        <a class="btn-main" :href="mainSite">回主站登录 →</a>
+        <button class="btn-dev" type="button" @click="devEnter">调试进入（开发环境）</button>
+        <p class="annot">※ 登录态有效期 2 小时，过期后回到本页重新引导；调试按钮仅开发环境可见，联调后移除。</p>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
-.card { width: 400px; background: var(--box); border-radius: var(--radius-box); box-shadow: var(--shadow-box); padding: 44px 38px 30px; text-align: center; }
-.card h1 { font-size: 22px; font-weight: 800; color: #222; letter-spacing: -0.02em; }
-.desc { margin: 16px 0 22px; font-size: 13.5px; color: var(--body); line-height: 1.8; }
-.btn-post { display: inline-block; font-size: 13px; color: var(--ink); background: var(--box); border: 1px solid #CCC; border-radius: var(--radius-box); padding: 7px 22px; }
-.btn-post:hover { border-color: #999; }
-.btn-dev { display: block; margin: 14px auto 0; padding: 6px 16px; background: none; border: 1px dashed #CCC; color: var(--fade); font-size: 12px; border-radius: var(--radius-box); cursor: pointer; }
-.btn-dev:hover { border-color: var(--fade); color: var(--body); }
-.annot { margin-top: 20px; font-size: 12px; color: var(--fade); line-height: 1.8; }
+/* 独立路由（不套 ForumLayout）：居中卡片自带底纹即 body::before，无需另铺 */
+.gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+
+.card { width: 430px; background: var(--vio2-panel); border: var(--vio2-bd-main); box-shadow: var(--vio2-hard); }
+.card-h { display: flex; align-items: center; justify-content: space-between; background: var(--vio2-head); padding: 10px 16px; border-bottom: var(--vio2-bd-main); }
+.card-h b { color: var(--vio2-ink); font-size: 14px; font-weight: 900; letter-spacing: 0.06em; }
+.card-h span { font-family: var(--vio2-mono); font-size: 10px; color: #C9C4B4; letter-spacing: 0.14em; }
+
+.in { padding: 38px 36px 26px; text-align: center; }
+.in h1 { font-size: 30px; font-weight: 900; color: var(--vio2-ink); letter-spacing: -0.02em; }
+.desc { margin: 14px 0 24px; font-size: 13.5px; color: var(--vio2-ink-2); font-weight: 600; line-height: 1.9; }
+
+.btn-main { display: inline-block; background: var(--vio2-yellow); color: var(--vio2-on-ac); border: var(--vio2-bd-acc); font-size: 14px; font-weight: 900; padding: 10px 28px; text-decoration: none; box-shadow: var(--vio2-hard-s); }
+.btn-main:hover { transform: translate(2px, 2px); box-shadow: var(--vio2-hard-xs); }
+
+.btn-dev { display: block; margin: 18px auto 0; padding: 6px 16px; background: none; border: 2px dashed var(--vio2-bd); color: var(--vio2-ink-3); font-size: 12px; cursor: pointer; }
+.btn-dev:hover { color: var(--vio2-ink-2); }
+
+.annot { margin-top: 22px; font-size: 12px; color: var(--vio2-ink-3); line-height: 1.8; }
 </style>

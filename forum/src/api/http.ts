@@ -36,7 +36,7 @@ const http = axios.create({
 })
 
 http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = sessionStorage.getItem(TOKEN_KEY)
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
@@ -47,7 +47,7 @@ http.interceptors.response.use(
     if (body.code === 0) return body.data as never
     if (body.code === 1002) {
       // 登录失效：清 token 整页跳主站登录（整页刷新顺带清空内存态，最朴素也最稳）
-      localStorage.removeItem(TOKEN_KEY)
+      sessionStorage.removeItem(TOKEN_KEY)
       ElMessage.error(body.message || '登录已失效，请回主站重新登录')
       window.location.assign(import.meta.env.VITE_MAIN_SITE_URL ?? 'http://localhost:5174/login')
       return Promise.reject(new BizError(body.code, body.message))

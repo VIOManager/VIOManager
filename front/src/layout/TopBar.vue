@@ -1,14 +1,15 @@
 <script setup lang="ts">
 /**
- * 顶栏：面包屑（取路由 meta）+ 待办 + 用户区
+ * 顶栏：面包屑（取路由 meta）+ 待办 + 用户区 + 主题切换
  * 对应方案：Step 2；FS2 补改密闭环（PRD §3.1：右上角改密，改后强制重新登录）
+ * S2 粗野重涂（2026-10-15 方案）：深色头带（--vio2-head）双主题恒暗，文字用固定亮色
  * 待办数：审批中心 P08 未读数（todoCount 邀请/通知 + resultCount 申请结果），路由切换时刷新
- * ⚠️ 角色切换器为开发调试件：用于验证三端菜单显隐，联调后必须移除（角色实际来自登录响应）
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useApprovalStore } from '@/stores/approval'
+import { useThemeStore } from '@/stores/theme'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import type { Role } from '@/types'
 
@@ -16,6 +17,7 @@ const route = useRoute()
 const router = useRouter()
 const user = useUserStore()
 const approval = useApprovalStore()
+const theme = useThemeStore()
 
 const crumb = computed(() => ({
   group: (route.meta.group as string) ?? '',
@@ -55,7 +57,7 @@ function onLogout() {
 
 <template>
   <header class="topbar">
-    <span class="crumb">
+    <span class="crumb mono">
       <template v-if="crumb.group">{{ crumb.group }} / </template><b>{{ crumb.title }}</b>
     </span>
     <div class="topbar-right">
@@ -63,20 +65,9 @@ function onLogout() {
         class="chip mono"
         :title="'审批中心未读：邀请/通知 ' + approval.todoCount + ' · 申请结果 ' + approval.resultCount"
         @click="router.push('/approval')"
-        style="cursor: pointer"
       >待办 {{ approval.total }}</span>
-      <!-- ⚠️ 开发调试件：三端菜单显隐验证用，联调后移除 -->
-      <select
-        class="role-switch mono"
-        :value="user.role"
-        @change="user.setRole(($event.target as HTMLSelectElement).value as Role)"
-        title="调试用：切换角色验证三端菜单"
-      >
-        <option value="SUPER_ADMIN">超管</option>
-        <option value="DEPT_ADMIN">部门管理员</option>
-        <option value="STUDENT">学生</option>
-      </select>
       <span class="user"><i class="ava">{{ user.realName.slice(0, 1) }}</i>{{ user.realName }} · {{ ROLE_LABEL[user.role] }}</span>
+      <button class="btn-plain" :title="theme.current === 'light' ? '当前：图纸白，点击切深空黑' : '当前：深空黑，点击切图纸白'" @click="theme.toggle()">{{ theme.current === 'light' ? '☾ 深色' : '☀ 浅色' }}</button>
       <button class="btn-plain" @click="pwdVisible = true">改密</button>
       <button class="btn-plain" @click="onLogout">退出</button>
     </div>
@@ -89,51 +80,51 @@ function onLogout() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 32px;
-  border-bottom: 1px solid var(--vio-rule);
-  background: var(--vio-sheet);
+  padding: 12px 32px;
+  border-bottom: 3px solid var(--vio2-bd);
+  background: var(--vio2-head);
+  position: relative;
+  z-index: 2; /* 压过壳层网格底纹 */
 }
-.crumb { font-size: 12.5px; color: var(--vio-ink-3); }
-.crumb b { color: var(--vio-ink); font-weight: 600; }
-.topbar-right { display: flex; align-items: center; gap: 14px; }
+/* 头带双主题恒暗：文字/描边用固定色值，不走主题令牌 */
+.crumb { font-size: 12px; color: #98A2B8; letter-spacing: 0.06em; }
+.crumb b { color: #FFFFFF; font-weight: 700; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
 .chip {
   font-size: 11px;
-  color: var(--vio-seal);
-  border: 1px solid var(--vio-seal);
-  padding: 2px 9px;
+  font-weight: 700;
+  color: #101010;
+  background: var(--vio2-pink);
+  border: 2px solid #101010;
+  padding: 1px 9px 2px;
   letter-spacing: 0.08em;
   cursor: pointer;
 }
-.role-switch {
-  border: 1px solid var(--vio-rule);
-  background: var(--vio-paper);
-  font-size: 11px;
-  color: var(--vio-ink-3);
-  padding: 4px 6px;
-}
-.user { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--vio-ink-2); }
+.chip:hover { background: var(--vio2-yellow); }
+.user { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #E9EDF5; }
 .ava {
   display: inline-grid;
   place-items: center;
-  width: 27px;
-  height: 27px;
-  border-radius: 50%;
-  background: var(--vio-wash);
-  color: var(--vio-blue-ink);
+  width: 26px;
+  height: 26px;
+  background: var(--vio2-green);
+  color: #101010;
+  border: 2px solid #101010;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 900;
   font-style: normal;
-  font-family: var(--vio-serif);
+  font-family: var(--vio2-din);
 }
 .btn-plain {
-  padding: 5px 14px;
+  padding: 4px 13px;
   background: none;
-  border: 1px solid var(--vio-rule);
-  color: var(--vio-ink-2);
-  font-size: 12.5px;
+  border: 2px solid #3A4360;
+  color: #98A2B8;
+  font-size: 12px;
+  font-weight: 700;
   border-radius: 0;
   cursor: pointer;
-  transition: all 0.25s var(--vio-ease);
+  transition: border-color 0.2s var(--vio-ease), color 0.2s var(--vio-ease), background 0.2s var(--vio-ease);
 }
-.btn-plain:hover { border-color: var(--vio-ink); color: var(--vio-ink); }
+.btn-plain:hover { border-color: #E9EDF5; color: #FFFFFF; }
 </style>

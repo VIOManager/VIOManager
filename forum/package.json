@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "VIOManager 团队论坛独立站（图纸档案家族视觉）",
+  "description": "VIOManager 团队论坛独立站（新粗野双主题：图纸白 / 深空黑）",
   "scripts": {
     "dev": "vite --port 5175",
     "build": "vue-tsc --noEmit && vite build",

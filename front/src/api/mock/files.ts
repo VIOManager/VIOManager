@@ -16,7 +16,17 @@ registerMock({
     const fd = ctx.body as unknown as FormData
     const file = fd && typeof fd.get === 'function' ? (fd.get('file') as File | null) : null
     const name = file ? file.name : 'unknown.bin'
+    // bizType 为后端 FileController 必填（业务来源），缺参对齐 1001
+    const bizType = fd && typeof fd.get === 'function' ? String(fd.get('bizType') ?? '') : ''
+    if (!bizType) return fail(1001, '参数校验失败：缺少必填参数 bizType')
     if (name.toLowerCase().indexOf('virus') >= 0) return fail(1010, '文件安全扫描未通过，请更换文件')
-    return ok({ fileId: 'f' + seq++, fileName: name, scanStatus: 'CLEAN' })
+    return ok({ fileId: 'f' + seq++, originalName: name, scanStatus: 'CLEAN' })
   }
+})
+
+/** 文件下载（blob 请求由 mock 适配器统一包成演示文件流，真实文件名由前端兜底传入） */
+registerMock({
+  method: 'get',
+  path: '/api/files/:fileId/download',
+  reply: (ctx) => ok({ fileId: ctx.params.fileId, note: 'mock 演示文件内容' })
 })

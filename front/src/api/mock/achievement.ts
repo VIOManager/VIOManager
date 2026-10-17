@@ -70,12 +70,12 @@ function applyEvidenceLinkage(teamId: string): void {
   if (!task) return
   let hasEvidence = false
   for (const r of requirements) {
-    if (r.taskId === task.id && r.type === 'EVIDENCE') hasEvidence = true
+    if (r.taskId === task.id && r.materialType === 'EVIDENCE') hasEvidence = true
   }
   if (!hasEvidence) {
     requirements.push({
-      id: nextReqId(), taskId: task.id, type: 'EVIDENCE', required: true,
-      formats: ['pdf', 'jpg', 'zip'], namingRule: '队名-成果名-佐证', maxSizeMb: 20
+      id: nextReqId(), taskId: task.id, materialType: 'EVIDENCE', requiredFlag: 1,
+      allowedFormats: ['pdf', 'jpg', 'zip'], namingRule: '队名-成果名-佐证', maxSizeMb: 20
     })
   }
   recomputeTeam(teamId)

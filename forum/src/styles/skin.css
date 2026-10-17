@@ -1,0 +1,117 @@
+/**
+ * 论坛站共享皮肤：新粗野组件（盒 / tab / 行 / 胶囊 / 分页 / 钮 / 贴纸 / 右栏 / 楼层）
+ * 依据：样张 nb.css 转正（.agentdocs/design-preview/2026-10-15-forum-redesign/）
+ * 用法：全局引入一次（main.ts）；页面差异样式仍写各组件 scoped 块，同名类可叠加覆盖
+ */
+
+/* ── 页头：mono 眉行 + 900 大标题 + 贴纸 ── */
+.p-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+.p-head h1 { font-size: 32px; font-weight: 900; }
+.p-head h1 span { display: block; font-family: var(--vio2-mono); font-size: 11px; font-weight: 400; letter-spacing: 0.24em; color: var(--vio2-ink-3); margin-bottom: 7px; }
+.sticker { display: inline-block; background: var(--vio2-lilac); color: var(--vio2-on-ac); border: var(--vio2-bd-acc); box-shadow: var(--vio2-hard-s); padding: 7px 14px; font-size: 12.5px; font-weight: 900; transform: rotate(2deg); }
+
+/* ── 面板盒：3px 边 + 8px 硬投影；盒头黑条 ── */
+.box { border: var(--vio2-bd-main); background: var(--vio2-panel); box-shadow: var(--vio2-hard); }
+.box-h { display: flex; justify-content: space-between; align-items: center; padding: 11px 16px; border-bottom: var(--vio2-bd-main); background: var(--vio2-head); color: #FFF; }
+.box-h b { font-size: 13px; letter-spacing: 0.12em; font-weight: 900; }
+.box-h span { font-family: var(--vio2-mono); font-size: 10px; color: #C9C4B4; letter-spacing: 0.1em; }
+
+/* ── 频道行：粗野 chip tab（按压反馈：hover 收投影、active 归零） ── */
+.tabs { display: flex; flex-wrap: wrap; gap: 9px; padding: 14px 16px; border-bottom: var(--vio2-bd-main); align-items: center; }
+.tabs a { border: var(--vio2-bd-row); background: var(--vio2-panel); color: var(--vio2-ink-2); font-size: 13px; font-weight: 800; padding: 5px 14px; box-shadow: var(--vio2-hard-xs); transition: transform 0.12s, box-shadow 0.12s; cursor: pointer; }
+.tabs a:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--vio2-shadow); color: var(--vio2-ink); }
+.tabs a.on { background: var(--vio2-yellow); color: var(--vio2-on-ac); border-color: var(--vio2-shadow); }
+.tabs .right { margin-left: auto; display: flex; gap: 9px; }
+
+/* 频道第二行：标签 / 说明字（mono 小字） */
+.tabs2 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 16px; border-bottom: 2px solid var(--vio2-row-line); font-family: var(--vio2-mono); font-size: 11.5px; color: var(--vio2-ink-3); }
+.tabs2 a { color: var(--vio2-ink-3); cursor: pointer; }
+.tabs2 a:hover { color: var(--vio2-blue); }
+
+/* ── 行式列表（主题行 / 推送行共用骨架）── */
+.cell { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-bottom: 2px solid var(--vio2-row-line); }
+.cell:last-child { border-bottom: none; }
+.ava { width: 48px; height: 48px; flex: none; border: var(--vio2-bd-acc); object-fit: cover; }
+.t-title { font-size: 16px; font-weight: 800; line-height: 1.35; }
+.t-title a { color: var(--vio2-ink); }
+.t-title a:hover { color: var(--vio2-blue); }
+.pin { display: inline-block; background: var(--vio2-pink); color: var(--vio2-on-ac); border: 2px solid var(--vio2-shadow); font-size: 10px; font-weight: 900; padding: 1px 7px; margin-right: 7px; letter-spacing: 0.08em; transform: rotate(-1.5deg); vertical-align: 2px; }
+.t-meta { margin-top: 6px; font-size: 12px; color: var(--vio2-ink-3); font-family: var(--vio2-mono); }
+.t-meta b { color: var(--vio2-ink-2); font-weight: 700; }
+.node { display: inline-block; border: 2px solid var(--vio2-shadow); background: var(--vio2-panel-2); color: var(--vio2-ink-2); padding: 0 8px; margin-right: 8px; font-weight: 700; }
+.pill { flex: none; min-width: 34px; text-align: center; border: var(--vio2-bd-row); background: var(--vio2-panel); color: var(--vio2-ink); font-family: var(--vio2-mono); font-size: 13px; font-weight: 700; padding: 4px 6px; box-shadow: var(--vio2-hard-xs); }
+.pill.hot { background: var(--vio2-yellow); color: var(--vio2-on-ac); border-color: var(--vio2-shadow); }
+.empty { padding: 30px 14px; font-size: 13px; color: var(--vio2-ink-3); text-align: center; font-weight: 700; }
+
+/* ── 分页 ── */
+.pager { display: flex; gap: 9px; justify-content: center; align-items: center; padding: 18px 0 8px; }
+.pager a { min-width: 36px; height: 36px; display: grid; place-items: center; border: var(--vio2-bd-row); background: var(--vio2-panel); color: var(--vio2-ink-2); font-family: var(--vio2-mono); font-weight: 700; box-shadow: var(--vio2-hard-xs); cursor: pointer; }
+.pager a.on { background: var(--vio2-yellow); color: var(--vio2-on-ac); border-color: var(--vio2-shadow); }
+.pager a.off { opacity: 0.35; pointer-events: none; }
+.pager .info { font-family: var(--vio2-mono); font-size: 10.5px; color: var(--vio2-ink-3); margin-left: 10px; letter-spacing: 0.1em; }
+
+/* ── 按钮：黄主钮 / 描边小钮 ── */
+.btn { background: var(--vio2-yellow); color: var(--vio2-on-ac); border: var(--vio2-bd-acc); box-shadow: var(--vio2-hard-s); font: inherit; font-size: 13.5px; font-weight: 900; padding: 10px 22px; cursor: pointer; letter-spacing: 0.06em; transition: transform 0.12s, box-shadow 0.12s; }
+.btn:hover:not(:disabled) { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--vio2-shadow); }
+.btn:active:not(:disabled) { transform: translate(5px, 5px); box-shadow: none; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.chipbtn { border: var(--vio2-bd-row); background: var(--vio2-panel); color: var(--vio2-ink-2); font: inherit; font-size: 12.5px; font-weight: 800; padding: 6px 14px; cursor: pointer; box-shadow: var(--vio2-hard-xs); transition: transform 0.12s, box-shadow 0.12s; }
+.chipbtn:hover:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--vio2-shadow); color: var(--vio2-ink); }
+.chipbtn.on { background: var(--vio2-pink); color: var(--vio2-on-ac); border-color: var(--vio2-shadow); }
+.chipbtn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── 右栏（盒体 + 黄品牌盒 + 热榜 + 统计 + 版块云）── */
+.side .box { margin-bottom: 20px; }
+.side .bd { padding: 14px 16px; }
+.brand { background: var(--vio2-yellow); }
+.brand .slogan { font-size: 15px; font-weight: 900; color: #101010; }
+.brand .sub2 { font-size: 12px; color: #101010; opacity: 0.72; margin: 6px 0 12px; font-weight: 700; }
+.brand .back { font-family: var(--vio2-mono); font-size: 11px; color: #101010; font-weight: 700; }
+.hot { margin: 0; padding: 0; }
+.hot li { list-style: none; display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 2px solid var(--vio2-row-line); }
+.hot li:last-child { border: none; padding-bottom: 2px; }
+.rk { font-family: var(--vio2-mono); color: var(--vio2-blue); font-weight: 700; font-size: 12px; margin-top: 2px; flex: none; }
+:root[data-theme='dark'] .rk { text-shadow: 0 0 14px rgba(91, 140, 255, 0.5); }
+.hot a { font-size: 12.5px; color: var(--vio2-ink-2); font-weight: 700; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hot a:hover { color: var(--vio2-blue); }
+.stat div { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 0; border-bottom: 2px solid var(--vio2-row-line); font-size: 12.5px; color: var(--vio2-ink-2); font-weight: 700; }
+.stat div:last-child { border: none; }
+.stat b { font-family: var(--vio2-mono); color: var(--vio2-ink); font-size: 17px; }
+.nodes a { display: inline-block; border: var(--vio2-bd-row); background: var(--vio2-panel-2); color: var(--vio2-ink-2); font-size: 12px; font-weight: 800; padding: 3px 11px; margin: 0 7px 8px 0; box-shadow: 2px 2px 0 var(--vio2-shadow); cursor: pointer; }
+.nodes a:hover { background: var(--vio2-yellow); color: var(--vio2-on-ac); border-color: var(--vio2-shadow); }
+
+/* ── 楼层（详情页）── */
+.floor { display: flex; gap: 13px; padding: 14px 16px; border-bottom: 2px solid var(--vio2-row-line); }
+.floor:last-child { border-bottom: none; }
+.f-main { flex: 1; min-width: 0; }
+.f-meta { font-size: 12px; color: var(--vio2-ink-3); margin-bottom: 5px; display: flex; align-items: baseline; font-family: var(--vio2-mono); }
+.f-meta b { color: var(--vio2-blue); margin-right: 8px; font-size: 13px; }
+.fno { margin-left: auto; color: var(--vio2-ink-3); font-size: 12px; }
+.quote { background: var(--vio2-panel-2); border-left: 4px solid var(--vio2-lilac); padding: 7px 11px; font-size: 12.5px; color: var(--vio2-ink-2); font-weight: 600; margin-bottom: 7px; }
+.f-text { font-size: 14px; color: var(--vio2-ink); line-height: 1.7; font-weight: 600; }
+.f-ops { margin-top: 7px; font-size: 12px; font-family: var(--vio2-mono); }
+.f-ops a { margin-right: 14px; color: var(--vio2-ink-3); cursor: pointer; }
+.f-ops a:hover, .f-ops a.on { color: var(--vio2-pink); }
+
+/* ── 面包屑（mono 小字）── */
+.crumb2 { font-family: var(--vio2-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--vio2-ink-3); margin-bottom: 14px; }
+.crumb2 a { color: var(--vio2-ink-3); }
+.crumb2 a:hover { color: var(--vio2-blue); }
+
+/* ── 附件条（详情页主楼）── */
+.attach { margin-top: 16px; background: var(--vio2-panel-2); border: var(--vio2-bd-row); padding: 10px 14px; font-size: 12.5px; }
+.attach div { display: flex; justify-content: space-between; padding: 4px 0; }
+.attach a { color: var(--vio2-blue); font-weight: 700; }
+.attach .gray { font-family: var(--vio2-mono); font-size: 11px; color: var(--vio2-ink-3); }
+
+/* ── 作者统计格（详情页右栏）── */
+.astat { display: flex; text-align: center; }
+.astat div { flex: 1; border: var(--vio2-bd-row); background: var(--vio2-panel-2); padding: 7px 0; margin-right: 7px; font-size: 11px; color: var(--vio2-ink-3); font-weight: 700; }
+.astat div:last-child { margin-right: 0; }
+.astat b { display: block; font-family: var(--vio2-mono); font-size: 17px; color: var(--vio2-ink); margin-bottom: 2px; }
+
+/* ── 页脚（mono 居中灰字）── */
+.foot { text-align: center; font-family: var(--vio2-mono); font-size: 11px; color: var(--vio2-ink-3); padding: 26px 0 34px; letter-spacing: 0.08em; position: relative; z-index: 1; }
+.foot a { color: var(--vio2-ink-3); margin: 0 8px; }
+.foot a:hover { color: var(--vio2-blue); }
+.foot div { margin-bottom: 5px; }

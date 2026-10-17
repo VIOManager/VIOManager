@@ -2,6 +2,10 @@
 # 一切可用环境变量覆盖，生产配置不得写死在文件里（PRD §5：所有配置通过环境变量管理）。
 server:
   port: 8088   # 阶段1 无网关直跑 8088；阶段2 论坛上线后由 Nginx 按路径转发
+  tomcat:
+    # 超限请求体也完整接收后再回 1009 JSON（默认 2MB 会在半途掐断连接，前端只见网络异常）；
+    # 只吞客户端实际发送的量，客户端主动断开即结束
+    max-swallow-size: -1
   compression:
     enabled: true   # gzip，PRD §5 性能要求
     mime-types: application/json,text/html,text/css,application/javascript
@@ -13,10 +17,10 @@ spring:
     name: vio-management
   servlet:
     multipart:
-      # ⚠️ 刻意高于 vio.file.max-size-mb（25 > 20）：业务校验先给出 1009 业务码，
+      # ⚠️ 刻意高于 vio.file.max-size-mb（210 > 200）：业务校验先给出 1009 业务码，
       # 这里是最后防线，超了由全局异常处理器同样转 1009
-      max-file-size: 25MB
-      max-request-size: 30MB
+      max-file-size: 210MB
+      max-request-size: 215MB
   datasource:
     # 宿主端口默认 3307：对应 compose 的 MySQL 容器映射（避开本机原生 MySQL 的 3306）
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${MYSQL_DATABASE:viomanager}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
@@ -26,6 +30,14 @@ spring:
     enabled: true
     locations: classpath:db/migration
     # ⚠️ 冲突：V1 是 52 表全量基线，禁改；改表只新增 V2+ 脚本并同步 docs/db/initsql.sql（骨架方案 §0.1 三步走）
+  data:
+    redis:
+      # 审批中心升级（插入点①② 组织树/未读红点缓存）：降级口径与 kb 完全同款——
+      # 命令超时压到 1s + 代码内 30s 熔断，Redis 不可用时透明回退直查库，接口不倒
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:1s}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
 
 minio:
   # 对象存储连接位：Step 8 文件服务才接入 SDK，此处先落配置约定
@@ -56,12 +68,22 @@ vio:
     async: true
   file:
     # 文件服务：桶名 / 单文件大小上限 / 扩展名白名单 / ClamAV 连接位
+    # 2026-10-15 组长拍板：上限 20→200MB 支持视频（PRD §3.14 知识库内容形态含视频）
     bucket: vio-files
-    max-size-mb: 20
-    allowed-extensions: jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx,ppt,pptx,zip
+    max-size-mb: 200
+    # 视频：mp4 通用 / mov 手机拍摄 / avi 相机 / mkv 压制 / webm 网页端
+    allowed-extensions: jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx,ppt,pptx,zip,mp4,mov,avi,mkv,webm
     clamav:
       host: ${CLAMAV_HOST:localhost}
       port: ${CLAMAV_PORT:3310}
   approval:
     # 审批单有效期（天）：到期未处理由定时任务转 EXPIRED（方案 §7 待确认项，建议值 7）
     expire-days: 7
+  cache:
+    # 插入点①组织树缓存：false=path LIKE 现查（现状行为）；true=cache-aside + TTL 10 分钟，Redis 挂了自动降级
+    org-enabled: ${VIO_CACHE_ORG:false}
+    # 插入点②未读红点缓存：false=两条 selectCount 现算（现状行为）；true=Redis Hash + 状态变更事件重算
+    unread-enabled: ${VIO_CACHE_UNREAD:false}
+  # 插入点③④（outbox 通知 + 延迟消息）：false=不装配任何 MQ Bean，过期兜底轮询照跑，系统与现状行为一致；
+  # true=需同时设 ROCKETMQ_NAME_SERVER（如 localhost:9876），starter 见到该配置才激活装配
+  mq-enabled: ${VIO_MQ:false}

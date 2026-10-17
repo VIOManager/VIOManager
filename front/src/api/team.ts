@@ -4,7 +4,7 @@
  * 关键约束：组队/加人/移除/加指导教师都生成审批单不直接生效；队员确认后状态 UNCONFIRMED→CONFIRMED
  * ⚠️ 安全：TE02 详情仅本队成员/管理端/指导教师可见，其他人 4008（封堵按 ID 枚举越权）
  */
-import { del, get, post, put } from './http'
+import { get, postIdem, putIdem, delIdem } from './http'
 
 export type TeamMemberStatus = 'UNCONFIRMED' | 'CONFIRMED' | 'REJECTED' | 'EXITED' | 'REMOVED'
 export type TeamViewerRole = 'LEADER' | 'MEMBER' | 'ADVISOR' | 'ADMIN'
@@ -79,11 +79,11 @@ export function apiTeamDetail(id: string): Promise<TeamDetail> {
 }
 /** 组队申请（TE03）：校验通过后生成 TEAM_CREATE 审批单，不直接建队 */
 export function apiCreateTeam(body: { contestId: string; trackId: string; name: string; projectName: string; prefillMemberIds: string[] }): Promise<{ approvalId: string }> {
-  return post('/api/teams', body)
+  return postIdem('/api/teams', body, crypto.randomUUID())
 }
 /** 队长编辑队名/项目名（同比赛队名唯一 4002） */
 export function apiUpdateTeam(id: string, body: { name: string; projectName: string }): Promise<null> {
-  return put('/api/teams/' + id, body)
+  return putIdem('/api/teams/' + id, body, crypto.randomUUID())
 }
 
 // ── 成员生命周期 ──
@@ -92,28 +92,28 @@ export function apiSearchTeamMembers(teamId: string, keyword: string): Promise<T
 }
 /** 队长加人申请（TE04）：4003 人数上限 / 4004 重复参赛 / 4005 已在队 / 4007 已有待审批 */
 export function apiAddTeamMember(teamId: string, memberId: string): Promise<null> {
-  return post('/api/teams/' + teamId + '/members', { memberId })
+  return postIdem('/api/teams/' + teamId + '/members', { memberId }, crypto.randomUUID())
 }
 /** 队员本人确认/拒绝（TE06）：action=CONFIRM|REJECT */
 export function apiConfirmTeamMember(teamId: string, memberId: string, action: 'CONFIRM' | 'REJECT'): Promise<null> {
-  return post('/api/teams/' + teamId + '/members/' + memberId + '/confirm', { action })
+  return postIdem('/api/teams/' + teamId + '/members/' + memberId + '/confirm', { action }, crypto.randomUUID())
 }
 /** 移除成员（TE07，默认走审批；队长不可被移除 4010） */
 export function apiRemoveTeamMember(teamId: string, memberId: string): Promise<null> {
-  return del('/api/teams/' + teamId + '/members/' + memberId)
+  return delIdem('/api/teams/' + teamId + '/members/' + memberId, crypto.randomUUID())
 }
 /** 非队长主动退出（TE08） */
 export function apiExitTeam(teamId: string): Promise<null> {
-  return post('/api/teams/' + teamId + '/exit')
+  return postIdem('/api/teams/' + teamId + '/exit', {}, crypto.randomUUID())
 }
 /** 解散（TE12）：有材料/成果/待审批拒绝（4009） */
 export function apiDissolveTeam(teamId: string, reason: string): Promise<null> {
-  return post('/api/teams/' + teamId + '/dissolve', { reason })
+  return postIdem('/api/teams/' + teamId + '/dissolve', { reason }, crypto.randomUUID())
 }
 /** 加指导教师（TE09）：仅教师类型（4006） */
 export function apiAddAdvisor(teamId: string, memberId: string): Promise<null> {
-  return post('/api/teams/' + teamId + '/advisors', { memberId })
+  return postIdem('/api/teams/' + teamId + '/advisors', { memberId }, crypto.randomUUID())
 }
 export function apiRemoveAdvisor(teamId: string, advisorId: string): Promise<null> {
-  return del('/api/teams/' + teamId + '/advisors/' + advisorId)
+  return delIdem('/api/teams/' + teamId + '/advisors/' + advisorId, crypto.randomUUID())
 }

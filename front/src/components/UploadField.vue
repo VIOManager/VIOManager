@@ -19,6 +19,8 @@ const props = withDefaults(
     tip?: string
     maxMb?: number
     buttonText?: string
+    /** 业务来源标识（大写蛇形，后端文件服务必填：对象存储目录分层 + 审计记录） */
+    bizType: string
   }>(),
   { accept: '', tip: '', maxMb: 10, buttonText: '选择文件上传' }
 )
@@ -66,7 +68,7 @@ async function doUpload() {
   if (!currentFile || uploading.value) return
   uploading.value = true
   try {
-    const resp = await apiUploadFile(currentFile, idemKey)
+    const resp = await apiUploadFile(currentFile, idemKey, props.bizType)
     result.value = resp
     emit('uploaded', resp)
   } catch {
