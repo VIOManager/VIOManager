@@ -2,8 +2,10 @@
  * 人员档案接口（A 线 M01–M13）
  * 对应清单：docs/api/A线-基础数据-接口清单.md §3 + PRD §3.2
  * ⚠️ 隐私：列表只返回 idCardLast4；完整身份证走 M10（写审计日志）；证件照/签名走文件服务
+ * 写操作按规范 §6 带 X-Idempotency-Key（postIdem/putIdem/delIdem，键随每次点击生成，
+ * 同审批/材料线的联调口径）；M12 技能替换后端未挂幂等，普通 PUT。
  */
-import { del, get, post, put, upload } from './http'
+import { delIdem, download, get, postIdem, put, putIdem, upload } from './http'
 import type { PageResult } from './types'
 
 export type MemberType = 'STUDENT' | 'TEACHER' | 'OTHER'
@@ -91,19 +93,20 @@ export function apiMemberDetail(id: string): Promise<MemberDetail> {
   return get('/api/members/' + id)
 }
 export function apiCreateMember(body: MemberForm): Promise<MemberDetail> {
-  return post('/api/members', body)
+  return postIdem('/api/members', body, crypto.randomUUID())
 }
 export function apiUpdateMember(id: string, body: MemberForm): Promise<MemberDetail> {
-  return put('/api/members/' + id, body)
+  return putIdem('/api/members/' + id, body, crypto.randomUUID())
 }
 /** 队长拒删（3003）；当前登录账号拒删（3004） */
 export function apiDeleteMember(id: string): Promise<null> {
-  return del('/api/members/' + id)
+  return delIdem('/api/members/' + id, crypto.randomUUID())
 }
 /** 完整身份证号（M10，写审计日志；仅超管/本部门管理员/本队队长/本人） */
 export function apiMemberIdCard(id: string): Promise<{ idCard: string }> {
   return get('/api/members/' + id + '/id-card')
 }
+/** 技能整组替换：后端 M12 无 @Idempotent（替换天然幂等），普通 PUT 即可 */
 export function apiUpdateSkills(id: string, skills: string[]): Promise<null> {
   return put('/api/members/' + id + '/skills', { skills })
 }
@@ -112,27 +115,29 @@ export function apiImportMembers(file: File, idempotencyKey: string): Promise<Im
 }
 /** 证件照/电子签名上传（M08/M09）：先传文件服务拿 fileId，再回填档案 */
 export function apiBindPhoto(id: string, fileId: string): Promise<null> {
-  return post('/api/members/' + id + '/photo', { fileId })
+  return postIdem('/api/members/' + id + '/photo', { fileId }, crypto.randomUUID())
 }
 export function apiBindSignature(id: string, fileId: string): Promise<null> {
-  return post('/api/members/' + id + '/signature', { fileId })
+  return postIdem('/api/members/' + id + '/signature', { fileId }, crypto.randomUUID())
 }
 /** 账号绑定（M13）：POST 绑定（初始密码 abc123）；PUT 改登录名/重置密码（重置后回默认密码态） */
 export function apiBindAccount(id: string, loginName?: string): Promise<null> {
-  return post('/api/members/' + id + '/account', { loginName })
+  return postIdem('/api/members/' + id + '/account', { loginName }, crypto.randomUUID())
 }
 export function apiResetAccount(id: string, loginName?: string, resetPassword?: boolean): Promise<null> {
-  return put('/api/members/' + id + '/account', { loginName, resetPassword })
+  return putIdem('/api/members/' + id + '/account', { loginName, resetPassword }, crypto.randomUUID())
 }
 
 /**
- * 下载导入模板（M06）。mock 模式前端自生成 CSV 占位；真实模式走后端文件流
+ * 下载导入模板（M06）。mock 模式前端自生成 CSV 占位；真实模式走后端文件流。
+ * ⚠️ 必须用 download()（axios 带 Authorization + 解析 Content-Disposition 文件名）——
+ * window.open 发不了请求头，M06 有 @RequireRole 会被 401 拦下。
  * ⚠️ 待确认：PRD §3.2 文字写"13 列"但字段清单实际列了 14 项，本模板按字段清单（14 列）
  */
 export function apiDownloadTemplate(): void {
   const useMock = import.meta.env.VITE_USE_MOCK === 'true'
   if (!useMock) {
-    window.open((import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8088') + '/api/members/import-template')
+    void download('/api/members/import-template', '人员导入模板.xlsx')
     return
   }
   const header = '姓名,学号/学工号,手机号,学院,专业,班级,性别,民族,身份证号,邮箱,证件照,电子签名,所属组织,类型'
