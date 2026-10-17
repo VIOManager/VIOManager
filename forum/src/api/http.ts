@@ -29,7 +29,9 @@ export class BizError extends Error {
 }
 
 const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8088',
+  // 留空 = 相对路径：开发走 vite 代理（vite.config /api → 论坛服务 8089）、生产同域 Nginx 分流，
+  // 两态都无需完整地址；指向独立部署的论坛服务时才在 env 里填 VITE_API_BASE_URL
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? '',
   timeout: 15000,
   // mock 模式接管适配器；真实模式走默认 XHR（联调时 .env 里关 VITE_USE_MOCK 即可）
   adapter: useMock ? mockAdapter : undefined

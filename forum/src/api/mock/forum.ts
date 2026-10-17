@@ -1,7 +1,6 @@
 /**
- * 论坛帖子 mock 处理器（F01–F10）
- * TODO(联调-论坛清单)：论坛服务接口清单未出，路径 /api/forum/** 与错误码均为前端预设，
- *    清单定稿后对齐（帖子不存在暂用通用 1004，管理操作沿用 9002 口径）
+ * 论坛帖子 mock 处理器（F01–F10）——镜像 backend/vio-forum 契约
+ * 错误码对齐 ForumErrorCode：9102 主题不存在 / 9103 楼层不存在；管理权限通用 1003
  * 注册顺序敏感：/hot、/stats 必须先于 /:id 注册（见 registry.ts 头注）
  */
 import { registerMock, MockBizError, markIdem } from './registry'
@@ -24,7 +23,22 @@ function toListItem(t: MockTopic) {
   return {
     id: t.id, board: t.board, title: t.title, author: t.author, authorGroup: t.authorGroup,
     tags: t.tags.slice(), replyCount: t.replyCount, viewCount: t.viewCount, likeCount: t.likeCount,
-    lastActiveAt: t.lastActiveAt, lastReplyBy: t.lastReplyBy, pinned: t.pinned, hot: t.hot
+    lastActiveAt: t.lastActiveAt, lastReplyBy: t.lastReplyBy, pinned: t.pinned,
+    status: t.status ?? 'NORMAL', hot: t.hot
+  }
+}
+
+/** 楼层响应项：V4 两级字段全量下发（演示数据暂无二级，children 恒空数组） */
+function toReplyItem(r: { id: string; floorNo: number; author: string; authorGroup: string; publishAt: string; text: string; likeCount: number; liked: boolean; quoteReplyId: string | null }) {
+  let quote = null
+  if (r.quoteReplyId) {
+    const q = findReply(r.quoteReplyId)
+    if (q) quote = { author: q.author, floorNo: q.floorNo, text: q.text.slice(0, 60) }
+  }
+  return {
+    id: r.id, floorNo: r.floorNo, author: r.author, authorGroup: r.authorGroup,
+    publishAt: r.publishAt, text: r.text, likeCount: r.likeCount, liked: r.liked, quote,
+    parentReplyId: null, children: [], status: 'NORMAL', edited: false
   }
 }
 
@@ -86,7 +100,7 @@ registerMock('get', '/api/forum/topics/stats', () => {
 // F04 帖子详情（浏览 +1）；作者统计顺带算好（右栏"关于作者"用）
 registerMock('get', '/api/forum/topics/:id', (ctx) => {
   const t = findTopic(ctx.params.id)
-  if (!t) throw new MockBizError(1004, '帖子不存在或已删除')
+  if (!t) throw new MockBizError(9102, '主题不存在或已隐藏')
   t.viewCount++
   let postCount = 0
   let likeTotal = 0
@@ -99,32 +113,24 @@ registerMock('get', '/api/forum/topics/:id', (ctx) => {
   return {
     id: t.id, board: t.board, title: t.title, author: t.author, authorGroup: t.authorGroup,
     tags: t.tags.slice(), replyCount: t.replyCount, viewCount: t.viewCount, likeCount: t.likeCount,
-    liked: t.liked, collected: t.collected, pinned: t.pinned, publishAt: t.publishAt,
+    liked: t.liked, collected: t.collected, pinned: t.pinned, status: t.status ?? 'NORMAL',
+    publishAt: t.publishAt,
     body: t.body.slice(), attach: t.attach.slice(),
-    authorStats: { postCount, likeTotal, archivedCount: Math.floor(likeTotal / 30) }
+    // 第三项后端语义为"被收藏数"（collectedCount，V4 已改名；演示数据无收藏计数，按获赞近似）
+    authorStats: { postCount, likeTotal, collectedCount: Math.floor(likeTotal / 30) }
   }
 })
 
-// F05 楼层列表（分页参数兼容，演示数据量全量返回；引用信息在服务端拼好）
+// F05 楼层列表（一级分页、楼层号升序，size 上限 100 同后端；引用信息在服务端拼好）
 registerMock('get', '/api/forum/topics/:id/replies', (ctx) => {
   const t = findTopic(ctx.params.id)
-  if (!t) throw new MockBizError(1004, '帖子不存在或已删除')
+  if (!t) throw new MockBizError(9102, '主题不存在或已隐藏')
   const page = Number(ctx.query.page ?? '1')
-  const size = Number(ctx.query.size ?? '50')
+  const size = Math.min(Number(ctx.query.size ?? '20') || 20, 100)
   const all = repliesOf(t.id)
+  const start = (page - 1) * size
   const items = []
-  for (let i = 0; i < all.length; i++) {
-    const r = all[i]
-    let quote = null
-    if (r.quoteReplyId) {
-      const q = findReply(r.quoteReplyId)
-      if (q) quote = { author: q.author, floorNo: q.floorNo, text: q.text.slice(0, 60) }
-    }
-    items.push({
-      id: r.id, floorNo: r.floorNo, author: r.author, authorGroup: r.authorGroup,
-      publishAt: r.publishAt, text: r.text, likeCount: r.likeCount, liked: r.liked, quote
-    })
-  }
+  for (let i = start; i < Math.min(start + size, all.length); i++) items.push(toReplyItem(all[i]))
   return { list: items, total: all.length, page, size }
 })
 
@@ -134,9 +140,9 @@ registerMock('post', '/api/forum/topics', (ctx) => {
   const board = String(ctx.body.board ?? '')
   const title = String(ctx.body.title ?? '').trim()
   const bodyText = String(ctx.body.bodyText ?? '').trim()
-  const pinned = ctx.body.pinned === true
+  // 置顶仅超管生效，其他角色静默置 false（后端 TopicCreateDTO 同口径，不报错）
+  const pinned = ctx.body.pinned === true && ctx.role === 'SUPER_ADMIN'
   if (!board || !title || !bodyText) throw new MockBizError(1001, '版块、标题、正文都不能为空')
-  if (pinned) requireAdmin(ctx)
   // tags 兼容数组和逗号分隔字符串两种入参
   const rawTags = ctx.body.tags
   const tags: string[] = []
@@ -159,22 +165,23 @@ registerMock('post', '/api/forum/topics', (ctx) => {
     id, board: board as MockTopic['board'], title, author: ctx.loginName, authorGroup: '综合',
     tags, replyCount: 0, viewCount: 1, likeCount: 0, liked: false, collected: false,
     publishAt: nowText(), lastActiveAt: '刚刚', lastReplyBy: ctx.loginName, pinned, hot: false,
-    body, attach: []
+    body, attach: [], status: 'NORMAL'
   })
   return { id }
 })
 
-// F07 回帖（幂等）。body：text quoteReplyId（可空）
+// F07 回帖（幂等）。body：text quoteReplyId / parentReplyId（可空）
 registerMock('post', '/api/forum/topics/:id/replies', (ctx) => {
   requireIdem(ctx.idemKey)
   const t = findTopic(ctx.params.id)
-  if (!t) throw new MockBizError(1004, '帖子不存在或已删除')
+  if (!t) throw new MockBizError(9102, '主题不存在或已隐藏')
   const text = String(ctx.body.text ?? '').trim()
   if (!text) throw new MockBizError(1001, '回复内容不能为空')
-  const quoteReplyId = ctx.body.quoteReplyId ? String(ctx.body.quoteReplyId) : null
+  // 引用条无效（不存在/异主题/已隐藏）静默降级为无引用，不挡回帖（后端 L11 拍板口径）
+  let quoteReplyId = ctx.body.quoteReplyId ? String(ctx.body.quoteReplyId) : null
   if (quoteReplyId) {
     const q = findReply(quoteReplyId)
-    if (!q || q.topicId !== t.id) throw new MockBizError(1001, '引用的楼层不存在')
+    if (!q || q.topicId !== t.id) quoteReplyId = null
   }
   const floorNo = t.replyCount + 1
   const id = allocReplyId(t.id, floorNo)
@@ -188,40 +195,34 @@ registerMock('post', '/api/forum/topics/:id/replies', (ctx) => {
   return { id, floorNo }
 })
 
-// F08 帖子点赞/取消（状态型操作：body 带目标态，重复点无副作用，不需要幂等头）
+// F08 帖子点赞/取消（状态型操作：body 带目标态，重复点无副作用，不需要幂等头；返回服务端权威计数）
 registerMock('post', '/api/forum/topics/:id/like', (ctx) => {
   const t = findTopic(ctx.params.id)
-  if (!t) throw new MockBizError(1004, '帖子不存在或已删除')
+  if (!t) throw new MockBizError(9102, '主题不存在或已隐藏')
   const liked = ctx.body.liked === true
-  if (t.liked === liked) return { liked }
-  t.liked = liked
-  t.likeCount += liked ? 1 : -1
-  return { liked }
+  if (t.liked !== liked) {
+    t.liked = liked
+    t.likeCount += liked ? 1 : -1
+  }
+  return { liked, likeCount: t.likeCount }
 })
 
-// F09 帖子收藏/取消（收藏关系唯一约束天然幂等，同技术交流 T03 口径）
+// F09 帖子收藏/取消（收藏关系唯一约束天然幂等）
 registerMock('post', '/api/forum/topics/:id/collect', (ctx) => {
   const t = findTopic(ctx.params.id)
-  if (!t) throw new MockBizError(1004, '帖子不存在或已删除')
+  if (!t) throw new MockBizError(9102, '主题不存在或已隐藏')
   const collected = ctx.body.collected === true
   t.collected = collected
   return { collected }
 })
 
-// F10 楼层点赞/取消（同 F08 状态型口径）
+// F10 楼层点赞/取消（同 F08 状态型口径；楼层不存在 9103）
 registerMock('post', '/api/forum/replies/:id/like', (ctx) => {
   const r = findReply(ctx.params.id)
-  if (!r) throw new MockBizError(1004, '楼层不存在')
+  if (!r) throw new MockBizError(9103, '楼层不存在')
   const liked = ctx.body.liked === true
   if (r.liked === liked) return { liked }
   r.liked = liked
   r.likeCount += liked ? 1 : -1
   return { liked }
 })
-
-/** F06 置顶发帖的管理员校验（requireAdmin 的本地包装，错误文案带上下文） */
-function requireAdmin(ctx: { role: string }): void {
-  if (ctx.role !== 'SUPER_ADMIN') {
-    throw new MockBizError(9002, '无权执行管理操作（置顶仅管理员）')
-  }
-}

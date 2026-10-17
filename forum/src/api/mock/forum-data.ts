@@ -2,8 +2,7 @@
  * 论坛帖子内存种子数据（mock 层）
  * 来源：HomePage/TopicPage 骨架阶段的静态演示数据整体迁入，字段含义不变
  * ⚠️ 内存态：刷新页面恢复种子（与主站 mock 同口径，演示同标签页内进行）
- * TODO(联调-论坛清单)：论坛服务接口清单尚未落盘，字段按页面展示需要预设，
- *    清单出稿后以清单为准调整——错误码段、路径前缀 /api/forum 均待登记
+ * 契约基准：backend/vio-forum VO（F01-F10 已实现；错误码 9100-9199 对齐 ForumErrorCode）
  */
 import type { BoardCode } from '@/types'
 
@@ -34,6 +33,8 @@ export interface MockTopic {
   lastReplyBy: string
   pinned: boolean
   hot: boolean
+  /** NORMAL / LOCKED / HIDDEN（契约字段；种子默认 NORMAL，管理端 F12 落地后 mock 演示锁定态） */
+  status?: string
   /** 正文段落（发帖表单按空行切段） */
   body: string[]
   attach: MockAttach[]

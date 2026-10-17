@@ -2,11 +2,12 @@
 /**
  * 帖子详情：mono 面包屑 + 主楼（左 73px 方头像）+ 回复楼层 + 回复框沉底 + 右栏
  * 视觉基准：.agentdocs/design-preview/2026-10-15-forum-redesign/topic.html（新粗野双主题，lzh 已拍板）
- * 数据：F04 详情（浏览计数服务端 +1）、F05 楼层、F02 本版热议
+ * 数据：F04 详情（浏览计数服务端 +1）、F05 楼层（一级分页）、F02 本版热议
  * 写操作：F07 回帖（幂等键防重）、F08/F10 点赞、F09 收藏（后三者为状态型天然幂等）
- * TODO(联调-论坛清单)：以上路径为前端预设；附件下载依赖文件服务方案，点击仅提示
+ * 契约基准：backend/vio-forum 控制器（F01-F10 已实现）；LOCKED 主题禁回（后端 9101 兜底，前端先拦）
+ * 附件下载依赖文件服务方案，点击仅提示
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { avatarOf } from '@/config/avatars'
@@ -22,6 +23,14 @@ const topicId = String(route.params.id)
 const detail = ref<TopicDetail | null>(null)
 const floors = ref<ReplyItem[]>([])
 const boardHot = ref<HotTopicItem[]>([])
+
+/** 楼层分页（后端 F05 一级分页、size 上限 100） */
+const REPLY_PAGE_SIZE = 20
+const replyPage = ref(1)
+const replyTotal = ref(0)
+
+/** LOCKED 主题禁回（后端状态字段透出；管理员 F12 状态接口落地后联动） */
+const locked = computed(() => detail.value?.status === 'LOCKED')
 
 /** 回复框状态：正文、引用楼层、提交中标志 */
 const replyText = ref('')
@@ -43,9 +52,26 @@ async function loadDetail() {
   }
 }
 
+/**
+ * 拉当前页楼层。⚠️ 响应竞态守卫：快速翻页并发时晚到的旧响应会覆盖新页——
+ * 序号对不上的响应直接丢弃，只认最后一次（同 HomePage 列表口径）
+ */
+let floorSeq = 0
 async function loadFloors() {
-  const res = await apiReplyList(topicId)
+  const seq = ++floorSeq
+  const res = await apiReplyList(topicId, { page: replyPage.value, size: REPLY_PAGE_SIZE })
+  if (seq !== floorSeq) return
   floors.value = res.list
+  replyTotal.value = res.total
+  if (detail.value) detail.value.replyCount = res.total
+}
+
+/** 楼层翻页（上一页/下一页；首页/末页由 pager 的 off 态拦住） */
+function turnReplyPage(delta: number) {
+  const next = replyPage.value + delta
+  if (next < 1 || (next - 1) * REPLY_PAGE_SIZE >= replyTotal.value) return
+  replyPage.value = next
+  loadFloors()
 }
 
 onMounted(() => {
@@ -69,7 +95,7 @@ const likePending = ref(false)
 const collectPending = ref(false)
 const floorLikeLocks = ref<Record<string, boolean>>({})
 
-/** 主楼点赞/取消（状态型：重复点无副作用） */
+/** 主楼点赞/取消（状态型：重复点无副作用；计数以服务端返回为准） */
 async function toggleLike() {
   if (likePending.value || !detail.value) return
   likePending.value = true
@@ -77,7 +103,7 @@ async function toggleLike() {
     const target = !detail.value.liked
     const res = await apiLikeTopic(detail.value.id, target)
     detail.value.liked = res.liked
-    detail.value.likeCount += res.liked ? 1 : -1
+    detail.value.likeCount = res.likeCount
   } finally {
     likePending.value = false
   }
@@ -127,7 +153,7 @@ function scrollToReply() {
 
 /** 提交回复（幂等 + 双层防重：submitting 置灰拦手抖，formKey 拦网络重试重复） */
 async function submitReply() {
-  if (submitting.value) return
+  if (submitting.value || locked.value) return
   if (!replyText.value.trim()) {
     ElMessage.warning('回复内容不能为空')
     return
@@ -143,8 +169,9 @@ async function submitReply() {
     replyText.value = ''
     quoteReply.value = null
     formKey.value = crypto.randomUUID()
+    // 新楼在末尾：跳到最后一页看自己的回复；replyCount 以重查的 total 为准
+    replyPage.value = Math.max(1, Math.ceil((replyTotal.value + 1) / REPLY_PAGE_SIZE))
     await loadFloors()
-    if (detail.value) detail.value.replyCount = floors.value.length
   } catch {
     // 失败：内容与 formKey 都保留，改完再点是同一次提交
     submitting.value = false
@@ -191,7 +218,7 @@ function attachTip() {
 
         <!-- 回复盒：黑条头行 + 楼层（楼层样式走 skin.css） -->
         <div class="box replies">
-          <div class="box-h"><b>{{ floors.length }} 条回复 · 按时间正序</b><span><a href="#reply" class="h-link">添加新回复 ↓</a></span></div>
+          <div class="box-h"><b>{{ replyTotal }} 条回复 · 按时间正序</b><span><a href="#reply" class="h-link">添加新回复 ↓</a></span></div>
           <div v-for="f in floors" :key="f.id" class="floor">
             <img class="ava" :src="avatarOf(f.author, 48)" :alt="f.author">
             <div class="f-main">
@@ -204,20 +231,26 @@ function attachTip() {
               </div>
             </div>
           </div>
+          <div v-if="replyTotal > REPLY_PAGE_SIZE" class="pager">
+            <a href="#" :class="{ off: replyPage <= 1 }" @click.prevent="turnReplyPage(-1)">‹</a>
+            <span class="info">PAGE {{ replyPage }} / {{ Math.max(1, Math.ceil(replyTotal / REPLY_PAGE_SIZE)) }} · {{ replyTotal }} FLOORS</span>
+            <a href="#" :class="{ off: replyPage * REPLY_PAGE_SIZE >= replyTotal }" @click.prevent="turnReplyPage(1)">›</a>
+          </div>
         </div>
 
-        <!-- 回复框沉底 -->
+        <!-- 回复框沉底（LOCKED 主题禁回：后端 9101 兜底，前端先行拦截） -->
         <div class="box replybox" id="reply">
           <div class="in">
             <h5>添加一条新回复</h5>
-            <div v-if="quoteReply" class="q-tip">
+            <div v-if="locked" class="q-tip">🔒 主题已被管理员锁定，暂停回复</div>
+            <div v-else-if="quoteReply" class="q-tip">
               引用 @{{ quoteReply.author }} #{{ quoteReply.floorNo }}
               <a href="#" @click.prevent="quoteReply = null">取消</a>
             </div>
-            <textarea ref="replyBox" v-model="replyText" :disabled="submitting" placeholder="回复即留痕，删除需管理员操作"></textarea>
+            <textarea ref="replyBox" v-model="replyText" :disabled="submitting || locked" placeholder="回复即留痕，删除需管理员操作"></textarea>
             <div class="r-foot">
               <i>※ 文明发言，排障类回复请尽量附现象、配置与波形</i>
-              <button class="btn" type="button" :disabled="submitting" @click="submitReply">
+              <button class="btn" type="button" :disabled="submitting || locked" @click="submitReply">
                 {{ submitting ? '回复中…' : '回复' }}
               </button>
             </div>
@@ -236,7 +269,7 @@ function attachTip() {
             <div class="astat">
               <div><b>{{ detail.authorStats.postCount }}</b>发帖</div>
               <div><b>{{ detail.authorStats.likeTotal }}</b>获赞</div>
-              <div><b>{{ detail.authorStats.archivedCount }}</b>被归档</div>
+              <div><b>{{ detail.authorStats.collectedCount }}</b>被收藏</div>
             </div>
           </div>
         </div>
