@@ -9,7 +9,7 @@ import { ElMessage } from 'element-plus'
 import { apiColleges } from '@/api/org'
 import type { CollegeItem } from '@/api/org'
 import { apiCreateMember, apiMemberDetail, apiUpdateMember } from '@/api/member'
-import type { MemberType } from '@/api/member'
+import type { MemberForm, MemberType } from '@/api/member'
 import { useDict } from '@/composables/useDict'
 import { MEMBER_TYPE_LABEL, GENDER_LABEL } from '@/config/labels'
 
@@ -23,7 +23,8 @@ const GENDER_OPTIONS = ['MALE', 'FEMALE', 'UNKNOWN']
 
 const empty = () => ({
   name: '', studentNo: '', phone: '', college: '', major: '', className: '',
-  gender: 'UNKNOWN', nation: '', email: '', memberType: 'STUDENT' as MemberType, orgId: '', skills: [] as string[]
+  gender: 'UNKNOWN', nation: '', email: '', memberType: 'STUDENT' as MemberType, orgId: '', skills: [] as string[],
+  idCard: ''
 })
 
 const form = reactive(empty())
@@ -67,28 +68,54 @@ function onCollegeChange() {
   }
 }
 
+// 组装提交体：可空字段的空串一律不传——后端 @Pattern/@Long 对空串直接报 1001，
+// 且编辑是部分更新语义（不传=不改这一项）；编辑还必须把 id 放进 body（P02 契约）
+function buildBody(): MemberForm {
+  const body: MemberForm = {
+    name: form.name.trim(),
+    studentNo: form.studentNo.trim(),
+    gender: form.gender,
+    memberType: form.memberType,
+    skills: form.skills
+  }
+  if (form.phone.trim()) body.phone = form.phone.trim()
+  if (form.college) body.college = form.college
+  if (form.major.trim()) body.major = form.major.trim()
+  if (form.className.trim()) body.className = form.className.trim()
+  if (form.nation.trim()) body.nation = form.nation.trim()
+  if (form.email.trim()) body.email = form.email.trim()
+  if (form.orgId) body.orgId = form.orgId
+  if (form.idCard.trim()) body.idCard = form.idCard.trim()
+  return body
+}
+
 async function onSubmit() {
   if (!form.name.trim()) {
     ElMessage.warning('姓名必填')
     return
   }
+  if (form.idCard.trim() && !/^\d{17}[0-9Xx]$/.test(form.idCard.trim())) {
+    ElMessage.warning('身份证号须为 18 位数字（末位可为 X）')
+    return
+  }
   submitting.value = true
   try {
     if (props.memberId) {
-      await apiUpdateMember(props.memberId, { ...form })
+      await apiUpdateMember(props.memberId, { ...buildBody(), id: props.memberId })
       ElMessage.success('档案已更新')
     } else {
-      await apiCreateMember({ ...form })
+      await apiCreateMember(buildBody())
       ElMessage.success('人员已建档')
     }
     visible.value = false
     emit('saved')
   } catch {
-    // 3001 学号重复 / 3002 学号不可改 提示已由拦截器弹出
+    // 3001 学号重复 / 3002 学号不可改 提示已由 http 拦截器弹出
   } finally {
     submitting.value = false
   }
 }
+
 </script>
 
 <template>
@@ -123,6 +150,9 @@ async function onSubmit() {
         </div>
       </el-form-item>
       <el-form-item label="手机号"><el-input v-model="form.phone" /></el-form-item>
+      <el-form-item label="身份证号">
+        <el-input v-model="form.idCard" :placeholder="memberId ? '不填保持原值（敏感加密存储）' : '18 位，选填（敏感加密存储）'" />
+      </el-form-item>
       <el-form-item label="邮箱"><el-input v-model="form.email" /></el-form-item>
       <el-form-item label="所属组织">
         <el-select v-model="form.orgId" style="width: 100%">
