@@ -8,6 +8,7 @@ import { onMounted, computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiCreateKbItem, apiKbItems } from '@/api/kb'
 import type { KbItem, KbSourceType } from '@/api/kb'
+import { BizError } from '@/api/http'
 import { KB_SOURCE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
 import UploadField from '@/components/UploadField.vue'
@@ -27,12 +28,24 @@ const loading = ref(false)
 
 const drawerVisible = ref(false)
 const detailId = ref('')
+/** 知识库独立服务 vio-kb(8091) 未启动时置真：显示横幅提示而非"网络异常"刷屏 */
+const serviceDown = ref(false)
 
 async function load() {
   loading.value = true
+  serviceDown.value = false
   try {
     all.value = await apiKbItems({ keyword: keyword.value || undefined })
     loadedCount.value = 20
+  } catch (e) {
+    // apiKbItems 已 silent，拦截器不弹提示；这里分两类兜底
+    if (e instanceof BizError) {
+      // 业务错误（如 9002 资源不存在）：保持原有弹错行为
+      ElMessage.error(e.message || '操作失败')
+    } else {
+      // 网络层失败（服务没起 = 请求无响应）：页面横幅说明情况
+      serviceDown.value = true
+    }
   } finally {
     loading.value = false
   }
@@ -122,6 +135,13 @@ onMounted(load)
       <button v-if="isAdmin" class="btn-ink" @click="openCreate">发布内容</button>
     </div>
 
+    <!-- 服务未启动横幅：粉色警示条，说明情况 + 重试入口 -->
+    <div v-if="serviceDown" class="kb-down">
+      <b>知识库服务未启动</b>
+      <p>知识库由独立服务 vio-kb（8091 端口）提供，当前该进程没有运行——数据没有丢，只是暂时取不到。在 backend 仓库启动 vio-kb 后，点"重新加载"即可恢复。</p>
+      <button class="btn-line" @click="load">重新加载</button>
+    </div>
+
     <div class="kb-grid">
       <div v-for="it in visible" :key="it.id" class="kb-card" @click="openDetail(it.id)">
         <div class="kb-top">
@@ -137,7 +157,7 @@ onMounted(load)
         </div>
       </div>
     </div>
-    <p v-if="!loading && all.length === 0" class="empty-note">暂无内容</p>
+    <p v-if="!loading && all.length === 0 && !serviceDown" class="empty-note">暂无内容</p>
     <ScrollLoader :loading="loading" :no-more="noMore" :loaded="visible.length" :total="all.length" @reach="loadMore" />
 
     <el-dialog v-model="formVisible" title="发布知识库内容" width="520px">
@@ -180,6 +200,10 @@ onMounted(load)
 
 <style scoped>
 .kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+/* 服务未启动横幅：粉底黑字警示条，双主题恒色 */
+.kb-down { border: 3px solid var(--vio2-bd); background: var(--vio2-pink); color: #101010; box-shadow: 6px 6px 0 var(--vio2-shadow); padding: 16px 18px; margin-bottom: 16px; }
+.kb-down b { font-family: var(--vio2-din); font-size: 16px; font-weight: 900; display: block; margin-bottom: 6px; }
+.kb-down p { font-size: 13px; line-height: 1.8; margin-bottom: 10px; }
 .kb-card { background: var(--vio2-panel); border: 2px solid var(--vio2-bd); box-shadow: 4px 4px 0 var(--vio2-shadow); padding: 15px 17px; cursor: pointer; transition: transform 0.15s var(--vio-ease), box-shadow 0.15s var(--vio-ease); }
 .kb-card:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--vio2-shadow); }
 .kb-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
