@@ -63,6 +63,31 @@ services:
     volumes:
       - vio-redis-data:/data
 
+  # RocketMQ NameServer：审批中心升级引入（延迟消息替换过期轮询 + 状态变更通知旁路）。
+  # 镜像用本机已有的 apache/rocketmq:5.5.0 零拉取；选 5.x 因时间轮支持任意延迟——
+  # 4.x 只有 18 个固定等级且最长 2 小时，撑不住默认 7 天的审批时效。
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.5.0
+    container_name: vio-rmqnamesrv
+    command: ["sh", "mqnamesrv"]
+    ports:
+      - "9876:9876"   # 宿主 IDEA 直连；容器内服务用服务名
+
+  # RocketMQ Broker：单主异步刷盘（本地开发够用），挂 docker/rocketmq/broker.conf。
+  # 应用侧默认不连 MQ——vio.mq-enabled=false 时 starter 不装配任何 MQ Bean，MQ 挂了不影响接口。
+  rocketmq-broker:
+    image: apache/rocketmq:5.5.0
+    container_name: vio-rmqbroker
+    command: ["sh", "mqbroker", "-n", "rocketmq-namesrv:9876", "-c", "/home/rocketmq/rocketmq-5.5.0/conf/broker.conf"]
+    ports:
+      - "10909:10909"   # VIP 通道（部分客户端走 listenPort-2）
+      - "10911:10911"   # 主端口，宿主 Java 客户端实际连它
+    volumes:
+      - ./docker/rocketmq/broker.conf:/home/rocketmq/rocketmq-5.5.0/conf/broker.conf:ro
+      - vio-rmqbroker-store:/home/rocketmq/rocketmq-5.5.0/store
+    depends_on:
+      - rocketmq-namesrv
+
   # 后端应用本体：镜像由 backend/Dockerfile 多阶段构建（构建层 Maven 打包，运行层仅 JRE）。
   # 刻意挂 profiles：默认 up 只起四件套，开发期应用照旧跑 IDEA 可热调；
   # 要一条命令起全套（演示/冒烟/部署演练）再 --profile app。
@@ -128,3 +153,4 @@ volumes:
   vio-mysql-data:
   vio-minio-data:
   vio-redis-data:
+  vio-rmqbroker-store:
