@@ -14,12 +14,12 @@ import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.ApprovalErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.util.IpUtil;
+import com.viomanager.datascop.OrgScopeSupport;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +46,9 @@ public class ApprovalActionServiceImpl implements IApprovalActionService {
 
     @Resource
     private JdbcTemplate jdbcTemplate;
+
+    @Resource
+    private OrgScopeSupport orgScopeSupport;
 
     @Override
     @Transactional
@@ -154,28 +157,17 @@ public class ApprovalActionServiceImpl implements IApprovalActionService {
         }
     }
 
-    /** 审批人资格：超管全放行；部门管理员须审批责任组织在自己子树内；学生到不了这（@RequireRole 挡） */
+    /** 审批人资格：超管全放行；部门管理员须审批责任组织在自己子树内（判定收口到 OrgScopeSupport，插入点①）；
+     *  学生到不了这（@RequireRole 挡） */
     private void checkApprover(CurrentUser user, Approval approval) {
         if ("SUPER_ADMIN".equals(user.getRole())) {
             return;
         }
         if (!"DEPT_ADMIN".equals(user.getRole()) || user.getOrgId() == null
-                || approval.getApproverOrgId() == null) {
+                || approval.getApproverOrgId() == null
+                || !orgScopeSupport.inSubtree(user.getOrgId(), approval.getApproverOrgId())) {
             throw new BizException(ApprovalErrorCode.NO_PERMISSION);
         }
-        try {
-            String adminPath = jdbcTemplate.queryForObject(
-                    "SELECT path FROM sys_org WHERE id = ? AND deleted = 0", String.class, user.getOrgId());
-            Integer count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM sys_org WHERE id = ? AND deleted = 0 AND path LIKE CONCAT(?, '%')",
-                    Integer.class, approval.getApproverOrgId(), adminPath);
-            if (adminPath != null && count != null && count > 0) {
-                return;
-            }
-        } catch (DataAccessException e) {
-            log.warn("审批人子树校验查询失败，按无权限处理：{}", e.getMessage());
-        }
-        throw new BizException(ApprovalErrorCode.NO_PERMISSION);
     }
 
     /** 当前用户的人员档案 ID（没绑定返回 null） */

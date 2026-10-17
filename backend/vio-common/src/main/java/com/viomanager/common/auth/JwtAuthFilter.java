@@ -81,7 +81,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     return;
                 }
             }
-            //4.身份入 ThreadLocal，放行
+            //4.维护锁定检查：学期切换执行期全员禁访（PRD §3.4），超管放行观察；
+            //   刻意 503 + 1012，不碰 401/1002 的"跳登录"契约
+            if (MaintenanceLock.isLocked() && !"SUPER_ADMIN".equals(user.getRole())) {
+                response.setStatus(503);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write(objectMapper.writeValueAsString(
+                        Result.fail(CommonErrorCode.SYSTEM_MAINTENANCE)));
+                return;
+            }
+            //5.身份入 ThreadLocal，放行
             UserHolder.saveUser(user);
             filterChain.doFilter(request, response);
         } finally {
