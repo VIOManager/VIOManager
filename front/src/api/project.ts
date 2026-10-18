@@ -141,7 +141,10 @@ export async function apiProjects(q?: { keyword?: string; status?: string; conte
 }
 
 export function apiCreateProject(body: {
-  name: string; description: string; contestId?: string; trackId?: string
+  name: string; description: string
+  /** 管理员代建（帮该成员创建，2026-10-16 需求）：不传=为自己建 */
+  ownerMemberId?: string
+  contestId?: string; trackId?: string
   semesterId?: string; orgId?: string; visibility?: string; startDate?: string; endDate?: string; remark?: string
 }): Promise<{ id: string }> {
   return postIdem('/api/projects', body, crypto.randomUUID())

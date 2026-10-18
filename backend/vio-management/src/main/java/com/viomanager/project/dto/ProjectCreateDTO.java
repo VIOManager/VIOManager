@@ -6,8 +6,8 @@ import java.time.LocalDate;
 import lombok.Data;
 
 /**
- * PR02 创建项目。所有人=当前登录人（JWT 解析 member_id），不接受指定他人。
- * 默认值在 service 落：semesterId=当前学期、orgId=本人组织、visibility=ORG。
+ * PR02 创建项目。所有人=当前登录人；管理员可经 ownerMemberId 代建（帮成员创建，2026-10-16 需求）。
+ * 默认值在 service 落：semesterId=当前学期、orgId=所有人组织（代建时取被代建人）、visibility=ORG。
  */
 @Data
 public class ProjectCreateDTO {
@@ -17,6 +17,9 @@ public class ProjectCreateDTO {
     private String name;
 
     private String description;
+
+    /** 所有人人员档案 ID（可选）：管理员代建指定被帮的成员；普通用户仅可传自己，传他人 7002 */
+    private Long ownerMemberId;
 
     /** 所属比赛（可选挂载） */
     private Long contestId;

@@ -104,9 +104,23 @@ public class ProjectServiceImpl implements ProjectService {
     @Transactional(rollbackFor = Exception.class)
     public Result<ProjectDetailVO> create(ProjectCreateDTO dto) {
         CurrentUser user = UserHolder.getUser();
-        //所有人=当前用户：项目是个人资产，必须绑定人员档案（admin 超管账号无档案，报 7013 明确提示而非参数错）
-        Long ownerId = memberIdSupport.currentMemberId(user);
-        if (ownerId == null) {
+        Long operatorId = memberIdSupport.currentMemberId(user);
+        //所有人解析（2026-10-16 需求：管理员可帮成员建项目）：默认=当前登录人（个人资产，
+        //无档案报 7013）；管理员经 ownerMemberId 指定被帮成员=代建，冗余字段跟被代建人走
+        Long ownerId = operatorId;
+        String ownerName = user.getRealName();
+        Long ownerOrgId = user.getOrgId();
+        if (dto.getOwnerMemberId() != null && !dto.getOwnerMemberId().equals(operatorId)) {
+            Map<String, Object> owner = requireMember(dto.getOwnerMemberId());
+            Long ownerOrg = owner.get("org_id") == null ? null : ((Number) owner.get("org_id")).longValue();
+            //代建仅管理员可（超管任意成员 / 部门管理员限子树内，orgManagedBy 一步判定），普通用户传他人 7002
+            if (!visibilitySupport.orgManagedBy(ownerOrg, user)) {
+                throw new BizException(ProjectErrorCode.NOT_OWNER);
+            }
+            ownerId = dto.getOwnerMemberId();
+            ownerName = (String) owner.get("name");
+            ownerOrgId = ownerOrg;
+        } else if (operatorId == null) {
             throw new BizException(ProjectErrorCode.NO_MEMBER_PROFILE);
         }
 
@@ -114,7 +128,7 @@ public class ProjectServiceImpl implements ProjectService {
         project.setName(dto.getName().trim());
         project.setDescription(dto.getDescription());
         project.setOwnerMemberId(ownerId);
-        project.setOwnerName(user.getRealName());
+        project.setOwnerName(ownerName);
         project.setContestId(dto.getContestId());
         project.setTrackId(dto.getTrackId());
         //学期：显式传入 > 当前激活学期；semester_id NOT NULL，缺失拦参数错
@@ -123,8 +137,8 @@ public class ProjectServiceImpl implements ProjectService {
             throw new BizException(CommonErrorCode.PARAM_INVALID);
         }
         project.setSemesterId(semesterId);
-        //组织：显式传入 > 本人组织；org_id NOT NULL（数据范围与绩效隔离依据）
-        Long orgId = dto.getOrgId() != null ? dto.getOrgId() : user.getOrgId();
+        //组织：显式传入 > 所有人组织（代建时=被代建人组织）；org_id NOT NULL（数据范围与绩效隔离依据）
+        Long orgId = dto.getOrgId() != null ? dto.getOrgId() : ownerOrgId;
         if (orgId == null) {
             throw new BizException(CommonErrorCode.PARAM_INVALID);
         }
@@ -147,12 +161,12 @@ public class ProjectServiceImpl implements ProjectService {
             throw new BizException(ProjectErrorCode.NAME_EXISTS);
         }
         //建项目即在成员表落 OWNER 行：PR06 列表含角色的锚点、PR08"OWNER 行不可移除"的前提；
-        //组织冗余取用户所属组织（非项目组织，显式跨组织建项目时两者不同）
+        //组织冗余取所有人所属组织（代建时=被代建人组织，非项目组织，显式跨组织建项目时两者不同）
         ProjectMember ownerRow = new ProjectMember();
         ownerRow.setProjectId(project.getId());
         ownerRow.setMemberId(ownerId);
-        ownerRow.setMemberName(user.getRealName());
-        ownerRow.setMemberOrgId(user.getOrgId());
+        ownerRow.setMemberName(ownerName);
+        ownerRow.setMemberOrgId(ownerOrgId);
         ownerRow.setProjectRole("OWNER");
         memberMapper.insert(ownerRow);
         return Result.ok(querySupport.toDetail(project));
@@ -268,5 +282,15 @@ public class ProjectServiceImpl implements ProjectService {
         List<Long> ids = jdbcTemplate.queryForList(
                 "SELECT id FROM semester WHERE is_current = 1 AND deleted = 0 LIMIT 1", Long.class);
         return ids.isEmpty() ? null : ids.get(0);
+    }
+
+    /** 代建目标成员必须存在（member 表未删除，1004），返回 name/org_id 供 owner 冗余落库 */
+    private Map<String, Object> requireMember(Long memberId) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT id, name, org_id FROM member WHERE id = ? AND deleted = 0", memberId);
+        if (rows.isEmpty()) {
+            throw new BizException(CommonErrorCode.NOT_FOUND);
+        }
+        return rows.get(0);
     }
 }

@@ -335,8 +335,48 @@ class ProjectSafetyTest extends PmTestSupport {
     @Test
     void adminWithoutMemberProfileCannotCreate() throws Exception {
         //超管账号未绑定人员档案：项目是个人资产，必须落到具体人 → 7013 明确提示（2026-10-16 拆出，此前误报 1001）
+        //超管要建项目走代建：带 ownerMemberId 指定被帮成员即可（见 adminCanCreateOnBehalfOfMember）
         String body = createProject(superToken, "{\"name\":\"无档案项目\"}");
         assertEquals(7013, (int) JsonPath.read(body, "$.code"), body);
+    }
+
+    // ---------------------------------------------------------------- 代建（2026-10-16）
+
+    @Test
+    void adminCanCreateOnBehalfOfMember() throws Exception {
+        //管理员帮成员建项目：超管代 B（机械学院）建，所有人/组织默认值/OWNER 行冗余全跟被代建人
+        String body = createProject(superToken,
+                "{\"name\":\"代建项目\",\"ownerMemberId\":80002}");
+        assertEquals(0, (int) JsonPath.read(body, "$.code"), body);
+        long id = Long.parseLong(JsonPath.read(body, "$.data.id"));
+        assertEquals(80002L, jdbcTemplate.queryForObject(
+                "SELECT owner_member_id FROM project WHERE id = ?", Long.class, id));
+        assertEquals("项目B", jdbcTemplate.queryForObject(
+                "SELECT owner_name FROM project WHERE id = ?", String.class, id));
+        //组织默认=被代建人组织（机械学院），而非操作者
+        assertEquals(ORG_MECH, jdbcTemplate.queryForObject(
+                "SELECT org_id FROM project WHERE id = ?", Long.class, id));
+        //OWNER 行跟被代建人落成员表（PR06 角色锚点）
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM project_member WHERE project_id = ? AND member_id = 80002 "
+                        + "AND project_role = 'OWNER' AND member_name = '项目B' AND deleted = 0",
+                Integer.class, id));
+    }
+
+    @Test
+    void createOnBehalfBoundaries() throws Exception {
+        //部门管理员仅可代本子树成员建：软件学院管理员代机械学院成员 → 7002
+        assertEquals(7002, (int) JsonPath.read(createProject(deptSoftToken,
+                "{\"name\":\"越界代建\",\"ownerMemberId\":80002}"), "$.code"));
+        //子树内成员（软件学院 C）正常代建
+        assertEquals(0, (int) JsonPath.read(createProject(deptSoftToken,
+                "{\"name\":\"子树内代建\",\"ownerMemberId\":80003}"), "$.code"));
+        //普通学生传他人 ID → 7002（代建是管理员专属；传自己=普通创建）
+        assertEquals(7002, (int) JsonPath.read(createProject(sameOrgStudentToken,
+                "{\"name\":\"学生传他人\",\"ownerMemberId\":80001}"), "$.code"));
+        //目标成员不存在 → 1004
+        assertEquals(1004, (int) JsonPath.read(createProject(superToken,
+                "{\"name\":\"幽灵代建\",\"ownerMemberId\":999999}"), "$.code"));
     }
 
     @Test

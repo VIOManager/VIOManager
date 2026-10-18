@@ -7,7 +7,8 @@
 import { fail, ok, registerMock } from './registry'
 import { findMockUserByToken } from './auth'
 import { meAsMember } from './member'
-import { deptScopeOrgIds } from './scope'
+import { members } from './member-data'
+import { deptScopeOrgIds, orgInScope } from './scope'
 import { tree } from './org-data'
 import { semesters } from './semester'
 import { contests } from './contest-data'
@@ -100,12 +101,31 @@ registerMock({
   reply: (ctx) => {
     if (!ctx.idemKey) return fail(1001, '缺少幂等键（X-Idempotency-Key）')
     if (usedIdemKeys.has(ctx.idemKey)) return fail(1005, '请勿重复提交')
+    const vc = viewCtx(ctx.token)
     const me = meAsMember(ctx.token)
-    if (!me) return fail(1003, '仅成员可创建项目')
+    // 所有人解析（与真后端同口径）：默认=当前登录人（无档案 7013）；管理员可经 ownerMemberId 代建
+    let ownerId = me ? me.id : ''
+    let ownerName = me ? me.name : ''
+    let ownerOrgId = me ? me.orgId : ''
+    let ownerOrgName = me ? me.orgName : ''
+    const onBehalfOf = ctx.body.ownerMemberId != null ? String(ctx.body.ownerMemberId) : ''
+    if (onBehalfOf && onBehalfOf !== ownerId) {
+      // 代建仅管理员（超管任意 / 部门管理员限子树内成员），普通用户传他人 7002
+      const target = members.find((m) => m.id === onBehalfOf)
+      if (!target) return fail(1004, '成员不存在')
+      const adminOk = vc.isSuper || (vc.isDeptAdmin && orgInScope(target.orgId, vc.deptScope))
+      if (!adminOk) return fail(7002, '仅管理员可代建（帮成员创建项目）')
+      ownerId = target.id
+      ownerName = target.name
+      ownerOrgId = target.orgId
+      ownerOrgName = target.orgName
+    } else if (!me) {
+      return fail(7013, '当前账号未绑定人员档案，无法创建项目')
+    }
     const name = String(ctx.body.name ?? '').trim()
     if (!name) return fail(1001, '项目名称不能为空')
     const sem = semesters.find((s) => s.status === 'ACTIVE') ?? semesters[1]
-    const orgId = String(ctx.body.orgId ?? me.orgId)
+    const orgId = String(ctx.body.orgId ?? ownerOrgId)
     // 7004 同学期同组织内项目名唯一
     for (const p of projects) {
       if (p.semesterId === sem.id && p.orgId === orgId && p.name === name) return fail(7004, '同学期同组织内项目名已存在')
@@ -114,14 +134,14 @@ registerMock({
     const contest = contests.find((c) => c.id === String(ctx.body.contestId ?? ''))
     const p: MockProject = {
       id: 'p' + projectSeq++, name, description: String(ctx.body.description ?? ''),
-      remark: String(ctx.body.remark ?? ''), ownerId: me.id, ownerName: me.name,
-      orgId, orgName: me.orgName, semesterId: sem.id, semesterName: sem.name,
+      remark: String(ctx.body.remark ?? ''), ownerId, ownerName,
+      orgId, orgName: ownerOrgName, semesterId: sem.id, semesterName: sem.name,
       contestId: contest ? contest.id : '', contestName: contest ? contest.name : '', trackId: String(ctx.body.trackId ?? ''),
       status: 'ACTIVE', visibility: (String(ctx.body.visibility ?? 'ORG') as MockProject['visibility']),
       startDate: String(ctx.body.startDate ?? ''), endDate: String(ctx.body.endDate ?? '')
     }
     projects.push(p)
-    projectMembers.push({ projectId: p.id, memberId: me.id, name: me.name, role: 'OWNER', joinedAt: nowText() })
+    projectMembers.push({ projectId: p.id, memberId: ownerId, name: ownerName, role: 'OWNER', joinedAt: nowText() })
     return ok({ id: p.id })
   }
 })

@@ -44,7 +44,10 @@ async function submit() {
   }
   saving.value = true
   try {
-    await apiCreateMilestone(contestId.value, form.value)
+    // datetime-local 出参 'YYYY-MM-DDTHH:mm'（带T无秒），后端契约 'yyyy-MM-dd HH:mm:ss'
+    let nodeTime = form.value.nodeTime.replace('T', ' ')
+    if (nodeTime.length === 16) nodeTime += ':00'
+    await apiCreateMilestone(contestId.value, { ...form.value, nodeTime })
     ElMessage.success('节点已创建（草稿），提交审核后生效')
     formVisible.value = false
     form.value = { nodeType: 'OTHER', name: '', nodeTime: '', description: '' }

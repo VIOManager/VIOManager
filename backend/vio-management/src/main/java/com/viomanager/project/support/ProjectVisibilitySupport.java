@@ -118,6 +118,16 @@ public class ProjectVisibilitySupport {
         return project;
     }
 
+    /** 指定组织是否在该管理员的管辖子树内（超管恒真；与可见性第 4 条同款口径）——代建等按组织判定的场景用 */
+    public boolean orgManagedBy(Long orgId, CurrentUser admin) {
+        if ("SUPER_ADMIN".equals(admin.getRole())) {
+            return true;
+        }
+        return "DEPT_ADMIN".equals(admin.getRole())
+                && orgId != null && admin.getOrgId() != null
+                && orgInSubtree(orgId, orgPath(admin.getOrgId()));
+    }
+
     /**
      * PR03 详情专用入口：仅当靠第 7 条授权才可见时消耗 ONCE（清单 PR03：ONCE 授权
      * 在此消耗，used_count 加一、用完置 EXPIRED）；靠 1-6 条可见的人不碰授权。
