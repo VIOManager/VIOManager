@@ -175,6 +175,33 @@ class MilestoneTest extends PmTestSupport {
     }
 
     @Test
+    void profileLessSuperAdminCannotSubmitButOthersCan() throws Exception {
+        //无档案超管可维护节点（建/删不需要 applicant），但提审落审批单必须落到具体人员 → 7014（此前误报 1001）
+        long id = createNode(superToken, "超管维护节点", "OTHER");
+        assertEquals(7014, (int) JsonPath.read(submit(superToken, id), "$.code"));
+        //节点停留 DRAFT（状态转移与审批单同事务回滚）
+        assertEquals("DRAFT", nodeStatus(id));
+        //无档案部门管理员同理（dept_mech 未绑 member，且比赛在其子树内才走到 applicant 判定——用子树内比赛验证）
+        jdbcTemplate.update("INSERT INTO contest (id, name, semester_id, org_id, status) "
+                + "VALUES (?, '机械比赛', ?, ?, 'RUNNING')", CONTEST + 1, SEMESTER, ORG_MECH);
+        String mechBody = mockMvc.perform(withToken(
+                        post("/api/contests/" + (CONTEST + 1) + "/milestones"), deptMechToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"机械节点\",\"nodeType\":\"OTHER\","
+                                + "\"nodeTime\":\"2026-11-02 09:00:00\"}"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertEquals(0, (int) JsonPath.read(mechBody, "$.code"), mechBody);
+        long mechNodeId = Long.parseLong(JsonPath.read(mechBody, "$.data.id"));
+        assertEquals(7014, (int) JsonPath.read(submit(deptMechToken, mechNodeId), "$.code"));
+        //绑定档案的管理员提交同一节点 → 0（对照组：能力与档案绑定相关，与角色无关）
+        assertEquals(0, (int) JsonPath.read(submit(deptSoftToken, id), "$.code"));
+        assertEquals("PENDING", nodeStatus(id));
+    }
+
+    @Test
     void studentSeesOnlyApproved() throws Exception {
         long draft = createNode(deptSoftToken, "草稿节点", "OTHER");
         long approved = createNode(deptSoftToken, "生效节点", "OTHER");

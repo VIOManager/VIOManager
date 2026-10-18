@@ -45,7 +45,10 @@ public enum ProjectErrorCode implements ErrorCode {
     TASK_NOT_FOUND(7012, "任务不存在或不属于该项目"),
 
     /** 创建项目的人未绑定人员档案（超管 admin 账号即此态）；此前误报 1001 参数校验失败，2026-10-16 联调拆出。 */
-    NO_MEMBER_PROFILE(7013, "当前账号未绑定人员档案，无法创建项目（项目是个人资产，所有人须有档案）");
+    NO_MEMBER_PROFILE(7013, "当前账号未绑定人员档案，无法创建项目（项目是个人资产，所有人须有档案）"),
+
+    /** PR20 提交节点审核：审批单 applicant_id 表结构 NOT NULL，提交人必须有人员档案（无档案超管即此态，此前误报 1001）。 */
+    MILESTONE_APPLICANT_NO_PROFILE(7014, "当前账号未绑定人员档案，无法提交节点审核（审批单须落在具体人员名下）；请由绑定档案的部门管理员提交，或为本账号绑定人员档案");
 
     private final int code;
     private final String message;

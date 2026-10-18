@@ -188,8 +188,8 @@ public class MilestoneServiceImpl implements MilestoneService {
         MilestoneNode node = requireNodeInRange(user, nodeId);
         Long applicantId = memberIdSupport.currentMemberId(user);
         if (applicantId == null) {
-            //审批单 applicantMemberId 必填：无人员档案的管理账号提不了审
-            throw new BizException(CommonErrorCode.PARAM_INVALID);
+            //审批单 applicant_id 表结构 NOT NULL：提交人必须落到具体人员（无档案超管 7014 明确提示，此前误报 1001）
+            throw new BizException(ProjectErrorCode.MILESTONE_APPLICANT_NO_PROFILE);
         }
         //CAS：DRAFT/REJECTED → PENDING（0 行=状态已被并发改变，7009）
         int rows = jdbcTemplate.update(
