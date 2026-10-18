@@ -12,7 +12,7 @@ import { tree } from './org-data'
 import { semesters } from './semester'
 import { contests } from './contest-data'
 import { usedIdemKeys, nowText } from './approval-data'
-import { projectAdvisors, projectMembers, projects, teamProjectRefs, viewGrants, visibleTo } from './project-data'
+import { projectMembers, projects, teamProjectRefs, viewGrants, visibleTo } from './project-data'
 import type { MockProject } from './project-data'
 import type { ProjectItem } from '@/api/project'
 
@@ -159,10 +159,8 @@ registerMock({
     }
     return ok({
       ...toItem(p), description: p.description, remark: p.remark,
-      ownerId: p.ownerId, orgId: p.orgId, semesterId: p.semesterId, contestId: p.contestId, trackId: p.trackId,
-      viewerIsOwner: !!vc.meId && p.ownerId === vc.meId,
-      // 指导教师列表（清单无独立读接口，详情扩展字段）
-      advisors: projectAdvisors.filter((a) => a.projectId === p.id)
+      // 出参对齐真后端 PR03：卡片字段 + description/remark + viewerIsOwner，无其余扩展
+      viewerIsOwner: !!vc.meId && p.ownerId === vc.meId
     })
   }
 })

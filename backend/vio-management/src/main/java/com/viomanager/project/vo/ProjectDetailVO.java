@@ -16,4 +16,7 @@ public class ProjectDetailVO extends ProjectVO {
 
     /** 备注 */
     private String remark;
+
+    /** 当前登录人是否所有人（前端按钮显隐辅助，后端按 owner_member_id 计算；写口权限仍逐接口 7002 收口） */
+    private Boolean viewerIsOwner;
 }

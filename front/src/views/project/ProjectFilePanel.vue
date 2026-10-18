@@ -1,31 +1,42 @@
 <script setup lang="ts">
 /**
  * 项目文件面板（PR25–PR28）
- * 上传：先走骨架 F01 拿 fileId（UploadField），再 PR26 建关联（幂等）；所有人与项目成员可传
- * 删除：所有人可删任意，成员仅可删自己上传的（7002 后端拦）
- * 下载走 PR28（业务线先校验可见性再转发，不暴露对象存储地址；mock 回提示）
+ * 上传：单段 multipart（file + fileCategory + remark），骨架 F01 校验与 ClamAV 检测在后端一体完成；
+ *      所有人与项目成员可传（后端 7002 拦）
+ * 删除：所有人可删任意，成员仅可删自己上传的（7002 后端拦；逻辑删关联，文件本体保留）
+ * 下载：blob 流式保存（PR28 先过项目可见性再转发，不暴露对象存储地址）
  */
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiAttachFile, apiDeleteProjectFile, apiDownloadProjectFile, apiProjectFiles } from '@/api/project'
+import { apiDeleteProjectFile, apiDownloadProjectFile, apiProjectFiles, apiUploadProjectFile } from '@/api/project'
 import type { ProjectFile } from '@/api/project'
 import { PROJECT_FILE_CATEGORY_LABEL } from '@/config/labels'
-import UploadField from '@/components/UploadField.vue'
-import type { UploadResp } from '@/api/file'
 
 const props = defineProps<{ projectId: string; canEdit: boolean }>()
 
 const list = ref<ProjectFile[]>([])
 const category = ref('DOC')
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
 
 async function load() {
   list.value = await apiProjectFiles(props.projectId)
 }
 
-async function onUploaded(f: UploadResp) {
-  await apiAttachFile(props.projectId, { fileId: f.fileId, fileName: f.originalName, fileCategory: category.value })
-  ElMessage.success('文件已关联到项目')
-  await load()
+async function onPickFile() {
+  const input = fileInput.value
+  if (!input || !input.files || input.files.length === 0) return
+  const file = input.files[0]
+  uploading.value = true
+  try {
+    await apiUploadProjectFile(props.projectId, file, category.value)
+    ElMessage.success('文件已上传并关联到项目')
+    await load()
+  } finally {
+    uploading.value = false
+    // 重置 input 让同一文件可再次选择
+    input.value = ''
+  }
 }
 
 async function onDelete(f: ProjectFile) {
@@ -39,8 +50,7 @@ async function onDelete(f: ProjectFile) {
 }
 
 async function onDownload(f: ProjectFile) {
-  const r = await apiDownloadProjectFile(f.id)
-  ElMessage.success(r.note)
+  await apiDownloadProjectFile(f.id, f.fileName)
 }
 
 function sizeText(n: number): string {
@@ -59,7 +69,8 @@ onMounted(load)
       <select v-model="category" class="input-line" style="width: 100px">
         <option v-for="(label, v) in PROJECT_FILE_CATEGORY_LABEL" :key="v" :value="v">{{ label }}</option>
       </select>
-      <UploadField biz-type="PROJECT_FILE" accept=".pdf,.docx,.zip,.jpg,.png" :max-mb="20" button-text="上传文件" @uploaded="onUploaded" />
+      <input ref="fileInput" type="file" accept=".pdf,.docx,.zip,.jpg,.png" style="display: none" @change="onPickFile" />
+      <button class="btn-act" :disabled="uploading" @click="fileInput?.click()">{{ uploading ? '上传中…' : '上传文件' }}</button>
     </div>
     <div v-for="f in list" :key="f.id" class="row-line">
       <span>{{ f.fileName }}<em class="mono">{{ PROJECT_FILE_CATEGORY_LABEL[f.fileCategory] }} · {{ sizeText(f.fileSize) }} · {{ f.uploadedByName }}</em></span>

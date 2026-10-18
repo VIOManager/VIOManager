@@ -34,13 +34,17 @@ registerMock({
     const isOwner = p.ownerId === me.id
     const isMember = projectMembers.some((m) => m.projectId === p.id && m.memberId === me.id)
     if (!isOwner && !isMember) return fail(7002, '仅所有人与项目成员可上传')
-    const fileId = String(ctx.body.fileId ?? '')
-    if (!fileId) return fail(1001, '缺少 fileId（先走骨架文件服务上传）')
+    // 对齐后端 PR26 单段 multipart 契约：FormData 的 file/fileCategory/remark 一体提交
+    const fd = ctx.body as unknown as FormData
+    const file = fd && typeof fd.get === 'function' ? (fd.get('file') as File | null) : null
+    if (!file) return fail(1001, '缺少文件（multipart file 字段）')
+    const fileCategory = fd && typeof fd.get === 'function' ? String(fd.get('fileCategory') ?? 'DOC') : 'DOC'
+    if (file.name.toLowerCase().indexOf('virus') >= 0) return fail(1010, '文件安全扫描未通过，请更换文件')
     usedIdemKeys.add(ctx.idemKey)
     const f = {
-      id: 'pf' + fileSeq++, projectId: p.id, fileId,
-      fileName: String(ctx.body.fileName ?? '未命名'), fileSize: Number(ctx.body.fileSize ?? 0),
-      fileCategory: String(ctx.body.fileCategory ?? 'OTHER'), scanStatus: 'CLEAN',
+      id: 'pf' + fileSeq++, projectId: p.id, fileId: 'mock-f' + fileSeq,
+      fileName: file.name, fileSize: file.size,
+      fileCategory, scanStatus: 'CLEAN',
       uploadedByName: me.name, uploadedById: me.id, createdAt: nowText()
     }
     projectFiles.push(f)

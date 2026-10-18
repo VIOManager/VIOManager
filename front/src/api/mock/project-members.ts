@@ -17,7 +17,13 @@ registerMock({
     const p = findProject(ctx.params.id)
     if (!p) return fail(7001, '项目不存在')
     if (!visibleTo(p, viewCtx(ctx.token))) return fail(7003, '无权查看该项目')
-    return ok(projectMembers.filter((m) => m.projectId === p.id))
+    // 出参对齐真后端契约：memberName/projectRole/joinAt（内部存量是 name/role/joinedAt）
+    return ok(projectMembers.filter((m) => m.projectId === p.id).map((m) => ({
+      memberId: m.memberId,
+      memberName: m.name,
+      projectRole: m.role,
+      joinAt: m.joinedAt
+    })))
   }
 })
 

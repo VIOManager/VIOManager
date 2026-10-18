@@ -30,12 +30,16 @@ const members = ref<ProjectMember[]>([])
 const teams = ref<ProjectTeamRef[]>([])
 const grants = ref<ViewGrant[]>([])
 
+//指导教师无读接口（清单 §2 备案）：添加后本地回显；重开抽屉即清空（暂态，待正式需求出读口）
+const advisors = ref<{ memberId: string; name: string; college: string }[]>([])
+
 async function load() {
   if (!props.projectId) return
   detail.value = await apiProjectDetail(props.projectId)
   members.value = await apiProjectMembers(props.projectId)
   teams.value = await apiProjectTeams(props.projectId)
   grants.value = await apiViewGrants(props.projectId).catch(() => [])
+  advisors.value = []
 }
 
 function changed() {
@@ -94,9 +98,9 @@ async function addAdvisor(m: MemberListItem) {
   if (!detail.value) return
   await apiAddProjectAdvisor(detail.value.id, m.id)
   ElMessage.success('已添加指导教师')
+  advisors.value.push({ memberId: m.id, name: m.name, college: m.college })
   memberOptions.value = []
   memberKw.value = ''
-  changed()
 }
 
 async function removeMember(memberId: string, name: string) {
@@ -113,8 +117,8 @@ async function removeMember(memberId: string, name: string) {
 async function onRemoveAdvisor(memberId: string) {
   if (!detail.value) return
   await apiRemoveProjectAdvisor(detail.value.id, memberId)
-  ElMessage.success('已移除指导教师')
-  changed()
+  ElMessage.success('已移除')
+  advisors.value = advisors.value.filter((a) => a.memberId !== memberId)
 }
 
 async function revokeGrant(g: ViewGrant) {
@@ -156,10 +160,10 @@ async function revokeGrant(g: ViewGrant) {
       <div class="zone">
         <h6>项目成员（不走审批）</h6>
         <div v-for="m in members" :key="m.memberId" class="row-line">
-          <span>{{ m.name }}<em class="mono">{{ m.role === 'OWNER' ? '所有人' : '成员' }}</em></span>
-          <button v-if="detail.viewerIsOwner && m.role !== 'OWNER'" class="btn-act" @click="removeMember(m.memberId, m.name)">移除</button>
+          <span>{{ m.memberName }}<em class="mono">{{ m.projectRole === 'OWNER' ? '所有人' : '成员' }}</em></span>
+          <button v-if="detail.viewerIsOwner && m.projectRole !== 'OWNER'" class="btn-act" @click="removeMember(m.memberId, m.memberName)">移除</button>
         </div>
-        <div v-for="a in detail.advisors" :key="a.memberId" class="row-line">
+        <div v-for="a in advisors" :key="a.memberId" class="row-line">
           <span>{{ a.name }}<em class="mono">指导教师 · {{ a.college }}</em></span>
           <button v-if="detail.viewerIsOwner" class="btn-act" @click="onRemoveAdvisor(a.memberId)">移除</button>
         </div>
