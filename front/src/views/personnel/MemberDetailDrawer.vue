@@ -11,7 +11,7 @@ import { apiBindAccount, apiBindPhoto, apiBindSignature, apiDeleteMember, apiMem
 import type { MemberDetail } from '@/api/member'
 import type { UploadResp } from '@/api/file'
 import { useDict } from '@/composables/useDict'
-import { MEMBER_TYPE_LABEL } from '@/config/labels'
+import { MEMBER_TYPE_LABEL, GENDER_LABEL } from '@/config/labels'
 import MaskField from '@/components/MaskField.vue'
 import UploadField from '@/components/UploadField.vue'
 
@@ -188,7 +188,7 @@ async function onRenameAccount() {
         <dl class="kv">
           <div><dt>学号/工号</dt><dd class="mono">{{ detail.studentNo || '—' }}</dd></div>
           <div><dt>类型</dt><dd>{{ MEMBER_TYPE_LABEL[detail.memberType] }}</dd></div>
-          <div><dt>性别 / 民族</dt><dd>{{ detail.gender || '—' }} / {{ detail.nation || '—' }}</dd></div>
+          <div><dt>性别 / 民族</dt><dd>{{ GENDER_LABEL[detail.gender ?? ''] || detail.gender || '—' }} / {{ detail.nation || '—' }}</dd></div>
           <div><dt>手机号</dt><dd><MaskField :text="detail.phone ?? ''" kind="phone" /></dd></div>
           <div><dt>邮箱</dt><dd>{{ detail.email || '—' }}</dd></div>
           <div><dt>学院</dt><dd>{{ detail.college }}</dd></div>

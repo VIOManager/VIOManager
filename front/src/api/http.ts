@@ -67,6 +67,16 @@ http.interceptors.response.use(
   },
   (err) => {
     const silent = ((err.config ?? {}) as unknown as { silent?: boolean }).silent === true
+    // HTTP 层 401：后端 JWT 过滤器直接回 401 状态码 + code 1002 响应体（后端重启/令牌过期走这里，
+    // 不经过上方 2xx 分支的 1002 处理）——同样清 token 踢回登录，
+    // 否则用户只会看到误导性的"网络异常"满屏刷（2026-10-17 组织管理排查定位）
+    if (err.response?.status === 401) {
+      const body = err.response.data as Result
+      sessionStorage.removeItem(TOKEN_KEY)
+      if (!silent) ElMessage.error(body?.message || '登录已失效，请重新登录')
+      window.location.assign('/login')
+      return Promise.reject(new BizError(1002, body?.message ?? '未登录或令牌已过期'))
+    }
     if (!silent) ElMessage.error('网络异常，请稍后重试')
     return Promise.reject(err)
   }

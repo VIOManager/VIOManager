@@ -196,7 +196,7 @@ registerMock({
     const scope = deptScopeOrgIds(ctx.token)
     if (scope !== null && !orgInScope(subOrgId, scope)) return fail(1003, '仅可排本部门子树的班')
     const sem = semesters.find((s) => s.id === semesterId)
-    if (sem && (weekNo < 1 || weekNo > sem.weekCount)) return fail(8010, '周次超出学期教学周数')
+    if (sem && (weekNo < 1 || weekNo > sem.totalWeeks)) return fail(8010, '周次超出学期教学周数')
     const assignments = Array.isArray(ctx.body.assignments) ? (ctx.body.assignments as Array<{ memberId: string; weekday: number; slotIndex: number; dutyName: string }>) : []
     const force = ctx.body.force === true
     for (const a of assignments) {

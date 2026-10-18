@@ -8,7 +8,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiPerfRules, apiSavePerfRules } from '@/api/performance'
 import type { PerfRule } from '@/api/performance'
-import { apiOrgTree } from '@/api/org'
+import { apiOrgTreeSafe } from '@/api/org'
 import type { OrgNode } from '@/api/org'
 
 const subOrgId = ref('')
@@ -77,7 +77,7 @@ function flatten(nodes: OrgNode[], out: Array<{ id: string; name: string }>) {
 }
 
 onMounted(async () => {
-  const tree = await apiOrgTree()
+  const tree = await apiOrgTreeSafe()
   const out: Array<{ id: string; name: string }> = []
   flatten(tree, out)
   orgs.value = out

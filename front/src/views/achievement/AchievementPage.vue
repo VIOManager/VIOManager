@@ -12,10 +12,16 @@ import type { AchievementItem } from '@/api/achievement'
 import { apiTeams } from '@/api/team'
 import type { TeamListItem } from '@/api/team'
 import { ACHIEVEMENT_STATUS_LABEL, ACHIEVEMENT_TYPE_LABEL } from '@/config/labels'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import AchievementFormDialog from './AchievementFormDialog.vue'
 import AchievementDetailDrawer from './AchievementDetailDrawer.vue'
 
 const list = ref<AchievementItem[]>([])
+/** 本地滚动分页：A01 返回全量数组，前端切片显示（每批 20 条）；全选/导出仍作用于全量 */
+const loadedCount = ref(20)
+const visible = computed(() => list.value.slice(0, loadedCount.value))
+const noMore = computed(() => loadedCount.value >= list.value.length)
+const loading = ref(false)
 const teams = ref<TeamListItem[]>([])
 const statusFilter = ref('')
 const keyword = ref('')
@@ -48,8 +54,20 @@ function pickedTeamIds(): string[] {
 }
 
 async function load() {
-  list.value = await apiAchievements({ status: statusFilter.value || undefined, keyword: keyword.value || undefined })
-  selectedIds.value = []
+  loading.value = true
+  try {
+    list.value = await apiAchievements({ status: statusFilter.value || undefined, keyword: keyword.value || undefined })
+    selectedIds.value = []
+    loadedCount.value = 20
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 滚动到底扩大切片（ScrollLoader 的 reach 回调） */
+function loadMore() {
+  if (loading.value || noMore.value) return
+  loadedCount.value += 20
 }
 
 function openDetail(id: string) {
@@ -116,7 +134,7 @@ onMounted(async () => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="a in list" :key="a.id" class="linkrow" @click="openDetail(a.id)">
+          <tr v-for="a in visible" :key="a.id" class="linkrow" @click="openDetail(a.id)">
             <td class="pickcell" @click.stop>
               <input :id="'pk-' + a.id" type="checkbox" class="pk" :checked="selectedIds.indexOf(a.id) >= 0" @change="toggle(a.id)" />
               <label :for="'pk-' + a.id" class="pick"></label>
@@ -136,6 +154,7 @@ onMounted(async () => {
         </tbody>
       </table>
       <p v-if="list.length === 0" class="empty-note">暂无成果</p>
+      <ScrollLoader :loading="loading" :no-more="noMore" :loaded="visible.length" :total="list.length" @reach="loadMore" />
     </div>
 
     <AchievementFormDialog v-model="formVisible" mode="admin" :teams="teams.map((t) => ({ teamId: t.id, teamName: t.name }))" @saved="load" />
@@ -144,8 +163,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.stamp.bad { color: var(--vio-danger); border-color: var(--vio-danger); }
-
 /* 行勾选圆圈（图纸档案风：图线圆圈，选中实心墨蓝带白对勾；input 隐藏 + label 绘制） */
 .pk { display: none; }
 .pick { display: inline-block; position: relative; width: 16px; height: 16px; border: 1.5px solid var(--vio-rule); border-radius: 50%; cursor: pointer; vertical-align: middle; box-sizing: border-box; }

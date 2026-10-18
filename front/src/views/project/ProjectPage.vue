@@ -4,11 +4,12 @@
  * 两 tab：项目列表（筛选+新建+详情抽屉）/ 比赛节点（DRAFT→提交审核→通过后自动同步任务）
  * 可见性八条由后端判定（清单 §2）；写操作仅项目所有人（7002，按钮显隐以 viewerIsOwner 驱动）
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiCreateProject, apiProjects } from '@/api/project'
 import type { ProjectItem } from '@/api/project'
 import { PROJECT_STATUS_LABEL, PROJECT_VISIBILITY_LABEL } from '@/config/labels'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import ProjectDetailDrawer from './ProjectDetailDrawer.vue'
 import MilestonePanel from './MilestonePanel.vue'
 
@@ -16,6 +17,10 @@ type TabKey = 'list' | 'milestone'
 const tab = ref<TabKey>('list')
 
 const list = ref<ProjectItem[]>([])
+/** 本地滚动分页：PR 列表返回全量数组，前端切片显示（每批 20 条） */
+const loadedCount = ref(20)
+const visible = computed(() => list.value.slice(0, loadedCount.value))
+const noMore = computed(() => loadedCount.value >= list.value.length)
 const loading = ref(false)
 const keyword = ref('')
 const statusFilter = ref('')
@@ -27,9 +32,16 @@ async function load() {
   loading.value = true
   try {
     list.value = await apiProjects({ keyword: keyword.value || undefined, status: statusFilter.value || undefined })
+    loadedCount.value = 20
   } finally {
     loading.value = false
   }
+}
+
+/** 滚动到底扩大切片（ScrollLoader 的 reach 回调） */
+function loadMore() {
+  if (loading.value || noMore.value) return
+  loadedCount.value += 20
 }
 
 function openDetail(id: string) {
@@ -107,7 +119,7 @@ onMounted(load)
             <tr><th>项目名称</th><th>所有人</th><th>所属组织</th><th>关联比赛</th><th>可见性</th><th>状态</th><th>起止</th><th style="width: 60px">操作</th></tr>
           </thead>
           <tbody>
-            <tr v-for="p in list" :key="p.id" class="linkrow" @click="openDetail(p.id)">
+            <tr v-for="p in visible" :key="p.id" class="linkrow" @click="openDetail(p.id)">
               <td style="color: var(--vio-ink); font-weight: 600">{{ p.name }}</td>
               <td>{{ p.ownerName }}</td>
               <td>{{ p.orgName }}</td>
@@ -120,6 +132,7 @@ onMounted(load)
           </tbody>
         </table>
         <p v-if="!loading && list.length === 0" class="empty-note">暂无可见项目（可见性八条见项目清单 §2）</p>
+        <ScrollLoader :loading="loading" :no-more="noMore" :loaded="visible.length" :total="list.length" @reach="loadMore" />
       </div>
     </template>
     <MilestonePanel v-else />
@@ -153,16 +166,18 @@ onMounted(load)
 <style scoped>
 .vtabs { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .vtab {
-  padding: 7px 18px;
-  border: 1px solid var(--vio-rule);
-  background: var(--vio-sheet);
-  color: var(--vio-ink-2);
+  padding: 5px 16px;
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-panel);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  color: var(--vio2-ink-2);
   font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s var(--vio-ease);
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.vtab.active { border-color: var(--vio-ink); color: var(--vio-ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--vio-ink); }
-.stamp.dim { color: var(--vio-ink-3); border-color: var(--vio-rule); }
+.vtab:hover { transform: translate(-1px, -1px); color: var(--vio2-ink); }
+.vtab.active { background: var(--vio2-yellow); color: #101010; }
 .form-col { display: flex; flex-direction: column; gap: 6px; }
-.form-col label { font-size: 12px; color: var(--vio-ink-3); margin-top: 6px; }
+.form-col label { font-size: 12px; color: var(--vio2-ink-2); margin-top: 6px; }
 </style>

@@ -5,12 +5,13 @@
  * 三个页签：比赛列表（C01）/ 模板管理（T01–T05）/ 待处理池（P01–P03）
  * ⚠️ 安全：学生仅见已发布及之后状态（后端过滤）；状态流转与发布检查由后端判定（4001/4011）
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { apiContests } from '@/api/contest'
 import type { ContestListItem, PoolItem } from '@/api/contest'
 import { apiSemestersSafe } from '@/api/semester'
 import type { Semester } from '@/api/semester'
 import { CONTEST_STATUS_LABEL } from '@/config/labels'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import ContestFormDialog from './ContestFormDialog.vue'
 import ContestDetailDrawer from './ContestDetailDrawer.vue'
 import TemplatePanel from './TemplatePanel.vue'
@@ -19,6 +20,10 @@ import PoolPanel from './PoolPanel.vue'
 const tab = ref<'contest' | 'template' | 'pool'>('contest')
 
 const contests = ref<ContestListItem[]>([])
+/** 本地滚动分页：C01 返回全量数组，前端切片显示（每批 20 条） */
+const loadedCount = ref(20)
+const visible = computed(() => contests.value.slice(0, loadedCount.value))
+const noMore = computed(() => loadedCount.value >= contests.value.length)
 const semesters = ref<Semester[]>([])
 const loading = ref(false)
 const filter = ref({ semesterId: '', status: '' })
@@ -37,9 +42,16 @@ async function load() {
       semesterId: filter.value.semesterId || undefined,
       status: filter.value.status || undefined
     })
+    loadedCount.value = 20
   } finally {
     loading.value = false
   }
+}
+
+/** 滚动到底扩大切片（ScrollLoader 的 reach 回调） */
+function loadMore() {
+  if (loading.value || noMore.value) return
+  loadedCount.value += 20
 }
 
 function openCreate() {
@@ -124,7 +136,7 @@ onMounted(async () => {
             <tr><th>名称</th><th>学期</th><th>状态</th><th>报名起止</th><th>比赛起止</th><th class="num">赛道</th><th class="num">赛队</th><th style="width: 60px">操作</th></tr>
           </thead>
           <tbody>
-            <tr v-for="c in contests" :key="c.id" class="linkrow" @click="openDetail(c.id)">
+            <tr v-for="c in visible" :key="c.id" class="linkrow" @click="openDetail(c.id)">
               <td style="color: var(--vio-ink); font-weight: 600">{{ c.name }}</td>
               <td class="nw">{{ c.semesterName }}</td>
               <td><span class="stamp" :class="statusStamp(c.status)">{{ CONTEST_STATUS_LABEL[c.status] }}</span></td>
@@ -137,6 +149,7 @@ onMounted(async () => {
           </tbody>
         </table>
         <p v-if="!loading && contests.length === 0" class="empty-note">暂无比赛</p>
+        <ScrollLoader :loading="loading" :no-more="noMore" :loaded="visible.length" :total="contests.length" @reach="loadMore" />
       </div>
     </template>
 
@@ -149,10 +162,18 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--vio-rule); margin-bottom: 18px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 18px; }
 .tab {
-  background: none; border: none; padding: 6px 2px 10px; font-size: 14px; color: var(--vio-ink-3);
-  cursor: pointer; letter-spacing: 0.08em; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: var(--vio2-panel);
+  border: 2px solid var(--vio2-bd);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  padding: 5px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--vio2-ink-2);
+  cursor: pointer;
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.tab.on { color: var(--vio-ink); font-weight: 600; border-bottom-color: var(--vio-blue-ink); }
+.tab:hover { transform: translate(-1px, -1px); color: var(--vio2-ink); }
+.tab.on { background: var(--vio2-yellow); color: #101010; }
 </style>

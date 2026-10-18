@@ -64,20 +64,26 @@ export interface MemberQuery {
   hasAccount?: string
 }
 
-/** 新建/编辑表单（M03/M04）；学号可空、不可重复、不可修改（3001/3002） */
+/** 新建/编辑表单（M03/M04）；学号可空、不可重复、不可修改（3001/3002）
+ *  2026-10-17 对齐后端 DTO：可空字段空串一律不传（@Pattern/@Long 对空串报 1001，
+ *  编辑是部分更新语义"不传=不改"），编辑时 body 必须带 id（P02 契约） */
 export interface MemberForm {
   name: string
   studentNo: string
-  phone: string
-  college: string
-  major: string
-  className: string
   gender: string
-  nation: string
-  email: string
   memberType: MemberType
-  orgId: string
   skills: string[]
+  phone?: string
+  college?: string
+  major?: string
+  className?: string
+  nation?: string
+  email?: string
+  orgId?: string
+  /** 身份证号（18 位选填；编辑不传=保持原值，传了后端重新加密覆盖） */
+  idCard?: string
+  /** 编辑必带：后端 P02 要求 id 同时出现在 body（幂等/审计定位用） */
+  id?: string
 }
 
 export interface ImportResult {

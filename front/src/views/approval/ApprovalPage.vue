@@ -12,6 +12,7 @@ import type { ApprovalItem, ApprovalRole, ApprovalView } from '@/api/approval'
 import { APPROVAL_STATUS_LABEL, APPROVAL_TYPE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
 import { useApprovalStore } from '@/stores/approval'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import ApprovalDetailDrawer from './ApprovalDetailDrawer.vue'
 
 const user = useUserStore()
@@ -42,15 +43,17 @@ const tabs = computed(() => {
   return out
 })
 
+/** 首次加载 / 切视角 / 筛选 / 处理完成刷新：清空回第 1 批 */
 async function load() {
   loading.value = true
   try {
+    page.value = 1
     const r = await apiApprovalList({
       view: view.value,
       status: statusFilter.value || undefined,
       bizType: typeFilter.value || undefined,
       keyword: keyword.value || undefined,
-      page: page.value,
+      page: 1,
       size
     })
     list.value = r.list
@@ -60,14 +63,33 @@ async function load() {
   }
 }
 
+/** 滚动到底追加下一批（ScrollLoader 的 reach 回调） */
+async function loadMore() {
+  if (loading.value || list.value.length >= total.value) return
+  loading.value = true
+  try {
+    page.value++
+    const r = await apiApprovalList({
+      view: view.value,
+      status: statusFilter.value || undefined,
+      bizType: typeFilter.value || undefined,
+      keyword: keyword.value || undefined,
+      page: page.value,
+      size
+    })
+    list.value = list.value.concat(r.list)
+    total.value = r.total
+  } finally {
+    loading.value = false
+  }
+}
+
 function switchView(v: ApprovalView) {
   view.value = v
-  page.value = 1
   void load()
 }
 
 function onSearch() {
-  page.value = 1
   void load()
 }
 
@@ -170,12 +192,7 @@ onMounted(load)
         </tbody>
       </table>
       <p v-if="!loading && list.length === 0" class="empty-note">暂无审批单</p>
-    </div>
-
-    <div v-if="total > size" class="pages mono">
-      <button class="btn-line" :disabled="page <= 1" @click="page--; load()">上一页</button>
-      <span>第 {{ page }} 页 · 共 {{ total }} 单</span>
-      <button class="btn-line" :disabled="page * size >= total" @click="page++; load()">下一页</button>
+      <ScrollLoader :loading="loading" :no-more="list.length >= total" :loaded="list.length" :total="total" @reach="loadMore" />
     </div>
 
     <ApprovalDetailDrawer v-model="drawerVisible" :approval-id="detailId" :view="view" @changed="onChanged" />
@@ -185,16 +202,18 @@ onMounted(load)
 <style scoped>
 .vtabs { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .vtab {
-  padding: 7px 18px;
-  border: 1px solid var(--vio-rule);
-  background: var(--vio-sheet);
-  color: var(--vio-ink-2);
+  padding: 5px 16px;
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-panel);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  color: var(--vio2-ink-2);
   font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s var(--vio-ease);
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.vtab em { font-style: normal; margin-left: 6px; font-size: 11px; color: var(--vio-seal); font-weight: 700; }
-.vtab.active { border-color: var(--vio-ink); color: var(--vio-ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--vio-ink); }
-.stamp.dim { color: var(--vio-ink-3); border-color: var(--vio-rule); }
-.pages { display: flex; align-items: center; gap: 14px; margin-top: 14px; font-size: 12px; color: var(--vio-ink-3); }
+.vtab:hover { transform: translate(-1px, -1px); color: var(--vio2-ink); }
+.vtab.active { background: var(--vio2-yellow); color: #101010; }
+.vtab em { font-style: normal; margin-left: 6px; font-size: 11px; color: var(--vio2-pink); font-weight: 700; }
+.vtab.active em { background: #101010; color: var(--vio2-yellow); padding: 0 4px; }
 </style>
