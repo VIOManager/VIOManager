@@ -45,6 +45,14 @@ minio:
   access-key: ${MINIO_ACCESS_KEY:vio-minio}
   secret-key: ${MINIO_SECRET_KEY:dev-minio-123}
 
+rocketmq:
+  producer:
+    # producer.group 是 starter 装配 DefaultMQProducer 的硬条件之一（与 rocketmq.name-server
+    # 缺一不可）；name-server 不配置时自动配置整体不激活、零装配，本节只是备好另一半条件。
+    # 开 MQ 的完整姿势：环境变量 ROCKETMQ_NAME_SERVER=localhost:9876 + vio.mq-enabled=true
+    group: vio-mgmt-producer
+    send-message-timeout: 3000
+
 app:
   version: @project.version@
 
