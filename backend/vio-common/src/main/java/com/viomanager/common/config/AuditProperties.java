@@ -23,4 +23,11 @@ public class AuditProperties {
      * ⚠️ 测试与排查问题时设 false：同步写完立即可查（vio.audit.async=false）
      */
     private boolean async = true;
+
+    /**
+     * 审计日志表名：默认当前库的 audit_log；跨库接入时配库名限定表名——
+     * 论坛服务配 viomanager.audit_log 直写管理库（2026-10-18 拍板）。
+     * 单实例前提下成立；拆库分实例时此配置失效，须切第二数据源方案
+     */
+    private String tableName = "audit_log";
 }

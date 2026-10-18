@@ -43,6 +43,9 @@ vio:
   audit:
     enabled: true
     async: true
+    # 跨库接入主站审计表（2026-10-18 拍板，推翻 2026-10-16 M3"论坛不进审计链路"）：
+    # 同实例限定表名直写管理库，主站侧默认值 audit_log 不变；拆库分实例时此配置失效须切第二数据源
+    table-name: viomanager.audit_log
   forum:
     # 管理侧 my-profile 地址：forum_user 快照首建/orgId 变化时转发用户 JWT 调用
     profile-url: ${MANAGEMENT_BASE_URL:http://localhost:8088}/api/auth/my-profile

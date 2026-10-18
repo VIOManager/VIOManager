@@ -1,5 +1,6 @@
 package com.viomanager.reply.controller;
 
+import com.viomanager.common.audit.AuditLog;
 import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.idempotent.Idempotent;
 import com.viomanager.common.result.PageResult;
@@ -44,7 +45,9 @@ public class ReplyController {
     /**
      * F07 回帖（幂等：一张表单一个键）。锁定禁回（9101）在服务层守卫。
      * Authorization 头原样下传给 forum_user 快照换名用。
+     * 审计 sensitive：签名带 Authorization 头，参数不落库防 JWT 进日志（摘要已带主题号）。
      */
+    @AuditLog(bizType = "FORUM_REPLY_CREATE", label = "回帖", summary = "'回复主题 #' + #topicId", sensitive = true)
     @Idempotent(bizType = "FORUM_REPLY_CREATE")
     @PostMapping
     public Result<Map<String, Object>> create(

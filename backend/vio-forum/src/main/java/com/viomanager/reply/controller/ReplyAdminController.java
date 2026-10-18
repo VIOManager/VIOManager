@@ -1,5 +1,6 @@
 package com.viomanager.reply.controller;
 
+import com.viomanager.common.audit.AuditLog;
 import com.viomanager.common.auth.RequireRole;
 import com.viomanager.common.idempotent.Idempotent;
 import com.viomanager.common.result.Result;
@@ -26,7 +27,8 @@ public class ReplyAdminController {
     @Resource
     private IReplyAdminService replyAdminService;
 
-    /** F13 编辑评论（软编辑：覆盖原文，edited=1 透出） */
+    /** F13 编辑评论（软编辑：覆盖原文，edited=1 透出）；审计 biz_type 与幂等注解共用同一词表 */
+    @AuditLog(bizType = "FORUM_REPLY_ADMIN_UPDATE", label = "管理员编辑楼层", summary = "'编辑楼层 #' + #id")
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
     @Idempotent(bizType = "FORUM_REPLY_ADMIN_UPDATE")
     @PutMapping("/{id}")
@@ -36,6 +38,7 @@ public class ReplyAdminController {
     }
 
     /** F14 状态设置：删除=HIDDEN（软删占位）/ 恢复=NORMAL */
+    @AuditLog(bizType = "FORUM_REPLY_ADMIN_STATUS", label = "楼层状态变更", summary = "'楼层 #' + #id + ' → ' + #dto.to")
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
     @Idempotent(bizType = "FORUM_REPLY_ADMIN_STATUS")
     @PostMapping("/{id}/status")

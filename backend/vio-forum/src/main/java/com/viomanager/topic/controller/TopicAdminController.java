@@ -1,5 +1,6 @@
 package com.viomanager.topic.controller;
 
+import com.viomanager.common.audit.AuditLog;
 import com.viomanager.common.auth.RequireRole;
 import com.viomanager.common.idempotent.Idempotent;
 import com.viomanager.common.result.Result;
@@ -26,7 +27,8 @@ public class TopicAdminController {
     @Resource
     private ITopicAdminService topicAdminService;
 
-    /** F11 编辑主题（标题/正文/标签） */
+    /** F11 编辑主题（标题/正文/标签）；审计 biz_type 与幂等注解共用同一词表 */
+    @AuditLog(bizType = "FORUM_TOPIC_ADMIN_UPDATE", label = "管理员编辑主题", summary = "'编辑主题 #' + #id")
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
     @Idempotent(bizType = "FORUM_TOPIC_ADMIN_UPDATE")
     @PutMapping("/{id}")
@@ -36,6 +38,7 @@ public class TopicAdminController {
     }
 
     /** F12 状态：删除=HIDDEN（软删）/ 恢复=NORMAL / 锁定与解锁=LOCKED⇄NORMAL */
+    @AuditLog(bizType = "FORUM_TOPIC_ADMIN_STATUS", label = "主题状态变更", summary = "'主题 #' + #id + ' → ' + #dto.to")
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
     @Idempotent(bizType = "FORUM_TOPIC_ADMIN_STATUS")
     @PostMapping("/{id}/status")

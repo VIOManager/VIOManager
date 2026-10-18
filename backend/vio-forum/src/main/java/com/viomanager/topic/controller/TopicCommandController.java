@@ -1,5 +1,6 @@
 package com.viomanager.topic.controller;
 
+import com.viomanager.common.audit.AuditLog;
 import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.idempotent.Idempotent;
 import com.viomanager.common.result.Result;
@@ -29,7 +30,9 @@ public class TopicCommandController {
     /**
      * F06 发帖（幂等：一张表单一个键，失败重试复用同键）。
      * Authorization 头原样下传，给 forum_user 快照换名用（方案 §二.3）。
+     * 审计 sensitive：签名带 Authorization 头，参数整体不落库防 JWT 进日志（摘要已带标题）。
      */
+    @AuditLog(bizType = "FORUM_TOPIC_CREATE", label = "发帖", summary = "'发布：' + #dto.title", sensitive = true)
     @Idempotent(bizType = "FORUM_TOPIC_CREATE")
     @PostMapping
     public Result<Map<String, Object>> create(
