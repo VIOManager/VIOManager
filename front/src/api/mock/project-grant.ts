@@ -31,9 +31,11 @@ registerMock({
     if (!p) return fail(7001, '项目不存在')
     const me = meAsMember(ctx.token)
     if (!me) return fail(1003, '仅项目成员可上传')
+    const u = findMockUserByToken(ctx.token)
+    const isAdmin = !!u && u.role !== 'STUDENT'
     const isOwner = p.ownerId === me.id
     const isMember = projectMembers.some((m) => m.projectId === p.id && m.memberId === me.id)
-    if (!isOwner && !isMember) return fail(7002, '仅所有人与项目成员可上传')
+    if (!isOwner && !isMember && !isAdmin) return fail(7002, '仅所有人、项目成员或管理员可上传')
     // 对齐后端 PR26 单段 multipart 契约：FormData 的 file/fileCategory/remark 一体提交
     const fd = ctx.body as unknown as FormData
     const file = fd && typeof fd.get === 'function' ? (fd.get('file') as File | null) : null
@@ -60,10 +62,12 @@ registerMock({
     if (!p) return fail(7001, '项目不存在')
     const me = meAsMember(ctx.token)
     if (!me) return fail(1003, '仅项目成员可操作')
+    const u2 = findMockUserByToken(ctx.token)
+    const adminDel = !!u2 && u2.role !== 'STUDENT'
     for (const f of projectFiles) {
       if (f.id !== ctx.params.fileRecordId || f.projectId !== p.id) continue
       const isOwner = p.ownerId === me.id
-      if (!isOwner && f.uploadedById !== me.id) return fail(7002, '成员仅可删除自己上传的文件')
+      if (!isOwner && !adminDel && f.uploadedById !== me.id) return fail(7002, '仅所有人/管理员可删任意文件，成员仅可删自己上传的')
       projectFiles.splice(projectFiles.indexOf(f), 1)
       return ok(null)
     }

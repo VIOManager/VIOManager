@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
  *
  * 列表口径与单对象不同（清单 PR01）：学生列表 = 参与的（所有人/成员/教师）∪ 授权可见的，
  * 不含 PUBLIC/ORG 全量（防止列表被无关项目淹没）；PUBLIC/ORG 只影响单项目详情可达性。
- * 写接口一律仅所有人（7002），不走本判定。
+ * 写口管理权（2026-10-16 组长拍板：所有人 or 管理员）也收口在本类 canManage，禁止第二份判定。
  */
 @Slf4j
 @Component
@@ -82,6 +82,38 @@ public class ProjectVisibilitySupport {
         }
         if (!canView(project, user, memberId)) {
             throw new BizException(ProjectErrorCode.VIEW_DENIED);
+        }
+        return project;
+    }
+
+    /**
+     * 管理权判定（2026-10-16 组长拍板：管理员权限最高，可执行项目管理所有操作，
+     * 原"写口一律仅所有人"口径作废）：所有人 or 超管 or 部门管理员（项目组织在其
+     * 管辖子树内，与可见性第 4 条同款口径——能看就能管）。
+     */
+    public boolean canManage(Project project, CurrentUser user, Long memberId) {
+        //1 所有人
+        if (memberId != null && memberId.equals(project.getOwnerMemberId())) {
+            return true;
+        }
+        //2 超管
+        if ("SUPER_ADMIN".equals(user.getRole())) {
+            return true;
+        }
+        //3 部门管理员：项目所属组织在其管辖子树内
+        return "DEPT_ADMIN".equals(user.getRole())
+                && project.getOrgId() != null && user.getOrgId() != null
+                && orgInSubtree(project.getOrgId(), orgPath(user.getOrgId()));
+    }
+
+    /** 写接口统一入口：存在（7001）+ 可管理（7002）一步到位 */
+    public Project requireManageableProject(Long projectId, CurrentUser user, Long memberId) {
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BizException(ProjectErrorCode.NOT_FOUND);
+        }
+        if (!canManage(project, user, memberId)) {
+            throw new BizException(ProjectErrorCode.NOT_OWNER);
         }
         return project;
     }

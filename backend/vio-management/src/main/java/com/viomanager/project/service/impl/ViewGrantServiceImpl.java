@@ -17,6 +17,7 @@ import com.viomanager.project.entity.ProjectViewGrant;
 import com.viomanager.project.mapper.ProjectMapper;
 import com.viomanager.project.mapper.ProjectViewGrantMapper;
 import com.viomanager.project.service.ViewGrantService;
+import com.viomanager.project.support.ProjectVisibilitySupport;
 import com.viomanager.project.vo.ViewGrantVO;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
@@ -45,6 +46,9 @@ public class ViewGrantServiceImpl implements ViewGrantService {
 
     @Resource
     private ProjectViewGrantMapper grantMapper;
+
+    @Resource
+    private ProjectVisibilitySupport visibilitySupport;
 
     @Resource
     private ApprovalClient approvalClient;
@@ -142,7 +146,8 @@ public class ViewGrantServiceImpl implements ViewGrantService {
         return Result.ok();
     }
 
-    /** PR30/PR31 门槛：项目所有人或管理员（超管/项目组织子树内部门管理员） */
+    /** PR30/PR31 门槛：项目所有人或管理员——判定收口 ProjectVisibilitySupport.canManage
+     *  （2026-10-16 拍板口径）；非门槛者沿用历史契约 1003（HTTP 403）不改码 */
     private void requireOwnerOrManager(Long projectId) {
         CurrentUser user = UserHolder.getUser();
         Long memberId = memberIdSupport.currentMemberId(user);
@@ -150,27 +155,9 @@ public class ViewGrantServiceImpl implements ViewGrantService {
         if (project == null) {
             throw new BizException(ProjectErrorCode.NOT_FOUND);
         }
-        if (memberId != null && memberId.equals(project.getOwnerMemberId())) {
-            return;
+        if (!visibilitySupport.canManage(project, user, memberId)) {
+            throw new BizException(CommonErrorCode.FORBIDDEN);
         }
-        if ("SUPER_ADMIN".equals(user.getRole())) {
-            return;
-        }
-        if ("DEPT_ADMIN".equals(user.getRole()) && user.getOrgId() != null) {
-            List<String> paths = jdbcTemplate.queryForList(
-                    "SELECT path FROM sys_org WHERE id = ? AND deleted = 0",
-                    String.class, user.getOrgId());
-            if (!paths.isEmpty()) {
-                Integer count = jdbcTemplate.queryForObject(
-                        "SELECT COUNT(*) FROM sys_org WHERE id = ? AND deleted = 0 "
-                                + "AND path LIKE CONCAT(?, '%')",
-                        Integer.class, project.getOrgId(), paths.get(0));
-                if (count != null && count > 0) {
-                    return;
-                }
-            }
-        }
-        throw new BizException(CommonErrorCode.FORBIDDEN);
     }
 
     private String payloadOf(Project project, ProjectViewGrant grant) {

@@ -3,7 +3,7 @@
  * 项目详情抽屉（PR03–PR14 + PR29–PR31）
  * 分区：基本信息（所有人可编辑/状态流转/删除）/ 成员与指导教师（不走审批）/ 挂载赛队 / 查看授权
  * 任务与文件区拆在 ProjectTaskPanel / ProjectFilePanel（单文件行数约束）
- * 权限显隐以 detail.viewerIsOwner 驱动（后端仍逐接口判定，7002 兜底）
+ * 权限显隐以 detail.viewerCanManage 驱动（后端仍逐接口判定，7002 兜底）
  */
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -47,7 +47,7 @@ function changed() {
   void load()
 }
 
-// ── 所有人操作 ──
+// ── 管理（所有人/管理员，2026-10-16 拍板口径）──
 async function onStatusFlow() {
   if (!detail.value) return
   const next = detail.value.status === 'ACTIVE' ? 'FINISHED' : 'ARCHIVED'
@@ -149,8 +149,8 @@ async function revokeGrant(g: ViewGrant) {
       </dl>
       <p v-if="detail.description" class="desc">{{ detail.description }}</p>
 
-      <div v-if="detail.viewerIsOwner" class="zone">
-        <h6>所有人操作</h6>
+      <div v-if="detail.viewerCanManage" class="zone">
+        <h6>管理操作（所有人 / 管理员）</h6>
         <button v-if="detail.status !== 'ARCHIVED'" class="btn-line" @click="onStatusFlow">
           {{ detail.status === 'ACTIVE' ? '完结项目' : '归档项目' }}
         </button>
@@ -161,13 +161,13 @@ async function revokeGrant(g: ViewGrant) {
         <h6>项目成员（不走审批）</h6>
         <div v-for="m in members" :key="m.memberId" class="row-line">
           <span>{{ m.memberName }}<em class="mono">{{ m.projectRole === 'OWNER' ? '所有人' : '成员' }}</em></span>
-          <button v-if="detail.viewerIsOwner && m.projectRole !== 'OWNER'" class="btn-act" @click="removeMember(m.memberId, m.memberName)">移除</button>
+          <button v-if="detail.viewerCanManage && m.projectRole !== 'OWNER'" class="btn-act" @click="removeMember(m.memberId, m.memberName)">移除</button>
         </div>
         <div v-for="a in advisors" :key="a.memberId" class="row-line">
           <span>{{ a.name }}<em class="mono">指导教师 · {{ a.college }}</em></span>
-          <button v-if="detail.viewerIsOwner" class="btn-act" @click="onRemoveAdvisor(a.memberId)">移除</button>
+          <button v-if="detail.viewerCanManage" class="btn-act" @click="onRemoveAdvisor(a.memberId)">移除</button>
         </div>
-        <template v-if="detail.viewerIsOwner">
+        <template v-if="detail.viewerCanManage">
           <div class="add-row">
             <input v-model="memberKw" class="input-line" style="flex: 1" placeholder="姓名/学号搜索" @keyup.enter="searchMember" />
             <button class="btn-line" @click="searchMember">搜索</button>
@@ -190,8 +190,8 @@ async function revokeGrant(g: ViewGrant) {
         <p v-if="teams.length === 0" class="dim-note">暂无赛队挂载（队长在赛队详情页挂载）</p>
       </div>
 
-      <ProjectTaskPanel :project-id="detail.id" :can-edit="detail.viewerIsOwner" />
-      <ProjectFilePanel :project-id="detail.id" :can-edit="detail.viewerIsOwner" />
+      <ProjectTaskPanel :project-id="detail.id" :can-edit="detail.viewerCanManage" />
+      <ProjectFilePanel :project-id="detail.id" :can-edit="detail.viewerCanManage" />
 
       <div v-if="grants.length > 0" class="zone">
         <h6>查看授权</h6>
@@ -199,7 +199,7 @@ async function revokeGrant(g: ViewGrant) {
           <span>{{ g.applicantName }}<em class="mono">{{ GRANT_TYPE_LABEL[g.grantType] }}<template v-if="g.grantType === 'LIMITED'"> · 至 {{ g.expireAt }}</template></em></span>
           <span>
             <span class="stamp" :class="g.status === 'ACTIVE' ? 'ok' : g.status === 'PENDING' ? 'warn' : 'dim'">{{ GRANT_STATUS_LABEL[g.status] }}</span>
-            <button v-if="g.status === 'ACTIVE' && detail.viewerIsOwner" class="btn-act" @click="revokeGrant(g)">撤销</button>
+            <button v-if="g.status === 'ACTIVE' && detail.viewerCanManage" class="btn-act" @click="revokeGrant(g)">撤销</button>
           </span>
         </div>
       </div>

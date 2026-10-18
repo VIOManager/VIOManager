@@ -29,8 +29,10 @@ export interface ProjectItem {
 export interface ProjectDetail extends ProjectItem {
   description: string
   remark: string
-  /** 当前登录人是否所有人（后端计算，按钮显隐用；权限后端判定） */
+  /** 当前登录人是否所有人（身份标记） */
   viewerIsOwner: boolean
+  /** 当前登录人是否可管理（所有人 or 管理员，2026-10-16 拍板口径；操作按钮显隐用，权限以后端判定为准） */
+  viewerCanManage: boolean
 }
 
 /** PR06 成员（契约字段：memberName/projectRole/joinAt，勿按 mock 旧形态写） */

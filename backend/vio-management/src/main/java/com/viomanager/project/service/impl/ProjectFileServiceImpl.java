@@ -81,8 +81,9 @@ public class ProjectFileServiceImpl implements ProjectFileService {
         CurrentUser user = UserHolder.getUser();
         Long uploaderId = memberIdSupport.currentMemberId(user);
         Project project = requireProject(projectId);
-        //上传权限比其他写口宽：所有人与项目成员都可传（指导教师挂名只读，清单字面）
-        requireOwnerOrMember(project, uploaderId);
+        //上传门槛（2026-10-16 拍板）：所有人与项目成员可传（教师挂名只读）+ 管理员；
+        //管理员须有人员档案（uploader_id 落库依据），admin 超管无档案报 7013
+        requireUploadable(project, user, uploaderId);
         String category = StringUtils.hasText(fileCategory) ? fileCategory : "DOC";
         if (!FILE_CATEGORIES.contains(category)) {
             throw new BizException(CommonErrorCode.PARAM_INVALID);
@@ -120,9 +121,9 @@ public class ProjectFileServiceImpl implements ProjectFileService {
         if (record == null || !projectId.equals(record.getProjectId())) {
             throw new BizException(CommonErrorCode.NOT_FOUND);
         }
-        boolean owner = memberId != null && memberId.equals(project.getOwnerMemberId());
-        //所有人删任何；成员仅删自己上传的；其余 7002
-        if (!owner && !(memberId != null && memberId.equals(record.getUploadedBy())
+        boolean manageable = visibilitySupport.canManage(project, user, memberId);
+        //所有人/管理员删任何；成员仅删自己上传的；其余 7002
+        if (!manageable && !(memberId != null && memberId.equals(record.getUploadedBy())
                 && isMember(projectId, memberId))) {
             throw new BizException(ProjectErrorCode.NOT_OWNER);
         }
@@ -155,12 +156,17 @@ public class ProjectFileServiceImpl implements ProjectFileService {
         return project;
     }
 
-    /** 上传门槛：所有人或项目成员（PR26 口径；成员判定查 project_member 含 OWNER 行） */
-    private void requireOwnerOrMember(Project project, Long memberId) {
-        if (memberId == null) {
-            throw new BizException(ProjectErrorCode.NOT_OWNER);
+    /** 上传门槛：所有人/项目成员（PR26 口径；成员判定查 project_member 含 OWNER 行）或管理员（须有档案） */
+    private void requireUploadable(Project project, CurrentUser user, Long memberId) {
+        if (visibilitySupport.canManage(project, user, memberId)) {
+            if (memberId == null) {
+                //管理员但无人员档案：uploader_id 无从落库（表结构即契约，不改库）
+                throw new BizException(ProjectErrorCode.NO_MEMBER_PROFILE);
+            }
+            return;
         }
-        if (memberId.equals(project.getOwnerMemberId()) || isMember(project.getId(), memberId)) {
+        if (memberId != null && (memberId.equals(project.getOwnerMemberId())
+                || isMember(project.getId(), memberId))) {
             return;
         }
         throw new BizException(ProjectErrorCode.NOT_OWNER);

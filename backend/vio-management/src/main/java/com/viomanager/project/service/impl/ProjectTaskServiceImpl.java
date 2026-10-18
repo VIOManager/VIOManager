@@ -29,9 +29,9 @@ import org.springframework.util.StringUtils;
 
 /**
  * 项目任务实现（PR21–PR24）。
- * PR23 权限矩阵（清单口径）：
- *  - 所有人：全字段可改，状态任意流转（置 DONE 回填 completed_at/by，离开 DONE 清空）
- *  - 负责人本人（非所有人）：仅 status=DONE（完成打卡语义），改其他字段 7002
+ * PR23 权限矩阵（2026-10-16 拍板：管理员权限最高）：
+ *  - 所有人/管理员（超管或项目组织子树内部门管理员）：全字段可改，状态任意流转（置 DONE 回填 completed_at/by，离开 DONE 清空）
+ *  - 负责人本人（其余人）：仅 status=DONE（完成打卡语义），改其他字段 7002
  *  - 其余可见者：7002
  */
 @Slf4j
@@ -102,8 +102,7 @@ public class ProjectTaskServiceImpl implements ProjectTaskService {
         Long memberId = memberIdSupport.currentMemberId(user);
         Project project = requireProject(projectId);
         ProjectTask task = requireTask(projectId, taskId);
-        boolean owner = memberId != null && memberId.equals(project.getOwnerMemberId());
-        if (owner) {
+        if (visibilitySupport.canManage(project, user, memberId)) {
             updateAsOwner(taskId, memberId, dto);
             return Result.ok();
         }
@@ -185,14 +184,11 @@ public class ProjectTaskServiceImpl implements ProjectTaskService {
         return project;
     }
 
+    /** 创建/删除门槛（7002，所有人 or 管理员）——收口在 ProjectVisibilitySupport */
     private Project requireOwnedProject(Long projectId) {
         CurrentUser user = UserHolder.getUser();
         Long memberId = memberIdSupport.currentMemberId(user);
-        Project project = requireProject(projectId);
-        if (memberId == null || !memberId.equals(project.getOwnerMemberId())) {
-            throw new BizException(ProjectErrorCode.NOT_OWNER);
-        }
-        return project;
+        return visibilitySupport.requireManageableProject(projectId, user, memberId);
     }
 
     /** 任务存在且属于该项目（7012：任务不存在或不属于该项目） */

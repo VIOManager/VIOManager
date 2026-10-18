@@ -14,7 +14,6 @@ import com.viomanager.project.entity.Project;
 import com.viomanager.project.entity.ProjectAdvisor;
 import com.viomanager.project.entity.ProjectMember;
 import com.viomanager.project.mapper.ProjectAdvisorMapper;
-import com.viomanager.project.mapper.ProjectMapper;
 import com.viomanager.project.mapper.ProjectMemberMapper;
 import com.viomanager.project.service.ProjectMemberService;
 import com.viomanager.project.support.ProjectVisibilitySupport;
@@ -37,9 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 public class ProjectMemberServiceImpl implements ProjectMemberService {
-
-    @Resource
-    private ProjectMapper projectMapper;
 
     @Resource
     private ProjectMemberMapper memberMapper;
@@ -166,18 +162,11 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
         return Result.ok();
     }
 
-    /** 加载项目（7001）+ 所有人校验（7002）——PR07-10 写口共用 */
+    /** 加载项目（7001）+ 管理权校验（7002，所有人 or 管理员）——PR07-10 写口共用 */
     private Project requireOwnedProject(Long projectId) {
         CurrentUser user = UserHolder.getUser();
         Long operatorId = memberIdSupport.currentMemberId(user);
-        Project project = projectMapper.selectById(projectId);
-        if (project == null) {
-            throw new BizException(ProjectErrorCode.NOT_FOUND);
-        }
-        if (operatorId == null || !operatorId.equals(project.getOwnerMemberId())) {
-            throw new BizException(ProjectErrorCode.NOT_OWNER);
-        }
-        return project;
+        return visibilitySupport.requireManageableProject(projectId, user, operatorId);
     }
 
     /** A 线人员档案：同库直查（只读），不存在 1004 */

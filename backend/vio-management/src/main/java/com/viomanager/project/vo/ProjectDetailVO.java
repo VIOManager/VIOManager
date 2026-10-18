@@ -19,4 +19,7 @@ public class ProjectDetailVO extends ProjectVO {
 
     /** 当前登录人是否所有人（前端按钮显隐辅助，后端按 owner_member_id 计算；写口权限仍逐接口 7002 收口） */
     private Boolean viewerIsOwner;
+
+    /** 当前登录人是否可管理（所有人 or 管理员，2026-10-16 拍板口径；前端操作按钮显隐用，权限以后端判定为准） */
+    private Boolean viewerCanManage;
 }

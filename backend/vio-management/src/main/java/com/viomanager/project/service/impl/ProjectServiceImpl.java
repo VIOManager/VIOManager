@@ -166,6 +166,7 @@ public class ProjectServiceImpl implements ProjectService {
         Project project = visibilitySupport.requireVisibleProjectConsumingOnce(id, user, memberId);
         ProjectDetailVO vo = querySupport.toDetail(project);
         vo.setViewerIsOwner(memberId != null && memberId.equals(project.getOwnerMemberId()));
+        vo.setViewerCanManage(visibilitySupport.canManage(project, user, memberId));
         return Result.ok(vo);
     }
 
@@ -175,7 +176,7 @@ public class ProjectServiceImpl implements ProjectService {
         CurrentUser user = UserHolder.getUser();
         Long memberId = memberIdSupport.currentMemberId(user);
         Project project = requireProject(id);
-        requireOwner(project, memberId);
+        requireManageable(project, user, memberId);
         //乐观锁：编辑页回显的 updatedAt 与当前值不一致=别人已改过（1007）
         if (dto.getUpdatedAt() != null && !dto.getUpdatedAt().equals(project.getUpdatedAt())) {
             throw new BizException(CommonErrorCode.CONCURRENT_MODIFIED);
@@ -227,7 +228,7 @@ public class ProjectServiceImpl implements ProjectService {
         CurrentUser user = UserHolder.getUser();
         Long memberId = memberIdSupport.currentMemberId(user);
         Project project = requireProject(id);
-        requireOwner(project, memberId);
+        requireManageable(project, user, memberId);
         //有 ACTIVE 挂载的赛队先解绑（7010）——RELEASSED 历史行不阻碍删除
         Integer activeMounts = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM team_project_ref WHERE project_id = ? AND status = 'ACTIVE' AND deleted = 0",
@@ -246,7 +247,7 @@ public class ProjectServiceImpl implements ProjectService {
         return Result.ok();
     }
 
-    /** 加载项目（7001 不存在）——写口专用，不做可见性判定（写口一律仅所有人） */
+    /** 加载项目（7001 不存在）——写口专用，不做可见性判定 */
     private Project requireProject(Long id) {
         Project project = projectMapper.selectById(id);
         if (project == null) {
@@ -255,9 +256,9 @@ public class ProjectServiceImpl implements ProjectService {
         return project;
     }
 
-    /** 写口所有人校验（7002）：memberId 为空（admin 无档案）必然不是所有人 */
-    private void requireOwner(Project project, Long memberId) {
-        if (memberId == null || !memberId.equals(project.getOwnerMemberId())) {
+    /** 写口管理权校验（7002，2026-10-16 拍板：所有人 or 管理员）——编辑/删除共用 */
+    private void requireManageable(Project project, CurrentUser user, Long memberId) {
+        if (!visibilitySupport.canManage(project, user, memberId)) {
             throw new BizException(ProjectErrorCode.NOT_OWNER);
         }
     }

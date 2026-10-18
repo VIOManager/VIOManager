@@ -1,7 +1,7 @@
 /**
  * 项目管理 mock 接口层（PR01–PR15 主体；PR16–PR31 在 ./project-ext.ts）
  * 契约：《项目管理-接口清单》（错误码 7xxx）；可见性判定在 ./project-data 的 visibleTo（§2 八条）
- * 写操作一律仅项目所有人（7002）；PR13 挂载校验队长身份（读 B 线 team 数据，只读）
+ * 写操作=所有人或管理员（2026-10-16 拍板，7002）；PR13 挂载校验队长身份（读 B 线 team 数据，只读）
  * TODO(联调)：后端项目接口就绪后删除本文件
  */
 import { fail, ok, registerMock } from './registry'
@@ -59,6 +59,12 @@ export function findProject(id: string): MockProject | null {
     if (p.id === id) return p
   }
   return null
+}
+
+/** 管理权（2026-10-16 拍板：所有人 or 超管 or 子树内部门管理员）——与真后端 canManage 同口径 */
+export function canManageMock(p: MockProject, vc: ReturnType<typeof viewCtx>): boolean {
+  return (!!vc.meId && p.ownerId === vc.meId) || vc.isSuper
+    || (vc.isDeptAdmin && !!p.orgId && (vc.deptScope?.indexOf(p.orgId) ?? -1) >= 0)
 }
 
 function toItem(p: MockProject): ProjectItem {
@@ -159,8 +165,9 @@ registerMock({
     }
     return ok({
       ...toItem(p), description: p.description, remark: p.remark,
-      // 出参对齐真后端 PR03：卡片字段 + description/remark + viewerIsOwner，无其余扩展
-      viewerIsOwner: !!vc.meId && p.ownerId === vc.meId
+      // 出参对齐真后端 PR03：卡片字段 + description/remark + viewerIsOwner/viewerCanManage
+      viewerIsOwner: !!vc.meId && p.ownerId === vc.meId,
+      viewerCanManage: canManageMock(p, vc)
     })
   }
 })
@@ -172,7 +179,7 @@ registerMock({
     const p = findProject(ctx.params.id)
     if (!p) return fail(7001, '项目不存在')
     const vc = viewCtx(ctx.token)
-    if (!vc.meId || p.ownerId !== vc.meId) return fail(7002, '仅项目所有人可操作')
+    if (!canManageMock(p, vc)) return fail(7002, '仅项目所有人或管理员可操作')
     if (ctx.body.name) p.name = String(ctx.body.name).trim()
     if (ctx.body.description !== undefined) p.description = String(ctx.body.description)
     if (ctx.body.remark !== undefined) p.remark = String(ctx.body.remark)
@@ -195,7 +202,7 @@ registerMock({
     const p = findProject(ctx.params.id)
     if (!p) return fail(7001, '项目不存在')
     const vc = viewCtx(ctx.token)
-    if (!vc.meId || p.ownerId !== vc.meId) return fail(7002, '仅项目所有人可操作')
+    if (!canManageMock(p, vc)) return fail(7002, '仅项目所有人或管理员可操作')
     for (const r of teamProjectRefs) {
       if (r.projectId === p.id && r.status === 'ACTIVE') return fail(7010, '项目有挂载中的赛队，请先解绑')
     }

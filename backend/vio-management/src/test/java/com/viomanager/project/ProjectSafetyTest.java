@@ -197,7 +197,7 @@ class ProjectSafetyTest extends PmTestSupport {
     @Test
     void nonOwnerCannotEditOrDelete() throws Exception {
         long id = createProject(ownerToken, "越权用例项目", "ORG");
-        //同部门学生（可见但非所有人）编辑/删除 → 7002
+        //同部门学生（可见但非所有人非管理员）编辑/删除 → 7002
         assertEquals(7002, (int) JsonPath.read(
                 update(sameOrgStudentToken, id, "{\"description\":\"篡改\"}"), "$.code"));
         assertEquals(7002, (int) JsonPath.read(
@@ -206,9 +206,12 @@ class ProjectSafetyTest extends PmTestSupport {
                         .andReturn()
                         .getResponse()
                         .getContentAsString(), "$.code"));
-        //超管可见但同样不可写（清单待确认③：管理员不代管他人项目，仅所有人 7002 从严）
-        assertEquals(7002, (int) JsonPath.read(
+        //2026-10-16 拍板：管理员权限最高可执行所有操作——超管可编辑他人项目
+        assertEquals(0, (int) JsonPath.read(
                 update(superToken, id, "{\"description\":\"代管\"}"), "$.code"));
+        //外部门管理员（项目组织不在其子树）仍 7002——能看才能管的边界
+        assertEquals(7002, (int) JsonPath.read(
+                update(deptMechToken, id, "{\"description\":\"越界\"}"), "$.code"));
     }
 
     @Test
