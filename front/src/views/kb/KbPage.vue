@@ -147,9 +147,9 @@ onMounted(load)
           <UploadField
             :key="formSeq"
             biz-type="KB_FILE"
-            accept=".pdf,.mp4,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.png,.jpg"
-            tip="支持 PDF / MP4 / Office 文档 / 压缩包 / 图片，单文件上限 20MB（后端业务上限；mp4 待后端白名单放行）"
-            :max-mb="20"
+            accept=".pdf,.mp4,.mov,.avi,.mkv,.webm,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.png,.jpg"
+            tip="支持 PDF / 视频（mp4/mov/avi/mkv/webm）/ Office 文档 / 压缩包 / 图片，单文件上限 200MB"
+            :max-mb="200"
             button-text="选择文件上传"
             @uploaded="onUploaded"
           />

@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VIOManager · 科创协作管理平台</title>
+    <script>
+      // 主题防闪烁：应用加载前按存储偏好或系统偏好落到 html 根节点（与 stores/theme.ts 同一键 vio_theme）
+      (function () {
+        var t = localStorage.getItem('vio_theme')
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        document.documentElement.setAttribute('data-theme', t)
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

@@ -144,19 +144,20 @@ async function submit() {
 </template>
 
 <style scoped>
-.overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); display: grid; place-items: center; z-index: 60; }
-.dlg { width: 520px; background: var(--box); border-radius: var(--radius-box); box-shadow: var(--shadow-box); padding: 18px 20px; }
-.dlg h3 { font-size: 15px; color: var(--ink); font-weight: 600; margin-bottom: 14px; }
+/* 弹窗皮（2026-10-15 重涂）：与 PostDialog 同一块皮——遮罩 / 3px 粗边 / 硬投影 / 直角；逻辑零改动 */
+.overlay { position: fixed; inset: 0; background: var(--vio2-mask); display: grid; place-items: center; z-index: 60; }
+.dlg { width: 560px; max-width: calc(100vw - 32px); background: var(--vio2-panel); border: var(--vio2-bd-main); box-shadow: var(--vio2-hard); padding: 22px 24px 18px; }
+.dlg h3 { font-size: 17px; color: var(--vio2-ink); font-weight: 900; margin-bottom: 16px; padding-bottom: 12px; border-bottom: var(--vio2-bd-main); letter-spacing: 0.02em; }
 .row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
-.row > label:first-child { width: 42px; flex: none; font-size: 13px; color: var(--fade); padding-top: 6px; }
-.row select, .row input, .row textarea { flex: 1; border: 1px solid var(--line); border-radius: var(--radius-box); padding: 7px 10px; font-size: 13px; font-family: inherit; background: var(--box-soft); color: var(--ink); }
-.row select:focus, .row input:focus, .row textarea:focus { outline: none; border-color: #BBB; background: var(--box); }
+.row > label:first-child { width: 42px; flex: none; font-family: var(--vio2-mono); font-size: 12px; color: var(--vio2-ink-3); padding-top: 7px; }
+.row select, .row input, .row textarea { flex: 1; border: 2px solid var(--vio2-bd); padding: 7px 10px; font-size: 13px; font-family: inherit; background: var(--vio2-panel-2); color: var(--vio2-ink); }
+.row select:focus, .row input:focus, .row textarea:focus { outline: none; border-color: var(--vio2-blue); background: var(--vio2-panel); }
 .row textarea { resize: vertical; line-height: 1.7; }
-.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--body); padding-top: 6px; }
-.foot { display: flex; align-items: center; border-top: 1px solid var(--line-soft); padding-top: 12px; }
-.foot i { flex: 1; font-style: normal; font-size: 12px; color: var(--fade); }
-.btn { font-size: 13px; color: var(--ink); background: var(--box); border: 1px solid #CCC; border-radius: var(--radius-box); padding: 5px 16px; cursor: pointer; margin-left: 8px; }
-.btn:hover:not(:disabled) { border-color: #999; }
-.btn.main { background: var(--tab-dark); color: #FFF; border-color: var(--tab-dark); }
+.chk { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--vio2-ink-2); padding-top: 6px; }
+.foot { display: flex; align-items: center; border-top: 2px solid var(--vio2-row-line); padding-top: 12px; }
+.foot i { flex: 1; font-style: normal; font-size: 12px; color: var(--vio2-ink-3); }
+.btn { font-size: 13px; color: var(--vio2-ink-2); background: var(--vio2-panel); border: var(--vio2-bd-row); font-weight: 700; padding: 6px 16px; cursor: pointer; margin-left: 8px; box-shadow: var(--vio2-hard-xs); }
+.btn:hover:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--vio2-shadow); }
+.btn.main { background: var(--vio2-yellow); color: var(--vio2-on-ac); border: var(--vio2-bd-acc); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 </style>
