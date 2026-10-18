@@ -4,7 +4,7 @@
  *   F11-F14 管理端编辑/状态接口随两级评论落地后在此追加
  * 幂等口径（规范 §6）：发帖/回帖带 X-Idempotency-Key；点赞/收藏为状态型天然幂等不带
  */
-import { get, post, postIdem } from './http'
+import { get, post, postIdem, putIdem } from './http'
 import type { PageResult } from './types'
 import type { BoardCode } from '@/types'
 
@@ -77,13 +77,14 @@ export interface HotTopicItem {
   author: string
 }
 
-/** F01 帖子列表 */
+/** F01 帖子列表（includeHidden：管理档专属，服务端强制鉴权——非两档角色传了也忽略） */
 export function apiTopicList(params: {
   board?: string
   sort?: 'latest' | 'hot'
   keyword?: string
   page?: number
   size?: number
+  includeHidden?: boolean
 }): Promise<PageResult<TopicItem>> {
   return get('/api/forum/topics', params as Record<string, unknown>)
 }
@@ -144,4 +145,42 @@ export function apiCollectTopic(id: string, collected: boolean): Promise<{ colle
 /** F10 楼层点赞/取消（状态型，天然幂等） */
 export function apiLikeReply(replyId: string, liked: boolean): Promise<{ liked: boolean }> {
   return post('/api/forum/replies/' + encodeURIComponent(replyId) + '/like', { liked })
+}
+
+/* ── F11-F14 管理档（超管+部门管理员两档同权，学生 1003；编辑/状态均带幂等键） ── */
+
+/** F11 编辑主题（标题/正文/标签；换版块不在常规编辑范围） */
+export function apiAdminUpdateTopic(
+  id: string,
+  data: { title: string; bodyText: string; tags: string[] },
+  idempotencyKey: string
+): Promise<{ id: string; title: string }> {
+  return putIdem('/api/forum/topics/' + encodeURIComponent(id), data, idempotencyKey)
+}
+
+/** F12 主题状态（删除=HIDDEN 软删可恢复 / 恢复=NORMAL / 锁定解锁=LOCKED⇄NORMAL；非法值 1001） */
+export function apiAdminSetTopicStatus(
+  id: string,
+  to: 'NORMAL' | 'LOCKED' | 'HIDDEN',
+  idempotencyKey: string
+): Promise<{ id: string; status: string }> {
+  return postIdem('/api/forum/topics/' + encodeURIComponent(id) + '/status', { to }, idempotencyKey)
+}
+
+/** F13 编辑评论（管理员覆盖原文，edited=1 透出） */
+export function apiAdminUpdateReply(
+  id: string,
+  text: string,
+  idempotencyKey: string
+): Promise<{ id: string; edited: boolean }> {
+  return putIdem('/api/forum/replies/' + encodeURIComponent(id), { text }, idempotencyKey)
+}
+
+/** F14 评论状态（删除=HIDDEN 学生占位/管理员原文；恢复=NORMAL；非法值 1001） */
+export function apiAdminSetReplyStatus(
+  id: string,
+  to: 'NORMAL' | 'HIDDEN',
+  idempotencyKey: string
+): Promise<{ id: string; status: string }> {
+  return postIdem('/api/forum/replies/' + encodeURIComponent(id) + '/status', { to }, idempotencyKey)
 }

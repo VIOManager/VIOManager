@@ -81,9 +81,9 @@ export function currentLoginName(): string {
 export function currentRole(): string {
   return sessionStorage.getItem(DEV_ROLE_KEY) ?? 'SUPER_ADMIN'
 }
-/** 管理操作权限口径：仅超管（对齐后端口径：通用 1003，ForumErrorCode 无专用码） */
+/** 管理操作权限口径：两档同权（超管+部门管理员，2026-10-17 P1 拍板；通用 1003，ForumErrorCode 无专用码） */
 export function requireAdmin(): void {
-  if (currentRole() !== 'SUPER_ADMIN') {
+  if (currentRole() !== 'SUPER_ADMIN' && currentRole() !== 'DEPT_ADMIN') {
     throw new MockBizError(1003, '无权执行管理操作（仅管理员）')
   }
 }

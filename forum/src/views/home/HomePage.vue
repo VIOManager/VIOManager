@@ -5,17 +5,44 @@
  * 数据：F01 帖子列表（board/sort/keyword/分页）、F02 今日热议、F03 社区统计
  * 搜索：顶栏搜索框回车跳 ?q=关键词，本页 watch route.query 联动查询
  * 标签行（接口方案回迁）：按当前版块全量主题单独聚合（size=50 封顶），
- *    翻页/排序/关键词变化不影响标签行——导航入口保持稳定；
+ *    按热度（使用帖数）只保留前 10；翻页/排序/关键词变化不影响标签行——导航入口保持稳定；
  *    点击即按该关键词搜索（F01 keyword 含标题与标签）
  */
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { BOARDS, boardName } from '@/config/boards'
 import { avatarOf } from '@/config/avatars'
-import { apiTopicList, apiHotTopics, apiForumStats, type TopicItem, type HotTopicItem } from '@/api/forum'
+import { useUserStore } from '@/stores/user'
+import {
+  apiTopicList, apiHotTopics, apiForumStats, apiAdminSetTopicStatus,
+  type TopicItem, type HotTopicItem
+} from '@/api/forum'
+import { ElMessage } from 'element-plus'
 
 const mainSite = import.meta.env.VITE_MAIN_SITE_URL ?? 'http://localhost:5174'
 const PAGE_SIZE = 10
+const user = useUserStore()
+
+/** 管理档"含隐藏"开关（两档角色专属；服务端强制鉴权，学生传了也忽略）——软删帖恢复入口 */
+const showHidden = ref(false)
+function toggleHidden() {
+  showHidden.value = !showHidden.value
+  page.value = 1
+  load()
+}
+
+/**
+ * 管理档恢复软删帖：HIDDEN 主题的详情/楼层对学生与管理员都 9102（后端 M2d 口径），
+ * 详情页进不去、管理按钮也就不存在——恢复只能按 id 走 F12，落在本列表行内。
+ * 状态型操作每次点击新发幂等键；恢复后标签行与统计同步刷（topicCount 只计 NORMAL+LOCKED）
+ */
+async function restoreHidden(t: TopicItem) {
+  await apiAdminSetTopicStatus(t.id, 'NORMAL', crypto.randomUUID())
+  ElMessage.success('主题已恢复为正常状态')
+  load()
+  loadTags()
+  loadSide()
+}
 
 /** 当前选中版块：'ALL' 为"全部"（boards 之外的伪选项） */
 const activeBoard = ref<string>('ALL')
@@ -27,6 +54,7 @@ const SORTS = [
 
 /**
  * 标签行：按当前版块全量主题聚合（独立请求，size=50 = F01 页上限封顶，演示量全覆盖）。
+ * 热度 = 被多少帖子使用，只保留前 10 条（2026-10-18 定：标签行不能无限增长）。
  * 独立于主列表的翻页/排序/关键词——标签是导航入口，不能跟着当前页内容漂移
  */
 const allTags = ref<string[]>([])
@@ -37,11 +65,17 @@ async function loadTags() {
     page: 1,
     size: 50
   })
-  const set = new Set<string>()
+  // 同帖重复标签计一次；并列热度按首见顺序排（sort 稳定），取前 10
+  const count = new Map<string, number>()
   for (const t of res.list) {
-    for (const g of t.tags) set.add(g)
+    for (const g of new Set(t.tags)) {
+      count.set(g, (count.get(g) ?? 0) + 1)
+    }
   }
-  allTags.value = Array.from(set)
+  allTags.value = Array.from(count.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(e => e[0])
 }
 
 /** 点击标签 = 关键词搜索（复用顶栏搜索链路：跳 ?q= 由 watch 联动查询） */
@@ -75,7 +109,8 @@ async function load() {
       sort: activeSort.value,
       keyword: keyword.value,
       page: page.value,
-      size: PAGE_SIZE
+      size: PAGE_SIZE,
+      includeHidden: user.isAdmin && showHidden.value
     })
     if (seq !== loadSeq) return
     topics.value = res.list
@@ -155,6 +190,8 @@ loadTags()
               :class="{ on: activeSort === s.code }"
               @click.prevent="switchSort(s.code)"
             >{{ s.name }}</a>
+            <!-- 管理档专属：软删帖恢复入口（服务端强制两档鉴权；行内"恢复"直调 F12） -->
+            <a v-if="user.isAdmin" href="#" :class="{ on: showHidden }" title="列表包含已隐藏的软删帖（行内可恢复）" @click.prevent="toggleHidden">含隐藏</a>
           </span>
         </div>
         <div class="tabs2">
@@ -163,12 +200,15 @@ loadTags()
           <span v-if="keyword" class="kw">关键词：{{ keyword }}</span>
         </div>
 
-        <!-- 主题行：48px 方头像 + 标题 + mono meta + 回复数块（热帖黄底） -->
-        <div v-for="t in topics" :key="t.id" class="cell">
+        <!-- 主题行：48px 方头像 + 标题 + mono meta + 回复数块（热帖黄底）；管理档含隐藏视图下带状态徽章 -->
+        <div v-for="t in topics" :key="t.id" class="cell" :class="{ 'is-hidden': user.isAdmin && t.status === 'HIDDEN' }">
           <img class="ava" :src="avatarOf(t.author, 48)" :alt="t.author">
           <div class="mid">
             <div class="t-title">
               <span v-if="t.pinned" class="pin">置顶</span>
+              <span v-if="t.status === 'LOCKED'" class="pin st-lock">锁定</span>
+              <span v-if="user.isAdmin && t.status === 'HIDDEN'" class="pin st-hid">已隐藏</span>
+              <a v-if="user.isAdmin && t.status === 'HIDDEN'" class="restore" href="#" title="恢复为正常状态（学生可见）" @click.prevent="restoreHidden(t)">恢复</a>
               <router-link :to="`/topic/${t.id}`">{{ t.title }}</router-link>
             </div>
             <div class="t-meta">
@@ -230,4 +270,11 @@ loadTags()
 .grid { display: grid; grid-template-columns: 1fr 270px; gap: 22px; align-items: start; }
 .mid { flex: 1; min-width: 0; }
 .kw { margin-left: auto; }
+/* 管理档状态徽章：复用置顶钉的形制换底色；隐藏行整体降不透明度提示"非学生视角" */
+.pin.st-lock { background: var(--vio2-lilac); }
+.pin.st-hid { background: var(--vio2-pink); }
+.cell.is-hidden { opacity: 0.6; }
+/* 隐藏行内恢复入口：小号 mono 链接，与徽章同排 */
+.restore { font-size: 11px; font-family: var(--vio2-mono); font-weight: 700; color: var(--vio2-blue); margin-left: 7px; }
+.restore:hover { text-decoration: underline; }
 </style>

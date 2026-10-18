@@ -1,23 +1,28 @@
 <script setup lang="ts">
 /**
- * 帖子详情：mono 面包屑 + 主楼（左 73px 方头像）+ 回复楼层 + 回复框沉底 + 右栏
- * 视觉基准：.agentdocs/design-preview/2026-10-15-forum-redesign/topic.html（新粗野双主题，lzh 已拍板）
- * 数据：F04 详情（浏览计数服务端 +1）、F05 楼层（一级分页）、F02 本版热议
- * 写操作：F07 回帖（幂等键防重）、F08/F10 点赞、F09 收藏（后三者为状态型天然幂等）
- * 契约基准：backend/vio-forum 控制器（F01-F10 已实现）；LOCKED 主题禁回（后端 9101 兜底，前端先拦）
+ * 帖子详情（编排层）：主楼 + 右栏在本页，楼层与回复框拆到 ReplyList / ReplyEditor（320 行超铁律拆分件）。
+ * 数据：F04 详情（浏览计数服务端 +1）、F05 楼层（一级分页 + 二级 children）、F02 本版热议
+ * 写操作：F07 回帖（ReplyEditor）、F08/F09 主楼点赞收藏、F11-F14 管理档（AdminDialog 统一弹窗）
+ * 契约基准：backend/vio-forum 控制器（F01-F14 已实现）；LOCKED 禁回 9101 后端兜底、前端先拦
  * 附件下载依赖文件服务方案，点击仅提示
  */
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { avatarOf } from '@/config/avatars'
 import { boardName } from '@/config/boards'
+import { useUserStore } from '@/stores/user'
+import ReplyList from '@/components/ReplyList.vue'
+import ReplyEditor from '@/components/ReplyEditor.vue'
+import AdminDialog, { type AdminTarget } from '@/components/AdminDialog.vue'
 import {
-  apiTopicDetail, apiReplyList, apiCreateReply, apiLikeTopic, apiCollectTopic, apiLikeReply,
-  type TopicDetail, type ReplyItem, type HotTopicItem, apiHotTopics
+  apiTopicDetail, apiReplyList, apiLikeTopic, apiCollectTopic, apiHotTopics,
+  type TopicDetail, type ReplyItem, type HotTopicItem
 } from '@/api/forum'
 
 const route = useRoute()
+const router = useRouter()
+const user = useUserStore()
 const topicId = String(route.params.id)
 
 const detail = ref<TopicDetail | null>(null)
@@ -29,26 +34,15 @@ const REPLY_PAGE_SIZE = 20
 const replyPage = ref(1)
 const replyTotal = ref(0)
 
-/** LOCKED 主题禁回（后端状态字段透出；管理员 F12 状态接口落地后联动） */
+/** LOCKED 主题禁回（detail.status 已透出，ReplyEditor 置灰 + 后端 9101 兜底） */
 const locked = computed(() => detail.value?.status === 'LOCKED')
-
-/** 回复框状态：正文、引用楼层、提交中标志 */
-const replyText = ref('')
-const quoteReply = ref<ReplyItem | null>(null)
-const submitting = ref(false)
-const replyBox = ref<HTMLTextAreaElement | null>(null)
-
-/**
- * ⚠️ 回帖幂等键：进入页面生成；提交失败保留（重试同键，防断网重复回帖）；
- * 提交成功后换新键（接着回复下一楼是新的内容）
- */
-const formKey = ref(crypto.randomUUID())
 
 async function loadDetail() {
   try {
     detail.value = await apiTopicDetail(topicId)
   } catch {
-    // 帖子不存在等业务错误：拦截器已提示，页面停留空态
+    // 帖子不存在/被隐藏：拦截器已提示；必须清空——管理回调靠 !detail 识别"已不可见"并跳首页
+    detail.value = null
   }
 }
 
@@ -90,12 +84,10 @@ async function loadBoardHot() {
   boardHot.value = list.slice(0, 4)
 }
 
-/** 操作锁：点赞/收藏是天然幂等操作，锁只为防连点白发一堆请求 */
+/** 主楼操作锁：点赞/收藏天然幂等，锁只为防连点白发一堆请求 */
 const likePending = ref(false)
 const collectPending = ref(false)
-const floorLikeLocks = ref<Record<string, boolean>>({})
 
-/** 主楼点赞/取消（状态型：重复点无副作用；计数以服务端返回为准） */
 async function toggleLike() {
   if (likePending.value || !detail.value) return
   likePending.value = true
@@ -109,7 +101,6 @@ async function toggleLike() {
   }
 }
 
-/** 主楼收藏/取消 */
 async function toggleCollect() {
   if (collectPending.value || !detail.value) return
   collectPending.value = true
@@ -122,61 +113,66 @@ async function toggleCollect() {
   }
 }
 
-/** 楼层点赞/取消（按楼层粒度加锁） */
-async function toggleFloorLike(f: ReplyItem) {
-  if (floorLikeLocks.value[f.id]) return
-  floorLikeLocks.value[f.id] = true
-  try {
-    const target = !f.liked
-    const res = await apiLikeReply(f.id, target)
-    f.liked = res.liked
-    f.likeCount += res.liked ? 1 : -1
-  } finally {
-    floorLikeLocks.value[f.id] = false
-  }
+/* ── 回复框目标态：二级回复（parentReplyId）与引用（quoteReplyId）互斥 ── */
+const parentReply = ref<ReplyItem | null>(null)
+const quoteReply = ref<ReplyItem | null>(null)
+const editorRef = ref<InstanceType<typeof ReplyEditor> | null>(null)
+
+function onFloorReplyTo(f: ReplyItem) {
+  parentReply.value = f
+  quoteReply.value = null
+  editorRef.value?.focus()
 }
 
-/** 楼层"回复"：带上引用并聚焦回复框 */
-function quoteFloor(f: ReplyItem) {
+function onFloorQuote(f: ReplyItem) {
   quoteReply.value = f
-  replyText.value = ''
-  if (replyBox.value) replyBox.value.focus()
+  parentReply.value = null
+  editorRef.value?.focus()
 }
 
-/** 主楼"回复"按钮：滚动到沉底回复框并聚焦 */
-function scrollToReply() {
-  if (replyBox.value) {
-    replyBox.value.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    replyBox.value.focus()
+/** 回复成功：一级新楼跳末页看自己的回复；二级挂当前页父楼下，留在本页即可 */
+function onEditorReplied() {
+  const wasChild = !!parentReply.value
+  parentReply.value = null
+  quoteReply.value = null
+  if (!wasChild) {
+    replyPage.value = Math.max(1, Math.ceil((replyTotal.value + 1) / REPLY_PAGE_SIZE))
   }
+  loadFloors()
 }
 
-/** 提交回复（幂等 + 双层防重：submitting 置灰拦手抖，formKey 拦网络重试重复） */
-async function submitReply() {
-  if (submitting.value || locked.value) return
-  if (!replyText.value.trim()) {
-    ElMessage.warning('回复内容不能为空')
+/* ── 管理档（两档）：主楼与楼层的"管理"都进统一弹窗 ── */
+const adminOpen = ref(false)
+const adminTarget = ref<AdminTarget | null>(null)
+
+function openTopicAdmin() {
+  if (!detail.value) return
+  adminTarget.value = {
+    type: 'topic',
+    id: detail.value.id,
+    label: `主题 #${detail.value.id}`,
+    status: detail.value.status,
+    title: detail.value.title,
+    // 正文回填按存储契约单 \n 分段（方案 §3.5；"空行分段"是 mock 演示层口径，真实后端不认）
+    bodyText: detail.value.body.join('\n'),
+    tags: detail.value.tags
+  }
+  adminOpen.value = true
+}
+
+function onFloorAdmin(f: ReplyItem) {
+  adminTarget.value = { type: 'reply', id: f.id, label: `#${f.floorNo} 楼`, status: f.status, text: f.text }
+  adminOpen.value = true
+}
+
+/** 管理操作完成：重拉详情与楼层；主题被隐藏后详情 9102，回首页（含隐藏列表里可恢复） */
+async function onAdminDone() {
+  await loadDetail()
+  if (!detail.value) {
+    router.push('/')
     return
   }
-  submitting.value = true
-  try {
-    await apiCreateReply(
-      topicId,
-      { text: replyText.value.trim(), quoteReplyId: quoteReply.value ? quoteReply.value.id : null },
-      formKey.value
-    )
-    ElMessage.success('回复成功')
-    replyText.value = ''
-    quoteReply.value = null
-    formKey.value = crypto.randomUUID()
-    // 新楼在末尾：跳到最后一页看自己的回复；replyCount 以重查的 total 为准
-    replyPage.value = Math.max(1, Math.ceil((replyTotal.value + 1) / REPLY_PAGE_SIZE))
-    await loadFloors()
-  } catch {
-    // 失败：内容与 formKey 都保留，改完再点是同一次提交
-  } finally {
-    submitting.value = false
-  }
+  loadFloors()
 }
 
 /** 附件点击：下载依赖文件服务，联调前提示 */
@@ -190,7 +186,7 @@ function attachTip() {
     <div v-if="detail" class="crumb2"><router-link to="/">首页</router-link> › <a href="#" @click.prevent>{{ boardName(detail.board) }}</a> › 主题 #{{ detail.id }}</div>
     <div class="grid">
       <div>
-        <!-- 主楼：左 73px 方头像 + 标题/meta -->
+        <!-- 主楼：左 73px 方头像 + 标题/meta；管理档追加"管理"入口（统一弹窗） -->
         <div v-if="detail" class="box post">
           <div class="in">
             <div class="p-top">
@@ -212,26 +208,16 @@ function attachTip() {
             <div class="ops">
               <button type="button" class="chipbtn" :class="{ on: detail.liked }" @click="toggleLike">{{ detail.liked ? '👍 已点赞' : '👍 点赞' }} {{ detail.likeCount }}</button>
               <button type="button" class="chipbtn" :class="{ on: detail.collected }" @click="toggleCollect">{{ detail.collected ? '⭐ 已收藏' : '⭐ 收藏' }}</button>
-              <button type="button" class="chipbtn" @click="scrollToReply">↩ 回复</button>
+              <button type="button" class="chipbtn" @click="editorRef?.focus()">↩ 回复</button>
+              <button v-if="user.isAdmin" type="button" class="chipbtn" @click="openTopicAdmin">⚙ 管理</button>
             </div>
           </div>
         </div>
 
-        <!-- 回复盒：黑条头行 + 楼层（楼层样式走 skin.css） -->
+        <!-- 回复盒：黑条头行 + 楼层列表（拆分件，含二级与楼层管理入口） -->
         <div class="box replies">
           <div class="box-h"><b>{{ replyTotal }} 条回复 · 按时间正序</b><span><a href="#reply" class="h-link">添加新回复 ↓</a></span></div>
-          <div v-for="f in floors" :key="f.id" class="floor">
-            <img class="ava" :src="avatarOf(f.author, 48)" :alt="f.author">
-            <div class="f-main">
-              <div class="f-meta"><b>{{ f.author }}</b>{{ f.authorGroup }} · {{ f.publishAt }}<span class="fno">#{{ f.floorNo }}</span></div>
-              <div v-if="f.quote" class="quote">@{{ f.quote.author }} #{{ f.quote.floorNo }}：{{ f.quote.text }}</div>
-              <div class="f-text">{{ f.text }}</div>
-              <div class="f-ops">
-                <a href="#" :class="{ on: f.liked }" @click.prevent="toggleFloorLike(f)">♥ {{ f.likeCount }}</a>
-                <a href="#reply" @click.prevent="quoteFloor(f)">回复</a>
-              </div>
-            </div>
-          </div>
+          <ReplyList :floors="floors" :is-admin="user.isAdmin" @reply-to="onFloorReplyTo" @quote="onFloorQuote" @admin="onFloorAdmin" />
           <div v-if="replyTotal > REPLY_PAGE_SIZE" class="pager">
             <a href="#" :class="{ off: replyPage <= 1 }" @click.prevent="turnReplyPage(-1)">‹</a>
             <span class="info">PAGE {{ replyPage }} / {{ Math.max(1, Math.ceil(replyTotal / REPLY_PAGE_SIZE)) }} · {{ replyTotal }} FLOORS</span>
@@ -239,24 +225,17 @@ function attachTip() {
           </div>
         </div>
 
-        <!-- 回复框沉底（LOCKED 主题禁回：后端 9101 兜底，前端先行拦截） -->
-        <div class="box replybox" id="reply">
-          <div class="in">
-            <h5>添加一条新回复</h5>
-            <div v-if="locked" class="q-tip">🔒 主题已被管理员锁定，暂停回复</div>
-            <div v-else-if="quoteReply" class="q-tip">
-              引用 @{{ quoteReply.author }} #{{ quoteReply.floorNo }}
-              <a href="#" @click.prevent="quoteReply = null">取消</a>
-            </div>
-            <textarea ref="replyBox" v-model="replyText" :disabled="submitting || locked" placeholder="回复即留痕，删除需管理员操作"></textarea>
-            <div class="r-foot">
-              <i>※ 文明发言，排障类回复请尽量附现象、配置与波形</i>
-              <button class="btn" type="button" :disabled="submitting || locked" @click="submitReply">
-                {{ submitting ? '回复中…' : '回复' }}
-              </button>
-            </div>
-          </div>
-        </div>
+        <!-- 回复框（拆分件：locked 置灰 / 二级与引用目标互斥展示） -->
+        <ReplyEditor
+          ref="editorRef"
+          :topic-id="topicId"
+          :locked="locked"
+          :parent-target="parentReply"
+          :quote-target="quoteReply"
+          @replied="onEditorReplied"
+          @clear-parent="parentReply = null"
+          @clear-quote="quoteReply = null"
+        />
       </div>
 
       <div class="side">
@@ -287,11 +266,14 @@ function attachTip() {
         </div>
       </div>
     </div>
+
+    <!-- 管理档统一弹窗：主题/楼层编辑 + 状态操作 -->
+    <AdminDialog v-model="adminOpen" :target="adminTarget" @done="onAdminDone" />
   </div>
 </template>
 
 <style scoped>
-/* 页面差异：双列网格 + 主楼/回复框结构；楼层/附件/统计格走 skin.css 共享组件 */
+/* 页面差异：双列网格 + 主楼结构；楼层/回复框/弹窗皮肤分别在各自组件与 skin.css */
 .grid { display: grid; grid-template-columns: 1fr 270px; gap: 22px; align-items: start; }
 .post, .replies { margin-bottom: 22px; }
 .post .in { padding: 20px 22px 16px; }
@@ -306,15 +288,7 @@ function attachTip() {
 .ops { margin-top: 16px; display: flex; gap: 10px; }
 .h-link { color: #C9C4B4; }
 .h-link:hover { color: var(--vio2-yellow); }
-.replybox .in { padding: 16px 18px 18px; }
-.replybox h5 { font-size: 13px; font-weight: 900; letter-spacing: 0.1em; margin-bottom: 10px; }
-.q-tip { font-size: 12px; color: var(--vio2-ink-2); background: var(--vio2-panel-2); border-left: 4px solid var(--vio2-lilac); padding: 5px 10px; margin-bottom: 8px; font-weight: 600; }
-.q-tip a { color: var(--vio2-ink-3); margin-left: 8px; }
-.replybox textarea { width: 100%; height: 110px; border: var(--vio2-bd-main); background: var(--vio2-panel-2); color: var(--vio2-ink); padding: 11px; font: inherit; font-size: 13px; line-height: 1.7; resize: vertical; }
-.replybox textarea:focus { outline: none; border-color: var(--vio2-blue); }
-.r-foot { display: flex; align-items: center; margin-top: 12px; gap: 14px; }
-.r-foot i { font-style: normal; font-size: 11.5px; color: var(--vio2-ink-3); flex: 1; font-family: var(--vio2-mono); }
 .author { display: flex; gap: 11px; align-items: center; margin-bottom: 12px; }
 .author b { font-size: 14px; }
-.gray2 { font-size: 11px; color: var(--vio2-ink-3); font-family: var(--vio2-mono); margin-top: 3px; }
+.gray2 { font-size: 11px; color: var(--vio2-ink-3); font-family: var(--vio2-mono); margin-top:  3px; }
 </style>

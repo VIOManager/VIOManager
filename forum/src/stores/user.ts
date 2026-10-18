@@ -53,8 +53,10 @@ export const useUserStore = defineStore('forum-user', {
   },
   getters: {
     loggedIn: (s) => s.token.length > 0,
-    /** 管理操作（置顶/录入/撤回）显隐用，口径同技术交流清单 9002：仅超管 */
-    isAdmin: (s) => s.role === 'SUPER_ADMIN'
+    /** 管理档（F11-F14 管理操作、含隐藏开关）：超管+部门管理员两档同权（2026-10-17 P1 拍板，对齐后端 @RequireRole） */
+    isAdmin: (s) => s.role === 'SUPER_ADMIN' || s.role === 'DEPT_ADMIN',
+    /** 置顶专属：后端发帖时仅超管置顶生效（两档之外唯一的口径差异点，勾选框显隐用） */
+    isSuperAdmin: (s) => s.role === 'SUPER_ADMIN'
   },
   actions: {
     /**

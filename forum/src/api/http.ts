@@ -97,9 +97,14 @@ export async function postIdem<T>(url: string, data: unknown, idempotencyKey: st
   return (await http.post(url, data, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
 }
 
+/** 带幂等键的 PUT（F11/F13 管理档编辑；键语义同 postIdem：一张表单一个键） */
+export async function putIdem<T>(url: string, data: unknown, idempotencyKey: string): Promise<T> {
+  return (await http.put(url, data, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
+}
+
 // ⚠️ 开发自验件：浏览器控制台 __http.get('/api/forum/topics') 可直接打接口；
 // 幂等演示：__http.postIdem('/api/forum/topics', {...}, 'k1') 连发两次同键，第二次 1005
 // import.meta.env.DEV 在构建期为 false，会被整段摇掉，不进生产包
 if (import.meta.env.DEV) {
-  ;(window as unknown as Record<string, unknown>).__http = { get, post, put, postIdem }
+  ;(window as unknown as Record<string, unknown>).__http = { get, post, put, postIdem, putIdem }
 }

@@ -100,15 +100,15 @@ async function submit() {
         </div>
         <div class="row">
           <label>正文</label>
-          <textarea v-model="bodyText" rows="7" placeholder="空行分段，段落会在详情页按段渲染" :disabled="submitting"></textarea>
+          <textarea v-model="bodyText" rows="7" placeholder="回车分段（一段一行），段落会在详情页按段渲染" :disabled="submitting"></textarea>
         </div>
         <div class="row">
           <label>标签</label>
           <input v-model="tagsText" placeholder="逗号分隔，如：STM32, 电机控制（可空）" :disabled="submitting">
         </div>
-        <div v-if="user.isAdmin" class="row">
+        <div v-if="user.isSuperAdmin" class="row">
           <label>置顶</label>
-          <label class="chk"><input type="checkbox" v-model="pinned" :disabled="submitting"> 置顶展示（仅管理员可见此项）</label>
+          <label class="chk"><input type="checkbox" v-model="pinned" :disabled="submitting"> 置顶展示（仅超管可见此项，后端同口径仅超管生效）</label>
         </div>
         <div class="foot">
           <i>※ 文明发言；发布后修改需管理员操作</i>

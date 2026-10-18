@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.viomanager.board.entity.ForumBoard;
 import com.viomanager.board.service.IBoardService;
+import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.ForumErrorCode;
 import com.viomanager.common.exception.BizException;
@@ -59,13 +60,19 @@ public class TopicQueryServiceImpl implements ITopicQueryService {
     private IForumUserService forumUserService;
 
     @Override
-    public PageResult<TopicItemVO> list(String board, String sort, String keyword, long page, long size) {
+    public PageResult<TopicItemVO> list(String board, String sort, String keyword, long page, long size, boolean includeHidden) {
         //1.分页参数收口：page 至少 1，size 默认 20 上限 50
         long p = Math.max(page, 1);
         long s = size <= 0 ? 20 : Math.min(size, MAX_PAGE_SIZE);
-        //2.组装条件：可见状态 + 可选版块 + 可选标题模糊
-        QueryWrapper<ForumTopic> wrapper = new QueryWrapper<ForumTopic>()
-                .in("status", "NORMAL", "LOCKED");
+        //2.组装条件：可见状态 + 可选版块 + 可选标题模糊。
+        //  includeHidden 仅管理档（两档）生效且服务端强制：管理列表要看到 HIDDEN 软删帖做恢复；
+        //  学生传 true 一律忽略——HIDDEN 对非管理档不可见是硬口径，不靠前端自觉
+        QueryWrapper<ForumTopic> wrapper = new QueryWrapper<>();
+        if (includeHidden && isForumAdmin(UserHolder.getUser())) {
+            wrapper.in("status", "NORMAL", "LOCKED", "HIDDEN");
+        } else {
+            wrapper.in("status", "NORMAL", "LOCKED");
+        }
         if (board != null && !board.isEmpty()) {
             ForumBoard fb = boardService.findByCode(board);
             //未知版块编码：不过发帖守卫（那是 9104 的事），列表按空结果处理最友好
@@ -177,6 +184,11 @@ public class TopicQueryServiceImpl implements ITopicQueryService {
         return vo;
     }
 
+    /** 论坛权限两档（2026-10-17 拍板）：超管或部门管理员——includeHidden 管理列表的准入判定 */
+    private boolean isForumAdmin(CurrentUser user) {
+        return user != null && ("SUPER_ADMIN".equals(user.getRole()) || "DEPT_ADMIN".equals(user.getRole()));
+    }
+
     /**
      * 热议候选集（F02 与列表 hot 标记共用）：24h 活跃窗取最近 500 条，再按回复数排前 5。
      */
@@ -230,14 +242,19 @@ public class TopicQueryServiceImpl implements ITopicQueryService {
         return map;
     }
 
-    /** 正文 \n 分段（方案 §3.5：存储 \n 分段，出参按段渲染） */
+    /**
+     * 正文 \n 分段（方案 §3.5：存储 \n 分段，出参按段渲染）。
+     * 空行不产出空段：表单里多敲回车/管理端编辑回填都可能出现连续换行，空段在详情页渲染成空块
+     */
     private List<String> splitBody(String body) {
         List<String> list = new ArrayList<>();
         if (body == null || body.isEmpty()) {
             return list;
         }
         for (String p : body.split("\n")) {
-            list.add(p);
+            if (!p.isBlank()) {
+                list.add(p);
+            }
         }
         return list;
     }

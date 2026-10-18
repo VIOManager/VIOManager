@@ -15,8 +15,10 @@ public interface ITopicQueryService {
     /**
      * F01 帖子列表：版块/排序（latest 最新最热 hot）/关键词/分页；
      * 可见状态 = NORMAL + LOCKED（HIDDEN 一律过滤），置顶恒排最前。
+     * includeHidden：仅管理档（超管+部门管理员）生效且服务端强制鉴权——管理列表含 HIDDEN 软删帖，
+     * 非管理档传 true 一律忽略。
      */
-    PageResult<TopicItemVO> list(String board, String sort, String keyword, long page, long size);
+    PageResult<TopicItemVO> list(String board, String sort, String keyword, long page, long size, boolean includeHidden);
 
     /**
      * F02 今日热议 top5：24h 活跃窗（LIMIT 500 候选兜底）按回复数排序（方案 §3.3）。

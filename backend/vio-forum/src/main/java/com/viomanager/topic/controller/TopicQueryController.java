@@ -27,7 +27,8 @@ public class TopicQueryController {
     private ITopicQueryService topicQueryService;
 
     /**
-     * F01 帖子列表：board/sort(latest|hot)/keyword/page/size。
+     * F01 帖子列表：board/sort(latest|hot)/keyword/page/size/includeHidden。
+     * includeHidden 仅管理档（两档）生效，服务端强制鉴权（学生传了也忽略）。
      */
     @GetMapping
     public Result<PageResult<TopicItemVO>> list(
@@ -35,8 +36,9 @@ public class TopicQueryController {
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false, defaultValue = "1") long page,
-            @RequestParam(required = false, defaultValue = "20") long size) {
-        return Result.ok(topicQueryService.list(board, sort, keyword, page, size));
+            @RequestParam(required = false, defaultValue = "20") long size,
+            @RequestParam(required = false, defaultValue = "false") boolean includeHidden) {
+        return Result.ok(topicQueryService.list(board, sort, keyword, page, size, includeHidden));
     }
 
     /**

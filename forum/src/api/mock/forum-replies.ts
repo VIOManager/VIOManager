@@ -16,6 +16,12 @@ export interface MockReply {
   liked: boolean
   /** 引用回复：指向本帖被引楼层 id；普通回复为 null */
   quoteReplyId: string | null
+  /** V4 二级评论：指向本帖一级楼层 id；一级为 null/缺省（两级封顶） */
+  parentReplyId?: string | null
+  /** NORMAL / HIDDEN（F14 管理端软删；缺省 NORMAL。HIDDEN 学生侧显示占位文本） */
+  status?: string
+  /** 管理员编辑标记（F13 覆盖原文后置 true 透出） */
+  edited?: boolean
 }
 
 /** 全部楼层（按帖分组有序，floorNo 连续） */
