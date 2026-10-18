@@ -331,9 +331,9 @@ class ProjectSafetyTest extends PmTestSupport {
 
     @Test
     void adminWithoutMemberProfileCannotCreate() throws Exception {
-        //超管账号未绑定人员档案：项目是个人资产，必须落到具体人 → 参数错拦截
+        //超管账号未绑定人员档案：项目是个人资产，必须落到具体人 → 7013 明确提示（2026-10-16 拆出，此前误报 1001）
         String body = createProject(superToken, "{\"name\":\"无档案项目\"}");
-        assertEquals(1001, (int) JsonPath.read(body, "$.code"), body);
+        assertEquals(7013, (int) JsonPath.read(body, "$.code"), body);
     }
 
     @Test

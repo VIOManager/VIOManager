@@ -42,7 +42,10 @@ public enum ProjectErrorCode implements ErrorCode {
     PENDING_REQUEST_EXISTS(7011, "已存在待审批的查看申请，请勿重复提交"),
 
     /** 任务不存在或不属于该项目的任务位（路径 taskId 与项目不匹配）。 */
-    TASK_NOT_FOUND(7012, "任务不存在或不属于该项目");
+    TASK_NOT_FOUND(7012, "任务不存在或不属于该项目"),
+
+    /** 创建项目的人未绑定人员档案（超管 admin 账号即此态）；此前误报 1001 参数校验失败，2026-10-16 联调拆出。 */
+    NO_MEMBER_PROFILE(7013, "当前账号未绑定人员档案，无法创建项目（项目是个人资产，所有人须有档案）");
 
     private final int code;
     private final String message;

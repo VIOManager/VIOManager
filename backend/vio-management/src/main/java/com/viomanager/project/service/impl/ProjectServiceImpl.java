@@ -104,10 +104,10 @@ public class ProjectServiceImpl implements ProjectService {
     @Transactional(rollbackFor = Exception.class)
     public Result<ProjectDetailVO> create(ProjectCreateDTO dto) {
         CurrentUser user = UserHolder.getUser();
-        //所有人=当前用户：项目是个人资产，必须绑定人员档案（admin 账号无档案不能建项目）
+        //所有人=当前用户：项目是个人资产，必须绑定人员档案（admin 超管账号无档案，报 7013 明确提示而非参数错）
         Long ownerId = memberIdSupport.currentMemberId(user);
         if (ownerId == null) {
-            throw new BizException(CommonErrorCode.PARAM_INVALID);
+            throw new BizException(ProjectErrorCode.NO_MEMBER_PROFILE);
         }
 
         Project project = new Project();
