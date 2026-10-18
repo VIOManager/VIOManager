@@ -30,12 +30,28 @@ spring:
     enabled: true
     locations: classpath:db/migration
     # ⚠️ 冲突：V1 是 52 表全量基线，禁改；改表只新增 V2+ 脚本并同步 docs/db/initsql.sql（骨架方案 §0.1 三步走）
+  data:
+    redis:
+      # 审批中心升级（插入点①② 组织树/未读红点缓存）：降级口径与 kb 完全同款——
+      # 命令超时压到 1s + 代码内 30s 熔断，Redis 不可用时透明回退直查库，接口不倒
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:1s}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
 
 minio:
   # 对象存储连接位：Step 8 文件服务才接入 SDK，此处先落配置约定
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
   access-key: ${MINIO_ACCESS_KEY:vio-minio}
   secret-key: ${MINIO_SECRET_KEY:dev-minio-123}
+
+rocketmq:
+  producer:
+    # producer.group 是 starter 装配 DefaultMQProducer 的硬条件之一（与 rocketmq.name-server
+    # 缺一不可）；name-server 不配置时自动配置整体不激活、零装配，本节只是备好另一半条件。
+    # 开 MQ 的完整姿势：环境变量 ROCKETMQ_NAME_SERVER=localhost:9876 + vio.mq-enabled=true
+    group: vio-mgmt-producer
+    send-message-timeout: 3000
 
 app:
   version: @project.version@
@@ -68,3 +84,11 @@ vio:
   approval:
     # 审批单有效期（天）：到期未处理由定时任务转 EXPIRED（方案 §7 待确认项，建议值 7）
     expire-days: 7
+  cache:
+    # 插入点①组织树缓存：false=path LIKE 现查（现状行为）；true=cache-aside + TTL 10 分钟，Redis 挂了自动降级
+    org-enabled: ${VIO_CACHE_ORG:false}
+    # 插入点②未读红点缓存：false=两条 selectCount 现算（现状行为）；true=Redis Hash + 状态变更事件重算
+    unread-enabled: ${VIO_CACHE_UNREAD:false}
+  # 插入点③④（outbox 通知 + 延迟消息）：false=不装配任何 MQ Bean，过期兜底轮询照跑，系统与现状行为一致；
+  # true=需同时设 ROCKETMQ_NAME_SERVER（如 localhost:9876），starter 见到该配置才激活装配
+  mq-enabled: ${VIO_MQ:false}

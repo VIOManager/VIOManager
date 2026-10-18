@@ -1,17 +1,42 @@
-/** 论坛站全局基础样式：V2EX 范式；页面样式写各组件 scoped 块 */
+/**
+ * 论坛站全局基础样式：新粗野双主题（2026-10-16 起替换 V2EX 范式）
+ * 职责：reset + 正文字栈 + 主题底纹；共享组件皮肤在 skin.css，页面差异在各组件 scoped 块
+ */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #app { height: 100%; }
 body {
-  font-family: var(--font);
+  font-family: var(--vio2-din);
   font-size: 14px;
   line-height: 1.6;
-  color: var(--body);
-  background: var(--bg);
+  color: var(--vio2-ink);
+  background: var(--vio2-bg);
   -webkit-font-smoothing: antialiased;
 }
-a { color: var(--meta); text-decoration: none; }
+a { color: var(--vio2-ink-2); text-decoration: none; }
 img { border: none; }
-:focus-visible { outline: 2px solid var(--tab-dark); outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--vio2-blue); outline-offset: 2px; }
+
+/* 底纹：浅色纸面颗粒 / 深色工程网格（固定铺满，不随滚动） */
+body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+:root[data-theme='light'] body::before {
+  background-image: radial-gradient(rgba(16, 16, 16, 0.05) 1px, transparent 1px);
+  background-size: 5px 5px;
+  opacity: 0.5;
+}
+:root[data-theme='dark'] body::before {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+/* 深色态右上蓝色光晕（页面只需放一个 .orb 节点，浅色自动隐藏） */
+.orb { display: none; }
+:root[data-theme='dark'] .orb {
+  display: block; position: fixed; width: 620px; height: 620px; border-radius: 50%;
+  top: -340px; right: -160px; pointer-events: none;
+  background: radial-gradient(circle, rgba(91, 140, 255, 0.12) 0%, transparent 62%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }

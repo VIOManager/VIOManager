@@ -46,7 +46,13 @@ public enum CommonErrorCode implements ErrorCode {
      * 病毒扫描服务不可用。组长 2026-10-10 拍板：不可用时**不拦用户**，文件标记 UNAVAILABLE 放行入库，
      * 本码保留给后续管理端"重扫 / 巡检告警"功能使用，上传链路不再抛出。
      */
-    SCAN_UNAVAILABLE(1011, "病毒扫描服务不可用");
+    SCAN_UNAVAILABLE(1011, "病毒扫描服务不可用"),
+
+    /**
+     * 学期切换维护锁定（S08 执行引擎窗口期）：JwtAuthFilter 对非超管返回 HTTP 503 + 此码。
+     * 刻意与 401/1002 区分——不触发前端"跳登录"，前端可按 503 展示维护提示页。
+     */
+    SYSTEM_MAINTENANCE(1012, "学期切换维护锁定中，请稍后再试");
 
     private final int code;
     private final String message;

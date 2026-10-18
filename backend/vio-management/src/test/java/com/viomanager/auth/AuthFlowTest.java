@@ -232,18 +232,18 @@ class AuthFlowTest {
         assertNotNull(reloaded.getPwdUpdatedAt());
     }
 
-    /** G1 防爆破：连续失败 5 次后锁 15 分钟，锁定期正确密码也回 2001 */
+    /** G1 防爆破：连续失败 20 次后锁 15 分钟，锁定期正确密码也回 2001（阈值 2026-10-16 lzh 拍板 5→20） */
     @Test
-    void fiveFailuresLockLogin() throws Exception {
-        //1.连续输错 5 次
-        for (int i = 0; i < 5; i++) {
+    void twentyFailuresLockLogin() throws Exception {
+        //1.连续输错 20 次
+        for (int i = 0; i < 20; i++) {
             mockMvc.perform(post("/api/auth/login")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"loginName\":\"probe_normal\",\"password\":\"wrong-pass\"}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(2001));
         }
-        //2.第 6 次用正确密码 → 仍然 2001（锁定中，不暴露锁定状态）
+        //2.第 21 次用正确密码 → 仍然 2001（锁定中，不暴露锁定状态）
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"loginName\":\"probe_normal\",\"password\":\"pass123456\"}"))
@@ -254,8 +254,8 @@ class AuthFlowTest {
     /** G1 防爆破：15 分钟窗口外的旧失败不构成锁定 */
     @Test
     void oldFailuresDoNotLock() throws Exception {
-        //1.手动插入 5 条 16 分钟前的失败日志（createdAt 显式赋值，填充器只补空值不会覆盖）
-        for (int i = 0; i < 5; i++) {
+        //1.手动插入 20 条 16 分钟前的失败日志（createdAt 显式赋值，填充器只补空值不会覆盖）
+        for (int i = 0; i < 20; i++) {
             SysLoginLog oldFail = new SysLoginLog();
             oldFail.setUserId(normalUser.getId());
             oldFail.setLoginName("probe_normal");
@@ -272,8 +272,8 @@ class AuthFlowTest {
     /** G1 防爆破：成功登录重置连败计数 */
     @Test
     void successResetsFailureStreak() throws Exception {
-        //1.失败 4 次（不足 5 次）
-        for (int i = 0; i < 4; i++) {
+        //1.失败 19 次（差一次到阈值 20）
+        for (int i = 0; i < 19; i++) {
             mockMvc.perform(post("/api/auth/login")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"loginName\":\"probe_normal\",\"password\":\"wrong-pass\"}"))
@@ -281,8 +281,8 @@ class AuthFlowTest {
         }
         //2.成功一次，连败清零
         loginOk("probe_normal", "pass123456");
-        //3.再失败 4 次 → 累计仍是 4 连败，正确密码可登录
-        for (int i = 0; i < 4; i++) {
+        //3.再失败 19 次 → 清零后重新累计 19 连败，正确密码可登录
+        for (int i = 0; i < 19; i++) {
             mockMvc.perform(post("/api/auth/login")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"loginName\":\"probe_normal\",\"password\":\"wrong-pass\"}"))

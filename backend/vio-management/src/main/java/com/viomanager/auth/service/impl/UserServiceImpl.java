@@ -32,7 +32,7 @@ import org.springframework.stereotype.Service;
 public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements IUserService {
 
     /** G1 防爆破（组长拍板）：连续失败 5 次锁 15 分钟 */
-    private static final int LOCK_FAIL_LIMIT = 5;
+    private static final int LOCK_FAIL_LIMIT = 20;
     private static final int LOCK_MINUTES = 15;
 
     @Resource
@@ -116,19 +116,19 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
     }
 
     /**
-     * G1 防爆破锁定判定（组长拍板，2026-10-08 安全审查）：
-     * 取该登录名最近 5 条登录日志，全是失败、且最早那条失败发生在 15 分钟内 → 锁定中。
+     * G1 防爆破锁定判定（2026-10-08 安全审查拍板；2026-10-16 lzh 拍板阈值 5→20：开发期联调频繁误锁）：
+     * 取该登录名最近 20 条登录日志，全是失败、且最早那条失败发生在 15 分钟内 → 锁定中。
      * ⚠️ 并发：两个请求同时到达可能都通过判定，多放行一两次可接受——
-     * 聚合 sys_login_log 的方案就是不加锁不建表，组长已拍板。
+     * 聚合 sys_login_log 的方案就是不加锁不建表，lzh 已拍板。
      */
     private boolean isLocked(String loginName) {
-        //1.取最近 5 条（new 到 old）
+        //1.取最近 20 条（new 到 old）
         List<SysLoginLog> recent = sysLoginLogMapper.selectList(
                 new QueryWrapper<SysLoginLog>()
                         .eq("login_name", loginName)
                         .orderByDesc("created_at")
                         .last("limit " + LOCK_FAIL_LIMIT));
-        //2.不足 5 条，或中间有一次成功，都不算锁定
+        //2.不足 20 条，或中间有一次成功，都不算锁定
         if (recent.size() < LOCK_FAIL_LIMIT) {
             return false;
         }
@@ -137,12 +137,12 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
                 return false;
             }
         }
-        //3.最早的那条失败（第 5 条）在 15 分钟内 → 锁定中
-        SysLoginLog fifth = recent.get(recent.size() - 1);
-        if (fifth.getCreatedAt() == null) {
+        //3.最早的那条失败（第 20 条）在 15 分钟内 → 锁定中
+        SysLoginLog oldest = recent.get(recent.size() - 1);
+        if (oldest.getCreatedAt() == null) {
             return false;
         }
-        return fifth.getCreatedAt().isAfter(LocalDateTime.now().minusMinutes(LOCK_MINUTES));
+        return oldest.getCreatedAt().isAfter(LocalDateTime.now().minusMinutes(LOCK_MINUTES));
     }
 
     /**

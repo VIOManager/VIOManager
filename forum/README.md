@@ -1,7 +1,7 @@
 # VIOManager 团队论坛（forum/）
 
 > 独立站：社区三模块（团队论坛 / 技术交流 / 知识库）2026-10-08 拍板迁出主站，本工程是其前端
-> 视觉：图纸档案家族（与主站 front/ 同源令牌）；设计稿见 `.agentdocs/design-preview/forum-site/`
+> 视觉：新粗野双主题「图纸白 / 深空黑」（2026-10-15 重涂，与主站 front/ 同源 --vio2-* 令牌，html[data-theme] 切换）；设计稿见 `.agentdocs/design-preview/2026-10-15-forum-redesign/`
 
 ## 环境
 
