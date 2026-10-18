@@ -11,7 +11,7 @@ const visible = defineModel<boolean>({ required: true })
 const props = defineProps<{ semester: Semester | null }>()
 const emit = defineEmits<{ saved: [] }>()
 
-const form = reactive({ name: '', startDate: '', endDate: '', weekCount: 16 })
+const form = reactive({ name: '', startDate: '', endDate: '', totalWeeks: 16 })
 const submitting = ref(false)
 
 watch(visible, (v) => {
@@ -20,12 +20,12 @@ watch(visible, (v) => {
     form.name = props.semester.name
     form.startDate = props.semester.startDate
     form.endDate = props.semester.endDate
-    form.weekCount = props.semester.weekCount
+    form.totalWeeks = props.semester.totalWeeks
   } else {
     form.name = ''
     form.startDate = ''
     form.endDate = ''
-    form.weekCount = 16
+    form.totalWeeks = 16
   }
 })
 
@@ -59,7 +59,7 @@ async function onSubmit() {
       <el-form-item label="学期名称" required><el-input v-model="form.name" placeholder="如：2027春季学期" /></el-form-item>
       <el-form-item label="开始日期" required><el-date-picker v-model="form.startDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
       <el-form-item label="结束日期" required><el-date-picker v-model="form.endDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item>
-      <el-form-item label="教学周数"><el-input v-model.number="form.weekCount" type="number" /></el-form-item>
+      <el-form-item label="教学周数"><el-input v-model.number="form.totalWeeks" type="number" /></el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="visible = false">取消</el-button>

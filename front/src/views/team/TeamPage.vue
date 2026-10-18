@@ -4,14 +4,19 @@
  * 列表含材料状态与齐全率；行点击进详情抽屉（成员生命周期操作在抽屉内）
  * 学生端为 /my/team（MyTeamPage），本页仅管理端
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { apiTeams } from '@/api/team'
 import type { TeamListItem } from '@/api/team'
 import { apiContests } from '@/api/contest'
 import type { ContestListItem } from '@/api/contest'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import TeamDetailDrawer from './TeamDetailDrawer.vue'
 
 const list = ref<TeamListItem[]>([])
+/** 本地滚动分页：TE01 返回全量数组，前端切片显示（每批 20 条） */
+const loadedCount = ref(20)
+const visible = computed(() => list.value.slice(0, loadedCount.value))
+const noMore = computed(() => loadedCount.value >= list.value.length)
 const contests = ref<ContestListItem[]>([])
 const loading = ref(false)
 const contestFilter = ref('')
@@ -24,9 +29,16 @@ async function load() {
   loading.value = true
   try {
     list.value = await apiTeams({ contestId: contestFilter.value || undefined, keyword: keyword.value || undefined })
+    loadedCount.value = 20
   } finally {
     loading.value = false
   }
+}
+
+/** 滚动到底扩大切片（ScrollLoader 的 reach 回调） */
+function loadMore() {
+  if (loading.value || noMore.value) return
+  loadedCount.value += 20
 }
 
 function openDetail(id: string) {
@@ -65,7 +77,7 @@ onMounted(async () => {
           <tr><th>队名</th><th>项目名</th><th>比赛 / 赛道</th><th>队长</th><th class="num">成员</th><th class="num">指导教师</th><th>材料状态</th><th class="num">齐全率</th><th style="width: 60px">操作</th></tr>
         </thead>
         <tbody>
-          <tr v-for="t in list" :key="t.id" class="linkrow" @click="openDetail(t.id)">
+          <tr v-for="t in visible" :key="t.id" class="linkrow" @click="openDetail(t.id)">
             <td style="color: var(--vio-ink); font-weight: 600">{{ t.name }}</td>
             <td>{{ t.projectName }}</td>
             <td class="fs" style="font-size: 12px">{{ t.contestName }}<template v-if="t.trackName"> · {{ t.trackName }}</template></td>
@@ -79,6 +91,7 @@ onMounted(async () => {
         </tbody>
       </table>
       <p v-if="!loading && list.length === 0" class="empty-note">暂无赛队</p>
+      <ScrollLoader :loading="loading" :no-more="noMore" :loaded="visible.length" :total="list.length" @reach="loadMore" />
     </div>
 
     <TeamDetailDrawer v-model="drawerVisible" :team-id="detailId" @changed="load" />

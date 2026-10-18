@@ -93,3 +93,33 @@ export function nextKbId(): string {
 export function nextCommentId(): string {
   return 'kc' + commentSeq++
 }
+
+/**
+ * 滚动分页演示数据（2026-10-16 lzh 拍板滚动分页）：
+ * 批量生成 23 条教程链接，知识库卡片流（本地切片模式）可演示滚到底自动加载
+ */
+const KB_SERIES = [
+  ['Python 办公自动化', '用 openpyxl 与 pandas 批量处理报表的系列教程。'],
+  ['STM32 进阶实战', '从串口通信到 FreeRTOS 任务调度的进阶路线。'],
+  ['三维建模基础', 'SolidWorks 从草图到装配体的入门系列。'],
+  ['视频剪辑速成', 'Premiere 剪辑节奏与调色入门课。'],
+  ['AIGC 工具指南', '提示词写法与常用模型选型对比。']
+]
+const KB_PUBLISHERS = ['李明', '陈志远', '李明轩']
+for (let i = 0; i < 23; i++) {
+  const s = KB_SERIES[i % KB_SERIES.length]
+  const no = Math.floor(i / KB_SERIES.length) + 1
+  kbItems.push({
+    id: 'kbg' + (i + 1),
+    title: s[0] + '（第 ' + no + ' 期）',
+    summary: s[1],
+    sourceType: 'LINK',
+    linkUrl: 'https://docs.vio.team/series-' + ((i % KB_SERIES.length) + 1) + '/' + no,
+    fileId: '',
+    fileName: '',
+    pinned: false,
+    viewCount: 20 + ((i * 13) % 400),
+    publisherName: KB_PUBLISHERS[i % 3],
+    createdAt: '2026-09-' + String((i % 28) + 1).padStart(2, '0') + ' 15:00:00'
+  })
+}

@@ -25,6 +25,14 @@ async function loadTree() {
   loading.value = true
   try {
     tree.value = await apiOrgTree()
+    // 补 parentId：后端 VO 自带；mock 嵌套数据没有，就地标注一遍供编辑弹窗回填当前上级
+    const mark = (nodes: OrgNode[], pid: string) => {
+      for (const n of nodes) {
+        if (!n.parentId) n.parentId = pid
+        mark(n.children, n.id)
+      }
+    }
+    mark(tree.value, '0')
     if (!selected.value && tree.value.length > 0) selected.value = tree.value[0]
   } finally {
     loading.value = false
@@ -113,7 +121,7 @@ onMounted(loadTree)
             <div><dt>层级</dt><dd class="mono">{{ selected.level }} 级</dd></div>
             <div><dt>排序号</dt><dd class="mono">{{ selected.sortNo }}</dd></div>
             <div><dt>子组织数</dt><dd class="mono">{{ selected.children.length }}</dd></div>
-            <div><dt>状态</dt><dd><span class="stamp ok">{{ selected.status === 'ENABLED' ? '启用' : '停用' }}</span></dd></div>
+            <div><dt>状态</dt><dd><span class="stamp ok">{{ selected.status === 1 ? '启用' : '停用' }}</span></dd></div>
           </dl>
           <div class="ops">
             <button class="btn-ink" @click="openCreate">新建子组织</button>

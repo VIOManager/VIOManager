@@ -117,11 +117,11 @@ async function loadSemester() {
     for (const s of list) {
       if (s.status !== 'ACTIVE') continue
       semName.value = s.name
-      semWeeks.value = s.weekCount
+      semWeeks.value = s.totalWeeks
       const days = Math.floor((Date.now() - new Date(s.startDate + 'T00:00:00').getTime()) / 86400000)
-      const w = Math.min(s.weekCount, Math.max(1, Math.floor(days / 7) + 1))
+      const w = Math.min(s.totalWeeks, Math.max(1, Math.floor(days / 7) + 1))
       semWeek.value = w
-      semPct.value = Math.round((w / s.weekCount) * 1000) / 10
+      semPct.value = Math.round((w / s.totalWeeks) * 1000) / 10
       return
     }
   } catch {

@@ -45,7 +45,9 @@ export interface KbComment {
 }
 
 export async function apiKbItems(q?: { keyword?: string }): Promise<KbItem[]> {
-  return get('/api/kb/docs', (q ?? {}) as Record<string, unknown>)
+  // silent：vio-kb(8091) 没启动时是网络层失败（无响应），统一"网络异常"toast 会刷屏；
+  // 静默后由 KbPage 自行兜底——网络失败显示"服务未启动"横幅，业务码错误照常提示
+  return get('/api/kb/docs', (q ?? {}) as Record<string, unknown>, { silent: true })
 }
 
 /** KB03 详情（浏览量 +1，含 favorited） */

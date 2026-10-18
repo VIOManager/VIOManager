@@ -1,7 +1,6 @@
 package com.viomanager.dict.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.exception.BizException;
@@ -15,7 +14,6 @@ import com.viomanager.dict.vo.DictItemVO;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 /**
@@ -43,15 +41,12 @@ public class DictServiceImpl implements IDictService {
     /** D02 用户补充：值在字典内唯一（含未审核与已驳回，防止换个马甲重复提交） */
     @Override
     public Long createSkillItem(String dictCode, DictItemCreateDTO dto) {
-        Long dup = sysDictItemMapper.selectCount(new QueryWrapper<SysDictItem>()
-                .eq("dict_code", dictCode).eq("item_value", dto.getItemValue()).eq("deleted", 0));
-        if (dup != null && dup > 0) {
+        //查重走声明了 @DataScope(ALL) 的 mapper 方法——D02 登录即可提交，学生不能被默认拒绝拦下
+        if (sysDictItemMapper.countByValue(dictCode, dto.getItemValue()) > 0) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "该技能值已存在（含待审核与已驳回项）");
         }
         //1.排序号取当前最大+1，新补充项排在预设项之后
-        Integer maxSort = sysDictItemMapper.selectObjs(new QueryWrapper<SysDictItem>()
-                        .select("MAX(sort_no)").eq("dict_code", dictCode).eq("deleted", 0))
-                .stream().filter(Objects::nonNull).map(o -> ((Number) o).intValue()).findFirst().orElse(0);
+        int maxSort = sysDictItemMapper.maxSortNo(dictCode);
         //2.落库：来源用户补充、待审核、启用
         SysDictItem item = new SysDictItem();
         item.setDictCode(dictCode);

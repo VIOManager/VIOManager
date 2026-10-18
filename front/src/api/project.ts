@@ -187,8 +187,9 @@ export function apiProjectTeams(id: string): Promise<ProjectTeamRef[]> {
   return get('/api/projects/' + id + '/teams')
 }
 
+/** PR13 列表；项目模块后端未实现期间由 TeamProjectPanel 静默降级（2026-10-16），故走 silent 不弹错 */
 export function apiTeamProjects(teamId: string): Promise<TeamProjectItem[]> {
-  return get('/api/teams/' + teamId + '/projects')
+  return get('/api/teams/' + teamId + '/projects', undefined, { silent: true })
 }
 
 /** PR13 队长挂载（同学期 7008、重复 7007；挂载时回溯补建未同步节点任务） */
@@ -201,9 +202,9 @@ export function apiDetachProject(teamId: string, projectId: string): Promise<nul
   return del('/api/teams/' + teamId + '/projects/' + projectId)
 }
 
-/** PR15 可挂载项目池（挂载选择器） */
+/** PR15 可挂载项目池（挂载选择器）；同上静默降级 */
 export function apiAttachableProjects(contestId?: string): Promise<ProjectItem[]> {
-  return get('/api/projects/attachable', contestId ? { contestId } : {})
+  return get('/api/projects/attachable', contestId ? { contestId } : {}, { silent: true })
 }
 
 // ── PR16–PR20 比赛时间节点 ──
