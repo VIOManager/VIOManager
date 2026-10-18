@@ -92,6 +92,14 @@ class MilestoneTest extends PmTestSupport {
                 .getContentAsString();
     }
 
+    private String deleteNode(String token, long nodeId) throws Exception {
+        return mockMvc.perform(withToken(delete("/api/milestones/" + nodeId), token))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
     /** 提审后查 MILESTONE_APPROVE 单 ID（真实审批链路） */
     private long approvalIdOf(long nodeId) {
         return jdbcTemplate.queryForObject(
@@ -175,13 +183,15 @@ class MilestoneTest extends PmTestSupport {
     }
 
     @Test
-    void profileLessSuperAdminCannotSubmitButOthersCan() throws Exception {
-        //无档案超管可维护节点（建/删不需要 applicant），但提审落审批单必须落到具体人员 → 7014（此前误报 1001）
-        long id = createNode(superToken, "超管维护节点", "OTHER");
-        assertEquals(7014, (int) JsonPath.read(submit(superToken, id), "$.code"));
-        //节点停留 DRAFT（状态转移与审批单同事务回滚）
+    void profileLessAdminCannotSubmitOthersDraft() throws Exception {
+        //超管创建即 APPROVED（无草稿可提审，见 superAdminCreateDirectlyApprovedAndSyncs）；
+        //7014 只在"提交草稿"时可达——审批单 applicant_id 表结构 NOT NULL，无档案账号落不了单
+        long id = createNode(deptSoftToken, "部门管理员草稿", "OTHER");
         assertEquals("DRAFT", nodeStatus(id));
-        //无档案部门管理员同理（dept_mech 未绑 member，且比赛在其子树内才走到 applicant 判定——用子树内比赛验证）
+        //无档案超管提别人的草稿 → 7014（此前误报 1001，2026-10-16 拆出）
+        assertEquals(7014, (int) JsonPath.read(submit(superToken, id), "$.code"));
+        assertEquals("DRAFT", nodeStatus(id));
+        //无档案部门管理员提自己的草稿同理（dept_mech 未绑 member；子树内比赛才走到 applicant 判定）
         jdbcTemplate.update("INSERT INTO contest (id, name, semester_id, org_id, status) "
                 + "VALUES (?, '机械比赛', ?, ?, 'RUNNING')", CONTEST + 1, SEMESTER, ORG_MECH);
         String mechBody = mockMvc.perform(withToken(
@@ -196,9 +206,43 @@ class MilestoneTest extends PmTestSupport {
         assertEquals(0, (int) JsonPath.read(mechBody, "$.code"), mechBody);
         long mechNodeId = Long.parseLong(JsonPath.read(mechBody, "$.data.id"));
         assertEquals(7014, (int) JsonPath.read(submit(deptMechToken, mechNodeId), "$.code"));
-        //绑定档案的管理员提交同一节点 → 0（对照组：能力与档案绑定相关，与角色无关）
+        //有档案管理员提交 → 0（对照：能力与档案绑定相关，与角色无关）
         assertEquals(0, (int) JsonPath.read(submit(deptSoftToken, id), "$.code"));
         assertEquals("PENDING", nodeStatus(id));
+        //PENDING 恒不可删（审批单还挂着 bizId 引用）：超管也不行
+        assertEquals(7009, (int) JsonPath.read(deleteNode(superToken, id), "$.code"));
+    }
+
+    @Test
+    void superAdminCreateDirectlyApprovedAndSyncs() throws Exception {
+        //2026-10-16 组长拍板：超管创建即生效——免审批流直接 APPROVED，任务同步与审批回调同一套 syncOnApproved
+        long id = createNode(superToken, "超管直生效节点", "WORK_SUBMIT");
+        assertEquals("APPROVED", nodeStatus(id));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT synced FROM milestone_node WHERE id = ?", Integer.class, id));
+        //setUp 已把项目挂到该比赛：即时生成任务
+        assertEquals(1, taskCount(projectId, id));
+        //审批人=超管账号（approved_by 落 sys_user.id，与审批回调 operator_id 同口径）
+        Long superUserId = jdbcTemplate.queryForObject(
+                "SELECT id FROM sys_user WHERE login_name = 'pm4_super'", Long.class);
+        assertEquals(superUserId, jdbcTemplate.queryForObject(
+                "SELECT approved_by FROM milestone_node WHERE id = ?", Long.class, id));
+        //管理端列表回显审批人姓名（fillApproverNames 批量解析）
+        String realName = jdbcTemplate.queryForObject(
+                "SELECT real_name FROM sys_user WHERE login_name = 'pm4_super'", String.class);
+        String mgrList = mockMvc.perform(withToken(
+                        get("/api/contests/" + CONTEST + "/milestones"), superToken))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(
+                mgrList.contains("\"approvedBy\":\"" + realName + "\""),
+                "审批人姓名应回显: " + mgrList);
+        //修正路径：APPROVED 节点部门管理员删被 7009 拦；超管可删（建错了删了重建，已同步任务不回收）
+        assertEquals(7009, (int) JsonPath.read(deleteNode(deptSoftToken, id), "$.code"));
+        assertEquals(1, taskCount(projectId, id), "删除节点不回收已同步任务");
+        assertEquals(0, (int) JsonPath.read(deleteNode(superToken, id), "$.code"));
     }
 
     @Test

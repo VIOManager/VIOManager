@@ -11,6 +11,7 @@ import { meAsMember } from './member'
 import { members } from './member-data'
 import { usedIdemKeys, nowText, pushApproval } from './approval-data'
 import { findProject } from './project'
+import { applyMilestoneApproved } from './project-approval'
 import { milestones, projectTasks } from './project-data'
 import type { MockMilestone, MockProjectTask } from './project-data'
 
@@ -67,6 +68,9 @@ registerMock({
       status: 'DRAFT', rejectReason: '', approvedAt: '', approvedBy: '', createdAt: nowText(), synced: false
     }
     milestones.push(m)
+    // 超管创建即生效（2026-10-16 拍板，与真后端同口径）：免审批流直接 APPROVED + 同步任务
+    const u = findMockUserByToken(ctx.token)
+    if (u && u.role === 'SUPER_ADMIN') applyMilestoneApproved(m, u.realName)
     return ok({ id: m.id })
   }
 })
@@ -94,7 +98,12 @@ registerMock({
     if (!adminOnly(ctx.token)) return fail(1003, '仅管理员可维护时间节点')
     const m = findMilestone(ctx.params.id)
     if (!m) return fail(7001, '节点不存在')
-    if (m.status !== 'DRAFT') return fail(7009, '时间节点当前状态不允许该操作')
+    // 与真后端同口径：PENDING 恒不可删（审批单引用）；DRAFT 可删；APPROVED/REJECTED 仅超管（直生效修正路径）
+    const u = findMockUserByToken(ctx.token)
+    const isSuper = !!u && u.role === 'SUPER_ADMIN'
+    if (m.status === 'PENDING' || (m.status !== 'DRAFT' && !isSuper)) {
+      return fail(7009, '时间节点当前状态不允许该操作')
+    }
     milestones.splice(milestones.indexOf(m), 1)
     return ok(null)
   }

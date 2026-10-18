@@ -36,6 +36,9 @@ public class MilestoneVO {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime approvedAt;
 
+    /** 审批人姓名（仅管理端列表回填；学生视图只回 APPROVED 基础字段） */
+    private String approvedBy;
+
     /** 驳回原因（仅管理员视图回显，REJECTED 时有值） */
     private String rejectReason;
 }

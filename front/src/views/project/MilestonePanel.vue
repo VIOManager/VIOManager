@@ -1,17 +1,22 @@
 <script setup lang="ts">
 /**
  * 比赛时间节点面板（PR16–PR20）
- * 管理员维护比赛关键日期：创建草稿 → 提交审核（开 MILESTONE_APPROVE 审批单，审批中心可见）
- * → 通过后自动给挂载该比赛的项目生成任务（审批回调，mock 同构模拟）
- * 仅 DRAFT/REJECTED 可编辑，仅 DRAFT 可删（7009）
+ * 管理员维护比赛关键日期：部门管理员 草稿 → 提交审核（MILESTONE_APPROVE 单，审批中心可见）
+ * → 超管批后自动给挂载该比赛的项目生成任务（审批回调，mock 同构模拟）
+ * 超管创建即生效（2026-10-16 拍板：审批人本就是超管，免审直接 APPROVED+同步任务）
+ * 仅 DRAFT/REJECTED 可编辑；DRAFT 可删，超管例外可删非 PENDING（直生效节点修正路径，7009 兜底）
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiContests } from '@/api/contest'
 import type { ContestListItem } from '@/api/contest'
 import { apiCreateMilestone, apiDeleteMilestone, apiMilestones, apiSubmitMilestone } from '@/api/project'
 import type { Milestone } from '@/api/project'
+import { useUserStore } from '@/stores/user'
 import { MILESTONE_STATUS_LABEL, MILESTONE_TYPE_LABEL } from '@/config/labels'
+
+const userStore = useUserStore()
+const isSuper = computed(() => userStore.role === 'SUPER_ADMIN')
 
 const contests = ref<ContestListItem[]>([])
 const contestId = ref('')
@@ -48,7 +53,10 @@ async function submit() {
     let nodeTime = form.value.nodeTime.replace('T', ' ')
     if (nodeTime.length === 16) nodeTime += ':00'
     await apiCreateMilestone(contestId.value, { ...form.value, nodeTime })
-    ElMessage.success('节点已创建（草稿），提交审核后生效')
+    // 超管创建即生效（免审直接 APPROVED+同步任务）；部门管理员仍是草稿待提审
+    ElMessage.success(isSuper.value
+      ? '节点已创建并直接生效（超管免审，已同步任务到挂载项目）'
+      : '节点已创建（草稿），提交审核后生效')
     formVisible.value = false
     form.value = { nodeType: 'OTHER', name: '', nodeTime: '', description: '' }
     await load()
@@ -69,13 +77,20 @@ async function onSubmit(m: Milestone) {
 }
 
 async function onDelete(m: Milestone) {
+  const tip = m.status === 'DRAFT' ? '删除草稿节点' : '删除已生效节点「' + m.name + '」？（仅超管可删，已同步的任务不回收）'
   try {
-    await ElMessageBox.confirm('删除草稿节点「' + m.name + '」？', '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(tip, '删除确认', { type: 'warning' })
   } catch {
     return
   }
   await apiDeleteMilestone(m.id)
+  ElMessage.success('已删除')
   await load()
+}
+
+/** 删除按钮显隐：DRAFT 人人可删（管理端）；超管例外可删 APPROVED/REJECTED（直生效修正路径），PENDING 恒不可删 */
+function canDelete(m: Milestone): boolean {
+  return m.status === 'DRAFT' || (isSuper.value && m.status !== 'PENDING')
 }
 
 function stampClass(status: string): string {
@@ -120,7 +135,7 @@ onMounted(async () => {
             <td style="font-size: 12px">{{ m.status === 'REJECTED' ? m.rejectReason : m.approvedBy || '—' }}</td>
             <td>
               <button v-if="m.status === 'DRAFT' || m.status === 'REJECTED'" class="btn-act" @click="onSubmit(m)">提交审核</button>
-              <button v-if="m.status === 'DRAFT'" class="btn-act" @click="onDelete(m)">删除</button>
+              <button v-if="canDelete(m)" class="btn-act" @click="onDelete(m)">删除</button>
             </td>
           </tr>
         </tbody>

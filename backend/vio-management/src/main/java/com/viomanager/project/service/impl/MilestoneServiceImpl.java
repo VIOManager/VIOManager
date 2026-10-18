@@ -16,11 +16,13 @@ import com.viomanager.project.dto.MilestoneUpdateDTO;
 import com.viomanager.project.entity.MilestoneNode;
 import com.viomanager.project.mapper.MilestoneNodeMapper;
 import com.viomanager.project.service.MilestoneService;
+import com.viomanager.project.support.MilestoneSyncSupport;
 import com.viomanager.project.vo.MilestoneVO;
 import jakarta.annotation.Resource;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,7 +33,9 @@ import org.springframework.util.StringUtils;
 /**
  * 时间节点实现（PR16–PR20）。
  * 状态机（清单 §3.4）：DRAFT → PENDING → APPROVED / REJECTED；REJECTED → PENDING 可重新提交；
- * 编辑仅 DRAFT/REJECTED（7009）、删除仅 DRAFT（7009）——已进入审批流的节点内容冻结。
+ * 编辑仅 DRAFT/REJECTED（7009）、删除仅 DRAFT（7009，超管例外可删非 PENDING——直生效节点的修正路径）。
+ * 超管创建即生效（2026-10-16 组长拍板）：MILESTONE_APPROVE 审批人本就是超管，自审是走过场——
+ * 跳过审批流直接 APPROVED + 同步任务；部门管理员仍走 草稿→提审→超管批（为批量建任务副作用把关）。
  * 管理范围：超管全部；部门管理员限本子树比赛（contest.org_id 在其子树内）。
  */
 @Slf4j
@@ -55,6 +59,9 @@ public class MilestoneServiceImpl implements MilestoneService {
 
     @Resource
     private com.viomanager.project.support.PmQueryCache queryCache;
+
+    @Resource
+    private MilestoneSyncSupport syncSupport;
 
     @Resource
     private JdbcTemplate jdbcTemplate;
@@ -81,9 +88,31 @@ public class MilestoneServiceImpl implements MilestoneService {
             }
             qw.in("contest_id", subtree);
         }
-        List<MilestoneVO> vos = milestoneMapper.selectList(qw).stream()
-                .map(this::toVO).toList();
+        List<MilestoneNode> nodes = milestoneMapper.selectList(qw);
+        List<MilestoneVO> vos = nodes.stream().map(this::toVO).toList();
+        fillApproverNames(nodes, vos);
         return Result.ok(vos);
+    }
+
+    /** 审批人 id → 姓名批量解析（仅管理端列表；学生视图只回 APPROVED 基础字段不带审核信息） */
+    private void fillApproverNames(List<MilestoneNode> nodes, List<MilestoneVO> vos) {
+        List<Long> ids = nodes.stream().map(MilestoneNode::getApprovedBy)
+                .filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return;
+        }
+        Map<Long, String> names = new HashMap<>();
+        String inClause = String.join(",", ids.stream().map(String::valueOf).toList());
+        for (Map<String, Object> row : jdbcTemplate.queryForList(
+                "SELECT id, real_name FROM sys_user WHERE id IN (" + inClause + ") AND deleted = 0")) {
+            names.put(longOf(row.get("id")), (String) row.get("real_name"));
+        }
+        for (int i = 0; i < nodes.size(); i++) {
+            Long approverId = nodes.get(i).getApprovedBy();
+            if (approverId != null && names.containsKey(approverId)) {
+                vos.get(i).setApprovedBy(names.get(approverId));
+            }
+        }
     }
 
     /** 学生视图：APPROVED 全量（缓存）+ nodeType 内存筛选 */
@@ -139,7 +168,23 @@ public class MilestoneServiceImpl implements MilestoneService {
         node.setStatus("DRAFT");
         node.setSynced(0);
         milestoneMapper.insert(node);
-        return Result.ok(toVO(node));
+        //超管创建即生效：跳过审批流直接 APPROVED + 同步任务（与审批回调同一套 syncOnApproved，零复制）；
+        //同事务——同步失败连创建一起回滚，不会出现"节点已建但任务没跟上"的中间态
+        boolean directEffect = "SUPER_ADMIN".equals(user.getRole());
+        if (directEffect) {
+            jdbcTemplate.update("UPDATE milestone_node SET status = 'APPROVED', approved_at = NOW(), "
+                            + "approved_by = ?, updated_at = updated_at WHERE id = ?",
+                    user.getUserId(), node.getId());
+            node.setStatus("APPROVED");
+            syncSupport.syncOnApproved(node.getId());
+            queryCache.evict("milestone:approved:" + contestId);
+        }
+        MilestoneVO vo = toVO(node);
+        if (directEffect) {
+            //VO 补审批人姓名（列表走 fillApproverNames，创建响应单条直接给）
+            vo.setApprovedBy(user.getRealName());
+        }
+        return Result.ok(vo);
     }
 
     @Override
@@ -173,8 +218,11 @@ public class MilestoneServiceImpl implements MilestoneService {
     public Result<Void> delete(Long nodeId) {
         CurrentUser user = requireManager();
         MilestoneNode node = requireNodeInRange(user, nodeId);
-        //仅 DRAFT 可删（7009）：已进审批流的节点动不得（审批单还挂着 bizId 引用）
-        if (!"DRAFT".equals(node.getStatus())) {
+        //PENDING 恒不可删（7009）：审批单还挂着 bizId 引用，删节点会孤儿化待办；
+        //其余状态：DRAFT 可删（原口径）；超管例外可删 APPROVED/REJECTED——
+        //2026-10-16 起超管创建即生效（无审批流），建错了要有修正路径（删了重建；已同步任务不回收，与 PR24 同步任务可删口径一致）
+        if ("PENDING".equals(node.getStatus())
+                || (!"DRAFT".equals(node.getStatus()) && !"SUPER_ADMIN".equals(user.getRole()))) {
             throw new BizException(ProjectErrorCode.MILESTONE_STATE_NOT_ALLOWED);
         }
         milestoneMapper.deleteById(nodeId);
