@@ -122,11 +122,14 @@ export function apiTaskOverview(taskId: string): Promise<TeamMaterialRow[]> {
 export function apiMyMaterials(): Promise<MyTeamMaterial[]> {
   return get('/api/materials/my')
 }
-/** 单条提交/覆盖上传（后端 MS02：覆盖式提交天然幂等不要求幂等头）：5002 过截止 / 5003 非在队成员 / 5004 格式不符 */
+/** 单条提交/覆盖上传（后端 MS02）：5002 过截止 / 5003 非在队成员 / 5004 格式不符
+ *  ⚠️ fileSize 必传（字节）：后端入参校验正数，最终以文件表权威值覆盖（2026-10-19 修——
+ *  此前前端漏发，提交恒被 1001"fileSize 必须为正数"拒掉，行状态永远停在未交） */
 export function apiSubmitMaterial(requirementId: string, body: {
   teamId: string
   fileId: string
   fileName: string
+  fileSize: number
 }): Promise<{ version: number }> {
   return post('/api/materials/requirements/' + requirementId + '/submit', body)
 }

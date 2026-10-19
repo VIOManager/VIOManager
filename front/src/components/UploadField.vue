@@ -25,7 +25,7 @@ const props = withDefaults(
   { accept: '', tip: '', maxMb: 10, buttonText: '选择文件上传' }
 )
 
-const emit = defineEmits<{ uploaded: [file: UploadResp] }>()
+const emit = defineEmits<{ uploaded: [file: UploadResp & { fileSize: number }] }>()
 
 const inputRef = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
@@ -70,7 +70,9 @@ async function doUpload() {
   try {
     const resp = await apiUploadFile(currentFile, idemKey, props.bizType)
     result.value = resp
-    emit('uploaded', resp)
+    // 附带本地文件字节数：上传接口不回 fileSize，而材料提交 MS02 契约 body 必须带
+    // （后端最终以文件表权威值覆盖，这里只需给一个真实正数过校验）
+    emit('uploaded', { ...resp, fileSize: currentFile.size })
   } catch {
     // 1010 等提示已由 http 拦截器弹出；标记失败态，允许重选
     failed.value = true

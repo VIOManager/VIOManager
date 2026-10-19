@@ -34,9 +34,9 @@ function daysLeft(deadline: string): number {
 function acceptOf(formats: string[]): string {
   return formats.map((f) => '.' + f).join(',')
 }
-/** 单条上传：文件服务上传完成（拿到 fileId）后再调提交接口 */
-async function onSubmitOne(teamId: string, requirementId: string, resp: UploadResp) {
-  const r = await apiSubmitMaterial(requirementId, { teamId, fileId: resp.fileId, fileName: resp.originalName })
+/** 单条上传：文件服务上传完成（拿到 fileId）后再调提交接口；fileSize 随上传事件透传（MS02 必填） */
+async function onSubmitOne(teamId: string, requirementId: string, resp: UploadResp & { fileSize: number }) {
+  const r = await apiSubmitMaterial(requirementId, { teamId, fileId: resp.fileId, fileName: resp.originalName, fileSize: resp.fileSize })
   ElMessage.success('已提交，当前版本 v' + r.version + (r.version > 1 ? '（旧版本已失效）' : ''))
   await load()
 }
