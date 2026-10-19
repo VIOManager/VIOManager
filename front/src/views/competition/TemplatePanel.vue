@@ -27,18 +27,21 @@ async function load() {
   }
 }
 
+/** §0 六键默认值：新建预填；编辑无规则模板时兜底（种子/接口创建的模板 default_rules 可为 null） */
+const DEFAULT_RULES: RulesMap = { memberLimit: 3, prefillLimit: 1, allowRepeatJoin: false, crossTeamLeader: false, maxAdvisorCount: 2, crossTrackLimit: true }
+
 function openCreate() {
   editing.value = null
   Object.assign(form, {
     name: '', code: '', category: '', description: '',
-    defaultRules: { memberLimit: 3, prefillLimit: 1, allowRepeatJoin: false, crossTeamLeader: false, maxAdvisorCount: 2, crossTrackLimit: true }
+    defaultRules: { ...DEFAULT_RULES }
   })
   dialogVisible.value = true
 }
 
 function openEdit(t: ContestTemplate) {
   editing.value = t
-  Object.assign(form, { name: t.name, code: t.code, category: t.category, description: t.description, defaultRules: { ...t.defaultRules } })
+  Object.assign(form, { name: t.name, code: t.code, category: t.category, description: t.description, defaultRules: t.defaultRules ? { ...t.defaultRules } : { ...DEFAULT_RULES } })
   dialogVisible.value = true
 }
 
@@ -97,9 +100,14 @@ onMounted(load)
           <td style="color: var(--vio-ink); font-weight: 600">{{ t.name }}</td>
           <td class="mono">{{ t.code }}</td>
           <td>{{ t.category }}</td>
+          <!-- defaultRules 可为 null（种子数据未插该列）：裸取属性会抛 TypeError 中断渲染，
+               整个面板变"僵尸"——列表空、无空态提示、新建/编辑点了没反应（2026-10-19 修复） -->
           <td class="fs" style="font-size: 12px">
-            {{ RULE_KEY_LABEL.memberLimit }} {{ ruleValueText(t.defaultRules.memberLimit ?? '—') }} ·
-            {{ RULE_KEY_LABEL.allowRepeatJoin }} {{ ruleValueText(t.defaultRules.allowRepeatJoin ?? false) }}
+            <template v-if="t.defaultRules">
+              {{ RULE_KEY_LABEL.memberLimit }} {{ ruleValueText(t.defaultRules.memberLimit ?? '—') }} ·
+              {{ RULE_KEY_LABEL.allowRepeatJoin }} {{ ruleValueText(t.defaultRules.allowRepeatJoin ?? false) }}
+            </template>
+            <span v-else>—</span>
           </td>
           <td class="num mono">{{ t.refCount }}</td>
           <td class="nw">
