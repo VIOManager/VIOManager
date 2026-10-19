@@ -164,7 +164,10 @@ select.input-line { padding-right: 26px; }
   border: 2px solid var(--vio2-bd);
   background: var(--vio2-panel);
   box-shadow: 3px 3px 0 var(--vio2-shadow);
-  padding: 0 16px;
+  /* !important 缘由：EP 有高优先级规则把首/末页签的单侧 padding 清零（:nth-child(2) 左、
+     :last-child 右，优先级 0,4,0 压不过），贴纸块页签的字会贴死色块一边不居中
+     （2026-10-19 材料页"队伍概览"实测定位：右 padding 被清 0，字贴右边） */
+  padding: 0 16px !important;
   margin-right: 8px;
   height: 34px;
   line-height: 30px;

@@ -158,9 +158,11 @@ onMounted(async () => {
                 <td class="num mono">{{ t.teamComplete }} / {{ t.teamTotal }}</td>
                 <td class="mono" style="font-size: 12px">{{ t.deadline }}</td>
                 <td>
+                  <!-- 行内操作统一 btn-act 小钮：此前混用 34px 大钮（编辑/删除），190px 操作列装不下
+                       三个按钮换行错位 + 高矮不齐（2026-10-19 lzh"比例崩了"反馈实测定位） -->
                   <button class="btn-act" @click="openReqs(t)">要求</button>
-                  <button class="btn-line" style="margin-left: 6px" @click="openTaskEdit(t)">编辑</button>
-                  <button class="btn-line" style="margin-left: 6px" @click="onDeleteTask(t)">删除</button>
+                  <button class="btn-act" style="margin-left: 6px" @click="openTaskEdit(t)">编辑</button>
+                  <button class="btn-act danger" style="margin-left: 6px" @click="onDeleteTask(t)">删除</button>
                 </td>
               </tr>
             </tbody>
@@ -189,9 +191,9 @@ onMounted(async () => {
                   <td class="fs">{{ r.namingRule || '—' }}</td>
                   <td class="num mono">{{ r.maxSizeMb }} MB</td>
                   <td>
-                    <button class="btn-line" @click="openReqEdit(r)">编辑</button>
-                    <button class="btn-line" style="margin-left: 6px" @click="onDeleteReq(r)">删除</button>
-                  </td>
+                  <button class="btn-act" @click="openReqEdit(r)">编辑</button>
+                  <button class="btn-act danger" style="margin-left: 6px" @click="onDeleteReq(r)">删除</button>
+                </td>
                 </tr>
               </tbody>
             </table>

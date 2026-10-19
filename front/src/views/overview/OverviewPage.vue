@@ -118,7 +118,12 @@ async function loadSemester() {
       if (s.status !== 'ACTIVE') continue
       semName.value = s.name
       semWeeks.value = s.totalWeeks
-      const days = Math.floor((Date.now() - new Date(s.startDate + 'T00:00:00').getTime()) / 86400000)
+      // startDate 可能为 null（种子学期没填起止日）或带时分秒（后端 Jackson 全局时间格式）——
+      // 统一截前 10 位日期解析；拿不到合法日期保持静态兜底周数，不把 NaN 写上刻度尺
+      const day = (s.startDate ?? '').slice(0, 10)
+      const start = new Date(day + 'T00:00:00').getTime()
+      if (!day || Number.isNaN(start)) return
+      const days = Math.floor((Date.now() - start) / 86400000)
       const w = Math.min(s.totalWeeks, Math.max(1, Math.floor(days / 7) + 1))
       semWeek.value = w
       semPct.value = Math.round((w / s.totalWeeks) * 1000) / 10
