@@ -120,9 +120,33 @@ export async function delIdem<T>(url: string, idempotencyKey: string): Promise<T
   return (await http.delete(url, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
 }
 
-/** 文件流下载（导出/打包）：blob 拉取后触发浏览器保存，文件名优先取响应头 */
+/** 文件流下载（导出/打包）：blob 拉取后触发浏览器保存，文件名优先取响应头。
+ *  ⚠️ 后端业务失败统一返回 HTTP 200 + {code,message} JSON（骨架 GlobalExceptionHandler 约定），
+ *  而 axios 只认状态码不会抛错 —— 若不判定，错误 JSON 会被当文件存成 xlsx/zip，用户打开即损坏文件。
+ *  故先看 content-type：是 JSON 就解析 message 提示并中断，不触发保存。 */
 export async function download(url: string, fallbackName: string): Promise<void> {
   const resp = (await http.get(url, { responseType: 'blob' })) as unknown as AxiosResponse<Blob>
+  const contentType = String(resp.headers?.['content-type'] ?? '')
+  if (contentType.includes('application/json')) {
+    let message = '下载失败'
+    let code = -1
+    try {
+      const body = JSON.parse(await (resp.data as Blob).text()) as Result
+      message = body?.message || message
+      code = body?.code ?? code
+    } catch {
+      // 解析失败用兜底文案，不把原始异常抛给用户
+    }
+    if (code === 1002) {
+      // 与拦截器口径一致：登录失效清 token 整页跳登录
+      sessionStorage.removeItem(TOKEN_KEY)
+      ElMessage.error(message || '登录已失效，请重新登录')
+      window.location.assign('/login')
+      return
+    }
+    ElMessage.error(message)
+    throw new BizError(code, message)
+  }
   const cd = String(resp.headers?.['content-disposition'] ?? '')
   const m = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(cd)
   const name = m ? decodeURIComponent(m[1].replace(/"/g, '')) : fallbackName
