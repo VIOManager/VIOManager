@@ -41,12 +41,12 @@ public class PerformanceSummaryController {
         return Result.ok(summaryService.summaries(semesterId, subOrgId, memberKeyword));
     }
 
-    /** PF10 导出 Excel（groupBy = MEMBER 按人 / ORG 按子组织，xlsx 流） */
+    /** PF10 导出 Excel（groupBy = MEMBER 按人 / ORG 按子组织，xlsx 流；semesterId 免参回退当前激活学期，与 PF09 同口径） */
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
     @AuditLog(bizType = "PERFORMANCE_EXPORT", label = "导出绩效汇总",
             summary = "'导出绩效：学期' + #semesterId + ' 分组' + #groupBy")
     @GetMapping("/export")
-    public void export(@RequestParam("semesterId") Long semesterId,
+    public void export(@RequestParam(value = "semesterId", required = false) Long semesterId,
                        @RequestParam(value = "subOrgId", required = false) Long subOrgId,
                        @RequestParam(value = "groupBy", defaultValue = "MEMBER") String groupBy,
                        HttpServletResponse response) {

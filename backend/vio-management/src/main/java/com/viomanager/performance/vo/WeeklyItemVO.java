@@ -27,6 +27,9 @@ public class WeeklyItemVO {
     /** 子组织名 */
     private String subOrgName;
 
+    /** 学期 ID（打分抽屉据此拉该学期的生效规则，与 PF07 校验口径一致） */
+    private Long semesterId;
+
     /** 周次 */
     private Integer weekNo;
 

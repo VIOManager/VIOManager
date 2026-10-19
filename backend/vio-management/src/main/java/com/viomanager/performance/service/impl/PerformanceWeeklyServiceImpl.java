@@ -196,6 +196,7 @@ public class PerformanceWeeklyServiceImpl implements PerformanceWeeklyService {
         vo.setMemberName(row.getMemberName());
         vo.setSubOrgId(row.getSubOrgId());
         vo.setSubOrgName(orgNames.getOrDefault(row.getSubOrgId(), "未知组织"));
+        vo.setSemesterId(row.getSemesterId());
         vo.setWeekNo(row.getWeekNo());
         vo.setStatus(row.getStatus());
         vo.setTotalScore(row.getTotalScore());
