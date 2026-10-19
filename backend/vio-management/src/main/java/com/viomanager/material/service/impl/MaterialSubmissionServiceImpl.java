@@ -113,9 +113,20 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
             throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "已过截止时间，禁止提交或覆盖");
         }
         //6.在册成员：队长或队员均可（team_member.status CONFIRMED / UNCONFIRMED 都算在队）→ 5003
+        //  ⚠️ 2026-10-19 组长拍板：部门管理员（DEPT_ADMIN）可代队伍提交材料，跳过在册校验；
+        //     超级管理员仍不代提交（越权面过大），须用队员账号操作。
+        //     代提交人记在 submitted_by / submitted_by_name，审计可追溯。
+        //  ⚠️ submitted_by 列 NOT NULL（V1 DDL）：任何提交人都必须有人员档案。
+        //     纯管理账号（sys_user.member_id 为 NULL）先挡在这里，避免把 null 写进 NOT NULL 列
+        //     触发 SQL 异常变成"系统繁忙"，也避免报错文案含糊。
+        // TODO(联调) 部门管理员目前不限组织子树（组长口径"能交就行"）；如需按部门收敛，在此加 org 子树判定。
         CurrentUser user = UserHolder.getUser();
         Long memberId = memberIdSupport.currentMemberId(user);
-        if (memberId == null || !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
+        if (memberId == null) {
+            throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER,
+                    "该账号未绑定人员档案，不能提交材料；请使用该队在册队员账号提交");
+        }
+        if (!isDeptAdmin(user) && !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
             throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER);
         }
         //7.文件归属：fileId 必须为当前用户上传，fileName / fileSize 以文件表权威值覆盖客户端自报
@@ -203,10 +214,15 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (task.getDeadline() != null && LocalDateTime.now().isAfter(task.getDeadline())) {
             throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "已过截止时间，禁止提交");
         }
-        //5.在册成员（队长或队员）→ 5003
+        //5.在册成员（队长或队员）→ 5003；部门管理员可代提交（同 MS02 第 6 步口径）。
+        //  submitted_by 列 NOT NULL → 无人员档案的纯管理账号先行拦截，避免 SQL 异常。
         CurrentUser user = UserHolder.getUser();
         Long memberId = memberIdSupport.currentMemberId(user);
-        if (memberId == null || !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
+        if (memberId == null) {
+            throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER,
+                    "该账号未绑定人员档案，不能提交材料；请使用该队在册队员账号提交");
+        }
+        if (!isDeptAdmin(user) && !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
             throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER);
         }
         //6.文件归属：fileId 必须为当前用户上传，fileName 以文件表权威值覆盖自报（zip 后缀判定用权威名）
@@ -221,6 +237,14 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
                 zipBatch.matchAndInsert(task, team, memberId, user.getRealName(), dto);
         completionService.recompute(dto.getTeamId());
         return Result.ok(vo);
+    }
+
+    /**
+     * 部门管理员判定（2026-10-19 组长拍板：部门管理员可代队伍提交材料，超级管理员不代提交）。
+     * 口径与各 Controller 的 @RequireRole 中 DEPT_ADMIN 取值一致。
+     */
+    private static boolean isDeptAdmin(CurrentUser user) {
+        return user != null && "DEPT_ADMIN".equals(user.getRole());
     }
 
     /** 从文件名提扩展名：小写、不含点；没有扩展名返回空串（与文件服务 FileServiceImpl 同款写法） */
