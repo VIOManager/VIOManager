@@ -17,7 +17,6 @@ import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
 import com.viomanager.material.support.MemberIdSupport;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
@@ -87,42 +86,26 @@ public class MaterialDownloadServiceImpl implements MaterialDownloadService {
         }
         //4.要求名 → 目录（批量查免 N+1）
         Map<Long, String> requirementNames = loadRequirementNames(submissions);
-        //5.先在内存里生成完整 zip：响应一旦开始写就无法再回写错误体（骨架业务异常是 HTTP 200 + JSON），
-        //  直接往 response.getOutputStream() 写会导致失败时客户端拿到"结构合法但缺文件"的 zip。
-        //  打包期的业务异常（1004 文件不存在 / 1000 存储不可用）在此阶段抛出，能正常回错误 JSON。
-        byte[] zipBytes = buildZip(teamId, submissions, requirementNames);
-        //6.成功生成后才写响应头与内容；此阶段失败只能记日志（状态码已不可改）
+        //5.zip 流式回写：entry = 要求名/文件名，重名追加序号；染毒文件跳过留痕
         try {
             response.setContentType("application/zip");
             String encodedName = URLEncoder.encode(team.getName() + "-材料打包.zip", StandardCharsets.UTF_8)
                     .replace("+", "%20");
             response.setHeader("Content-Disposition",
                     "attachment; filename=\"" + encodedName + "\"; filename*=UTF-8''" + encodedName);
-            response.setContentLength(zipBytes.length);
-            response.getOutputStream().write(zipBytes);
-            response.flushBuffer();
-        } catch (IOException e) {
-            log.error("全队材料打包写响应失败，teamId={}：{}", teamId, e.getMessage());
-        }
-    }
-
-    /** 在内存中组装 zip：entry = 要求名/文件名，重名追加序号；染毒文件跳过留痕 */
-    private byte[] buildZip(Long teamId, List<MaterialSubmission> submissions,
-                            Map<Long, String> requirementNames) {
-        Set<String> usedEntryNames = new HashSet<>();
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        try (ZipOutputStream zip = new ZipOutputStream(buffer)) {
-            for (MaterialSubmission submission : submissions) {
-                String entryName = uniqueEntryName(usedEntryNames,
-                        folderName(requirementNames.get(submission.getRequirementId()))
-                                + "/" + safeEntryFileName(submission.getFileName()));
-                writeEntry(zip, entryName, submission.getFileId());
+            Set<String> usedEntryNames = new HashSet<>();
+            try (ZipOutputStream zip = new ZipOutputStream(response.getOutputStream())) {
+                for (MaterialSubmission submission : submissions) {
+                    String entryName = uniqueEntryName(usedEntryNames,
+                            folderName(requirementNames.get(submission.getRequirementId()))
+                                    + "/" + submission.getFileName());
+                    writeEntry(zip, entryName, submission.getFileId());
+                }
             }
         } catch (IOException e) {
             log.error("全队材料打包失败，teamId={}：{}", teamId, e.getMessage());
             throw new BizException(CommonErrorCode.INTERNAL_ERROR, "材料打包失败");
         }
-        return buffer.toByteArray();
     }
 
     /** 下载权限：管理端放行；学生须为该队在册成员（与 MS02 同口径）→ 5009 */
@@ -171,32 +154,12 @@ public class MaterialDownloadServiceImpl implements MaterialDownloadService {
         }
     }
 
-    /** 要求名转 zip 目录名：去掉路径分隔符等非法字符与 ".."，空名兜底 */
+    /** 要求名转 zip 目录名：去掉路径分隔符等非法字符；空名兜底 */
     private String folderName(String requirementName) {
         if (requirementName == null || requirementName.isBlank()) {
             return "未命名要求";
         }
-        String name = requirementName.replace("..", "_")
-                .replaceAll("[\\\\/:*?\"<>|\\r\\n]", "_").trim();
-        return name.isBlank() ? "未命名要求" : name;
-    }
-
-    /**
-     * zip 条目名安全化（防 Zip Slip）：文件名来自用户上传的 original_name（file_object 原值落库），
-     * 含 "../" 或绝对路径时会把解压目标写到目录之外。
-     * 处理：统一分隔符 → 只取最后一段（剥掉所有目录部分）→ 剔除残留 ".." 与非法字符。
-     */
-    private String safeEntryFileName(String fileName) {
-        if (fileName == null || fileName.isBlank()) {
-            return "unnamed";
-        }
-        String name = fileName.replace('\\', '/');
-        int lastSlash = name.lastIndexOf('/');
-        if (lastSlash >= 0) {
-            name = name.substring(lastSlash + 1);
-        }
-        name = name.replace("..", "_").replaceAll("[\\\\/:*?\"<>|\\r\\n]", "_").trim();
-        return name.isBlank() ? "unnamed" : name;
+        return requirementName.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
     }
 
     /** zip 条目名去重：重名在扩展名前追加 -2 -3，避免 ZipOutputStream 同名冲突 */

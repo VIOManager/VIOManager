@@ -136,20 +136,6 @@ public class MaterialTeamQuerySupport {
                 BigDecimal.valueOf(completeRate));
     }
 
-    /**
-     * 按比赛查全部未删队伍 ID（只读）：材料要求按比赛共享（material_requirement 无 team_id 列），
-     * 要求集变动会影响该比赛下所有队伍的齐全率分母，重算必须整场收敛。
-     */
-    // TODO(联调) B 线提供按比赛查队伍的查询口后改调它，当前保留自研只读 SQL
-    public List<Long> loadTeamIdsByContest(Long contestId) {
-        if (contestId == null) {
-            return new ArrayList<>();
-        }
-        return jdbcTemplate.queryForList(
-                "SELECT id FROM team WHERE contest_id = ? AND deleted = 0",
-                Long.class, contestId);
-    }
-
     /** IN 占位符：n 个问号逗号相连（位置参数风格的批量查询辅助） */
     private String placeholders(int count) {
         StringBuilder sb = new StringBuilder();
