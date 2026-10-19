@@ -9,6 +9,7 @@ import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.enums.MaterialErrorCode;
 import com.viomanager.common.exception.BizException;
+import com.viomanager.datascop.OrgScopeSupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MemberIdSupport;
 import jakarta.annotation.Resource;
@@ -48,6 +49,9 @@ public class AchievementExportServiceImpl implements AchievementExportService {
     @Resource
     private MemberIdSupport memberIdSupport;
 
+    @Resource
+    private OrgScopeSupport orgScope;
+
     @Override
     public void export(Long teamId, HttpServletResponse response) {
         //1.范围：学生只导本人（按归属人，与队长/队员身份无关）；管理员全量或按队伍筛
@@ -61,6 +65,16 @@ public class AchievementExportServiceImpl implements AchievementExportService {
         }
         if (teamId != null) {
             wrapper.eq("team_id", teamId);
+        }
+        //部门管理员数据范围：只导本部门组织子树（docs/README.md 第 28 条）；超管全量不受影响。
+        //子树为空（未绑组织 / 组织已删）按"无可导出成果"拒绝，绝不退化成全量导出；
+        //子树查询复用骨架统一收口 datascop.OrgScopeSupport（Redis cache-aside + 熔断降级）
+        if (user != null && "DEPT_ADMIN".equals(user.getRole())) {
+            List<Long> subtreeOrgIds = orgScope.subtreeIdsOrEmpty(user.getOrgId());
+            if (subtreeOrgIds.isEmpty()) {
+                throw new BizException(CommonErrorCode.NOT_FOUND, "没有可导出的成果");
+            }
+            wrapper.in("org_id", subtreeOrgIds);
         }
         List<Achievement> achievements = achievementMapper.selectList(wrapper);
         //2.5008 闸门：范围内存在待审批或已驳回成果即拒（错误码表口径，宁拒不漏）

@@ -23,10 +23,15 @@ async function load() {
     return
   }
   reqs.value = await apiRequirements(taskId.value)
+  const task = props.tasks.find((t) => t.id === taskId.value)
+  if (!task) {
+    rows.value = []
+    return
+  }
   try {
-    rows.value = await apiTaskOverview(taskId.value)
+    rows.value = await apiTaskOverview(task)
   } catch {
-    // 联调降级：任务×队伍矩阵接口后端未提供（后端仅按队伍查概览），待 C 线定形状
+    // 兜底：任一队伍概览取失败都不该让整张表崩（组合接口内部已逐队 catch，这里防队伍列表本身失败）
     rows.value = []
   }
 }

@@ -59,7 +59,9 @@ export function apiCreateAchievement(body: {
 }): Promise<{ id: string; status: AchievementStatus }> {
   return postIdem('/api/achievements', body, crypto.randomUUID())
 }
-/** 管理员审批（A04）：⚠️ 后端暂未实现 POST /api/achievements/{id}/review——成果审批走审批中心还是独立接口待 C 线定，联调期此操作报资源不存在 */
+/** 管理员审批（A04）：⚠️ 后端无此路由，当前已无调用方（2026-10-19 起详情抽屉改走「审批中心」）。
+ *  接口清单 §5 口径：成果审批由 ACHIEVEMENT_SUBMIT 审批单承载，在审批中心批准/驳回，
+ *  回调里才置 APPROVED 并触发材料 §5 联动。保留本函数仅作契约记录，勿再接到 UI 上。 */
 export function apiReviewAchievement(id: string, action: 'APPROVE' | 'REJECT', comment: string): Promise<null> {
   return post('/api/achievements/' + id + '/review', { action, comment })
 }

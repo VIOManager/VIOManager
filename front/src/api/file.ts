@@ -16,9 +16,14 @@ export interface UploadResp {
   scanStatus: 'CLEAN' | 'INFECTED' | 'UNAVAILABLE'
   /** 原始文件名（骨架清单 F01 字段名） */
   originalName: string
+  /** 文件字节数：后端上传响应不含该字段，由本模块用 File.size 补带；MS02 提交要求必填 fileSize */
+  fileSize: number
 }
 
 /** 上传单个文件；idempotencyKey 由调用方（UploadField）在每次选择时生成 */
 export function apiUploadFile(file: File, idempotencyKey: string, bizType: string): Promise<UploadResp> {
-  return upload('/api/files', file, idempotencyKey, { bizType })
+  //fileSize 统一在这里补带：MS02 提交接口强制校验 fileSize 为正数，
+  //若让每个调用方自己记 File.size 极易漏传（漏传必被后端 1001「fileSize 必须为正数」拒绝）
+  return upload<Omit<UploadResp, 'fileSize'>>('/api/files', file, idempotencyKey, { bizType })
+    .then((resp) => ({ ...resp, fileSize: file.size }))
 }
