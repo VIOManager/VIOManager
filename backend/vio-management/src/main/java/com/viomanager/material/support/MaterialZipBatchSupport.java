@@ -9,10 +9,10 @@ import com.viomanager.material.entity.MaterialSubmission;
 import com.viomanager.material.entity.MaterialTask;
 import com.viomanager.material.mapper.MaterialRequirementMapper;
 import com.viomanager.material.mapper.MaterialSubmissionMapper;
+import com.viomanager.material.service.MaterialCompletionService;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
 import com.viomanager.material.vo.BatchMatchResultVO;
 import jakarta.annotation.Resource;
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,6 +23,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * zip 批量上传支撑（MS03）：解压读条目 + 两层匹配 + 未交要求的落库。
@@ -51,26 +52,35 @@ public class MaterialZipBatchSupport {
     @Resource
     private MaterialSubmissionMapper submissionMapper;
 
+    @Resource
+    private MaterialCompletionService completionService;
+
     /**
-     * 两层匹配并落库（在调用方的事务内执行）。入参校验已由调用方按 MS02 同口径 7 步完成。
+     * 两层匹配落库 + 齐全率重算（同一事务：落库失败或重算失败一起回滚）。
+     * 事务边界刻意放在这里而不是调用方——调用方必须先**在事务外**读完 zip 条目名，
+     * 否则读 MinIO 的网络 IO 会一直占着数据库连接（规范：事务内不做外部 IO）。
+     * 入参校验已由调用方按 MS02 同口径 7 步完成。
      * 已有 is_current=1 提交的要求跳过不重复覆盖；未交的插入合成提交记录
-     * （fileName = 队名-类型中文名.pdf、fileSize=0、多条要求共用压缩包 fileId）。
+     * （fileName = 队名-类型中文名.zip、fileSize = 压缩包真实大小、多条要求共用压缩包 fileId）。
      * 匹配到的要求（含已交过被跳过的）记入 matched；没匹配到任何要求的条目名记入 unmatched。
+     *
+     * <p>步骤编号沿用旧版：原「1.读 zip 条目名」已移到调用方事务外执行，见 {@code names} 入参。
+     *
+     * @param names 调用方在事务外读好的 zip 条目名（读失败时是压缩包名单条目）
      */
+    @Transactional(rollbackFor = Exception.class)
     public BatchMatchResultVO matchAndInsert(MaterialTask task, TeamRow team, Long memberId,
-                                             String realName, MaterialBatchUploadDTO dto) {
-        //1.第一层：真实解压读条目名；失败（存储不可用等）降级为压缩包名单条目，绝不让接口 500
-        List<String> names;
-        try {
-            names = readZipEntryNames(dto.getFileId());
-        } catch (Exception e) {
-            log.warn("zip 真实解压失败（对象存储不可用？），降级为压缩包名匹配：{}", e.getMessage());
-            names = Collections.singletonList(dto.getFileName());
-        }
+                                             String realName, MaterialBatchUploadDTO dto,
+                                             long zipFileSize, List<String> names) {
         //2.任务下全部未删要求（sort_no / id 升序）+ 该队已有当前版的要求集（已交跳过的判定依据）
         List<MaterialRequirement> reqs = requirementMapper.selectList(
                 new QueryWrapper<MaterialRequirement>().eq("task_id", dto.getTaskId())
                         .orderByAsc("sort_no").orderByAsc("id"));
+        //并发防线（与 MS02 / A06 同一把锁，见 MaterialSubmissionMapper 注释）：先逐要求锁住该队的
+        //提交行再读已交集合——否则两个并发批量都读到"未交"，各插一条 version_no=1 / is_current=1
+        for (MaterialRequirement req : reqs) {
+            submissionMapper.lockByRequirementAndTeam(req.getId(), dto.getTeamId());
+        }
         Set<Long> submittedReqIds = new HashSet<>(
                 submissionMapper.selectCurrentRequirementIds(dto.getTeamId()));
         //3.逐要求匹配：命中即记 matched；未交过的落库（versionNo 取历史最大 +1，无历史即为 1）
@@ -94,8 +104,11 @@ public class MaterialZipBatchSupport {
             submission.setSemesterId(task.getSemesterId());
             submission.setOrgId(team.getOrgId());
             submission.setFileId(dto.getFileId());
-            submission.setFileName(team.getName() + "-" + label + ".pdf");
-            submission.setFileSize(0L);
+            //兜底层（以及真实解压层）落库的 fileId 都是整个压缩包，取不出单个条目，
+            //所以文件名后缀用 .zip、大小用压缩包真实大小 —— 否则会出现"记录名是 .pdf、
+            //下载下来却是 zip"的误导，MS04 下载的文件名也与内容不符。
+            submission.setFileName(team.getName() + "-" + label + ".zip");
+            submission.setFileSize(zipFileSize);
             submission.setIsCurrent(1);
             submission.setVersionNo((maxVersion == null ? 0 : maxVersion) + 1);
             submission.setSubmittedBy(memberId);
@@ -112,6 +125,8 @@ public class MaterialZipBatchSupport {
                 unmatched.add(name);
             }
         }
+        //5.重算齐全率（与落库同一事务：重算失败则整批回滚，不留"交了但齐全率没更新"的中间态）
+        completionService.recompute(dto.getTeamId());
         return new BatchMatchResultVO().setMatched(matched).setUnmatched(unmatched);
     }
 
@@ -137,9 +152,15 @@ public class MaterialZipBatchSupport {
 
     /**
      * 第一层：经骨架口子 openCheckedStream 读 zip 流并解出全部条目名（只取名，不读内容）。
-     * 文件不存在 / 染毒 / 存储不可用等异常由调用方 catch 后降级兜底层。
+     * <b>必须在事务外调用</b>：这是网络 IO，放在数据库事务里会长时间占用连接。
+     * 文件不存在 / 染毒 / 存储不可用等任何异常都在本方法内降级为「压缩包名单条目」（第二层兜底），
+     * 绝不向上抛，保证批量上传接口不会因此 500。
+     *
+     * @param fileId       压缩包文件 ID（已由调用方校验归属）
+     * @param fallbackName 解压失败时用于兜底匹配的压缩包名
+     * @return 非空的条目名列表（失败时至少含 fallbackName）
      */
-    private List<String> readZipEntryNames(Long fileId) throws IOException {
+    public List<String> readZipEntryNames(Long fileId, String fallbackName) {
         try (ZipInputStream zip = new ZipInputStream(fileService.openCheckedStream(fileId))) {
             List<String> names = new ArrayList<>();
             for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
@@ -148,6 +169,9 @@ public class MaterialZipBatchSupport {
                 }
             }
             return names;
+        } catch (Exception e) {
+            log.warn("zip 真实解压失败（对象存储不可用？），降级为压缩包名匹配：{}", e.getMessage());
+            return Collections.singletonList(fallbackName);
         }
     }
 }

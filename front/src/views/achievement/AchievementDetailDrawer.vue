@@ -6,7 +6,7 @@
  */
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiAchievementDetail, apiDeleteAchievement, apiReviewAchievement, apiUploadEvidence } from '@/api/achievement'
+import { apiAchievementDetail, apiDeleteAchievement, apiUploadEvidence } from '@/api/achievement'
 import type { AchievementDetail } from '@/api/achievement'
 import type { UploadResp } from '@/api/file'
 import { useUserStore } from '@/stores/user'
@@ -33,21 +33,18 @@ async function load() {
 
 const isAdmin = () => user.role !== 'STUDENT'
 
+/**
+ * 成果审批：后端没有独立的成果审批接口。
+ * 按接口清单 §5 口径，学生提交成果（A03）会创建一条 ACHIEVEMENT_SUBMIT 审批单，
+ * 管理员在「审批中心」批准/驳回，批准回调里才置 APPROVED 并触发材料侧 §5 联动
+ * （原实现直连 POST /api/achievements/{id}/review，后端无此路由，联调必 404）。
+ */
 async function onReview(action: 'APPROVE' | 'REJECT') {
-  if (!detail.value) return
-  try {
-    if (action === 'APPROVE') {
-      await ElMessageBox.confirm('通过该成果？审批通过后其队伍材料任务将自动新增「佐证材料」必交项', '审批确认', { type: 'warning' })
-    } else {
-      await ElMessageBox.prompt('填写驳回原因', '驳回确认', { inputPlaceholder: '驳回原因（必填）', type: 'warning' })
-    }
-  } catch {
-    return
-  }
-  await apiReviewAchievement(detail.value.id, action, '')
-  ElMessage.success(action === 'APPROVE' ? '已通过（材料任务已新增佐证必交项）' : '已驳回')
-  visible.value = false
-  emit('changed')
+  ElMessage.info(
+    action === 'APPROVE'
+      ? '成果审批请到「审批中心」处理对应的 ACHIEVEMENT_SUBMIT 审批单；批准后自动生效并新增佐证必交项'
+      : '成果驳回请到「审批中心」处理对应的 ACHIEVEMENT_SUBMIT 审批单'
+  )
 }
 
 /** 佐证覆盖上传（仅队长，按钮显隐由 viewerIsLeader 驱动） */

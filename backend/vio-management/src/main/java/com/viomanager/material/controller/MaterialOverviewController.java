@@ -1,7 +1,6 @@
 package com.viomanager.material.controller;
 
 import com.viomanager.common.auth.RequireRole;
-import com.viomanager.common.datascop.DataScope;
 import com.viomanager.common.result.Result;
 import com.viomanager.material.service.MaterialCompletionService;
 import com.viomanager.material.vo.MyTeamMaterialVO;
@@ -33,11 +32,9 @@ public class MaterialOverviewController {
 
     /**
      * MS06 我的材料：学生视角逐队返回任务与逐要求状态，无队伍返回空数组。
-     * @DataScope(SELF)：本接口数据范围 = 业务 SQL 自带"本人"条件（按当前人查在册队伍），
-     * 学生可见性声明——C 线三张 Mapper 接口均已声明 SELF，这里再标一次防骨架策略收紧时漏网。
+     * 学生数据范围由业务 SQL 按当前人查在册队伍实现（@DataScope 是 mapper 层拦截器注解，标在 Controller 上无效）。
      */
     @RequireRole("STUDENT")
-    @DataScope(scope = DataScope.Scope.SELF)
     @GetMapping("/my")
     public Result<List<MyTeamMaterialVO>> myMaterials() {
         return completionService.myMaterials();

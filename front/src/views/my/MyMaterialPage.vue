@@ -36,7 +36,7 @@ function acceptOf(formats: string[]): string {
 }
 /** 单条上传：文件服务上传完成（拿到 fileId）后再调提交接口 */
 async function onSubmitOne(teamId: string, requirementId: string, resp: UploadResp) {
-  const r = await apiSubmitMaterial(requirementId, { teamId, fileId: resp.fileId, fileName: resp.originalName })
+  const r = await apiSubmitMaterial(requirementId, { teamId, fileId: resp.fileId, fileName: resp.originalName, fileSize: resp.fileSize })
   ElMessage.success('已提交，当前版本 v' + r.version + (r.version > 1 ? '（旧版本已失效）' : ''))
   await load()
 }
