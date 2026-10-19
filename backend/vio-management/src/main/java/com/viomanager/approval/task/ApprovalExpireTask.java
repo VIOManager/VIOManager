@@ -6,6 +6,7 @@ import com.viomanager.approval.entity.Approval;
 import com.viomanager.approval.entity.ApprovalRecord;
 import com.viomanager.approval.mapper.ApprovalMapper;
 import com.viomanager.approval.mapper.ApprovalRecordMapper;
+import com.viomanager.approval.support.ApprovalOutboxSupport;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,6 +30,9 @@ public class ApprovalExpireTask {
 
     @Resource
     private ApprovalRecordMapper approvalRecordMapper;
+
+    @Resource
+    private ApprovalOutboxSupport approvalOutboxSupport;
 
     /**
      * 兜底对账，10 分钟一次（原为每分钟全表扫——延迟消息上线后的历史使命结束）。
@@ -85,6 +89,12 @@ public class ApprovalExpireTask {
         record.setToStatus("EXPIRED");
         record.setCreatedAt(LocalDateTime.now());
         approvalRecordMapper.insert(record);
+        //3.同事务写本地消息表（插入点③）：过期也是状态变更，目标人的红点要刷新。
+        //   条件更新刚成功，读回快照必非空；防御性判空避免极端情况下过期循环卡死
+        Approval snapshot = approvalMapper.selectById(approvalId);
+        if (snapshot != null) {
+            approvalOutboxSupport.recordStatusChange(snapshot, "EXPIRE", "EXPIRED");
+        }
         return true;
     }
 }
