@@ -16,6 +16,7 @@ import com.viomanager.material.mapper.MaterialRequirementMapper;
 import com.viomanager.material.mapper.MaterialSubmissionMapper;
 import com.viomanager.material.mapper.MaterialTaskMapper;
 import com.viomanager.material.service.MaterialRequirementService;
+import com.viomanager.material.support.MaterialCompletionRecalculator;
 import com.viomanager.material.vo.MaterialRequirementVO;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
@@ -55,6 +56,10 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
 
     @Resource
     private MaterialSubmissionMapper submissionMapper;
+
+    /** 要求集变动后按比赛批量重算（材料要求按比赛共享，会改变全场队伍分母） */
+    @Resource
+    private MaterialCompletionRecalculator recalculator;
 
     @Override
     public Result<List<MaterialRequirementVO>> listByTask(Long taskId) {
@@ -100,6 +105,8 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
         requirement.setNamingRule(dto.getNamingRule());
         requirement.setSystemGenerated(0);
         requirementMapper.insert(requirement);
+        //5.要求集 +1 → 该比赛所有队伍分母变化，按比赛批量重算齐全率（P0#1）
+        recalculator.recomputeByContest(task.getContestId());
         return Result.ok(toVO(requirement));
     }
 
@@ -129,6 +136,8 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
             //并发兜底：查出后要求恰好被他人删除
             throw new BizException(CommonErrorCode.NOT_FOUND, "材料要求不存在");
         }
+        //5.必传标记/类型可能变化 → 该比赛所有队伍的分母与状态判定受影响，批量重算（P0#1）
+        recalculator.recomputeByContest(requirement.getContestId());
     }
 
     @Override
@@ -149,6 +158,8 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
         checkNotSystemGenerated(requirement, "系统生成的佐证要求不可删除");
         //4.逻辑删除（@TableLogic 把 delete 转成 UPDATE deleted=1，不物理删）
         requirementMapper.deleteById(id);
+        //5.要求集 -1 → 该比赛所有队伍分母变化，按比赛批量重算齐全率（P0#1）
+        recalculator.recomputeByContest(requirement.getContestId());
     }
 
     /** 系统生成守卫（MR02 / MR03 共用）：systemGenerated=1 按给定文案 403 拒绝 */

@@ -167,8 +167,10 @@ public class AchievementSubmitHandler implements ApprovalHandler {
         //并跳过——"通过 2 条成果只加 1 条佐证项"，且并发通过两条审批单也只可能落一条
         requirementMapper.insertEvidenceIfAbsent(IdWorker.getId(), task.getId(), task.getContestId(),
                 "佐证材料", "pdf,jpg,zip", "队名-成果名-佐证");
-        //重算齐全率（无新增时重算一次也幂等无害）
-        completionService.recompute(teamId);
+        //重算齐全率：要求集 +1 而提交数不变 → 齐全率下降，队伍状态可能转 PENDING。
+        //🔴 要求按比赛共享（material_requirement 无 team_id），新增 EVIDENCE 会让该比赛
+        //   所有队伍分母 +1，故必须按比赛批量重算，不能只重算触发的那一支队伍（P0#1）。
+        completionService.recomputeByContest(team.getContestId());
     }
 
     /** 从 payloadJson 解析成果 ID（提交时写入的是字符串化雪花 ID）；任何异常都吞掉返回 null */
