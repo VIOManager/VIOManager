@@ -2,25 +2,20 @@ package com.viomanager.approval.mq;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.viomanager.approval.support.ApprovalUnreadCache;
 import com.viomanager.approval.support.UnreadCounter;
 import com.viomanager.approval.vo.UnreadCountVO;
 import jakarta.annotation.Resource;
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 /**
  * 插入点③的消费者（本期唯一订阅方）：状态变更事件到达后按人重算红点写 Redis。
- * 写路径不增量而是整写重算——重算天然幂等、不会漂移，200 人量级成本可忽略；
- * 量大了再换增量 + 消费去重（方案 §4.② 的取舍记录）。
+ * 写路径不增量而是整写重算——重算天然幂等、不会漂移（方案 §4.② 的取舍记录）。
  * 降级口径：Redis 故障只丢这一次刷新（warn 留痕照常 ACK），红点由 TTL 到期后的
  * 读路径重算与 10 分钟对账兜底；开关 vio.cache.unread-enabled=false 时完全不写
  * （三开关全关 = 零外部副作用的验收口径），消息照常 ACK。
@@ -33,25 +28,19 @@ import org.springframework.stereotype.Component;
         consumerGroup = "vio-mgmt-approval-status")
 public class ApprovalStatusListener implements RocketMQListener<String> {
 
-    static final String KEY_PREFIX = "vio:approval:unread:";
-    private static final Duration TTL = Duration.ofHours(24);
-
     @Resource
     private UnreadCounter unreadCounter;
 
     @Resource
-    private StringRedisTemplate stringRedisTemplate;
+    private ApprovalUnreadCache approvalUnreadCache;
 
     @Resource
     private ObjectMapper objectMapper;
 
-    @Value("${vio.cache.unread-enabled:false}")
-    private boolean unreadCacheEnabled;
-
     @Override
     public void onMessage(String payloadJson) {
         //1.红点缓存关着就什么都不写
-        if (!unreadCacheEnabled) {
+        if (!approvalUnreadCache.isEnabled()) {
             return;
         }
         //2.解析受影响人（payload 由 ApprovalOutboxSupport 构造）
@@ -65,16 +54,12 @@ public class ApprovalStatusListener implements RocketMQListener<String> {
         if (!memberIds.isArray()) {
             return;
         }
-        //3.逐人重算整写 Hash；单人 Redis 故障不拦整批
+        //3.逐人重算整写；单人 Redis 故障不拦整批
         for (JsonNode node : memberIds) {
             long memberId = node.asLong();
             UnreadCountVO counts = unreadCounter.countFor(memberId);
             try {
-                Map<String, String> hash = new HashMap<>(4);
-                hash.put("todo", String.valueOf(counts.getTodoCount()));
-                hash.put("result", String.valueOf(counts.getResultCount()));
-                stringRedisTemplate.opsForHash().putAll(KEY_PREFIX + memberId, hash);
-                stringRedisTemplate.expire(KEY_PREFIX + memberId, TTL);
+                approvalUnreadCache.write(memberId, counts);
             } catch (DataAccessException e) {
                 log.warn("红点回写 Redis 失败（memberId={}），由 TTL 到期重算与对账兜底：{}",
                         memberId, e.getMessage());

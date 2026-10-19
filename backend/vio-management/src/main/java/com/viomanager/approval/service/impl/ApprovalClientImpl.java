@@ -8,6 +8,7 @@ import com.viomanager.approval.mapper.ApprovalMapper;
 import com.viomanager.approval.mapper.ApprovalRecordMapper;
 import com.viomanager.approval.mq.ApprovalMqProducer;
 import com.viomanager.approval.service.ApprovalClient;
+import com.viomanager.approval.support.ApprovalOutboxSupport;
 import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.util.IpUtil;
@@ -40,6 +41,9 @@ public class ApprovalClientImpl implements ApprovalClient {
 
     @Resource
     private ApprovalMqProducer approvalMqProducer;
+
+    @Resource
+    private ApprovalOutboxSupport approvalOutboxSupport;
 
     @Override
     @Transactional
@@ -78,6 +82,10 @@ public class ApprovalClientImpl implements ApprovalClient {
         record.setIp(currentIp());
         record.setCreatedAt(LocalDateTime.now());
         approvalRecordMapper.insert(record);
+        //2.5 同事务写本地消息表（插入点③补充写入位）：创建也是红点事件——
+        //    有目标人的单（如组队邀请）落地即推高目标人 todoCount，SUBMIT 事件让红点秒级刷新，
+        //    不然要等 10 分钟对账（"邀请到了"恰恰是用户最盯着看的红点）
+        approvalOutboxSupport.recordStatusChange(approval, "SUBMIT", "PENDING");
         //3.过期延迟消息（插入点④）：挂 afterCommit 再发——事务内就发的话，回滚的单子
         //  也会收到过期消息（消费者条件更新能兜住，但白扫一趟）；消息丢了由兜底轮询接住
         sendExpireMessageAfterCommit(approval);

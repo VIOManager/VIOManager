@@ -1,7 +1,6 @@
 package com.viomanager.approval;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,13 +50,19 @@ class NotifyOutboxWriteTest extends ApprovalTestBase {
 
     @Test
     void approveWritesOutboxSameTransaction() {
-        //1.部门管理员批准一张有目标人的单
+        //1.建单即落 SUBMIT 事件（有目标人的单落地就推高目标人红点）
         Long approvalId = createApproval(APPLICANT, TARGET);
+        Map<String, Object> submitRow = outboxRow(approvalId, "SUBMIT");
+        assertEquals("PENDING", submitRow.get("send_status"));
+        assertEquals("PENDING", JsonPath.read((String) submitRow.get("payload_json"), "$.toStatus"));
+
+        //2.部门管理员批准 → APPROVE 事件同事务落行
         loginDeptAdmin();
         approvalActionService.approve(approvalId, dto("同意"));
-
-        //2.outbox 同事务落一行 PENDING
-        Map<String, Object> row = outboxRow(approvalId);
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM notify_outbox WHERE biz_id = ?", Integer.class, approvalId),
+                "建单 + 批准应各落一行");
+        Map<String, Object> row = outboxRow(approvalId, "APPROVE");
         assertEquals("approval-status", row.get("topic"));
         assertEquals("PENDING", row.get("send_status"));
         assertEquals(0, ((Number) row.get("retry_count")).intValue());
@@ -77,13 +82,13 @@ class NotifyOutboxWriteTest extends ApprovalTestBase {
 
     @Test
     void expireWritesOutboxWithApplicantOnly() {
-        //1.无目标人的单过期
+        //1.无目标人的单过期（建单的 SUBMIT 行 + 过期的 EXPIRE 行）
         Long approvalId = createApproval(APPLICANT, null);
         boolean expired = approvalExpireTask.expireOne(approvalId);
         assertTrue(expired);
 
-        //2.outbox 落行，受影响人只有发起人
-        Map<String, Object> row = outboxRow(approvalId);
+        //2.EXPIRE 事件落行，受影响人只有发起人
+        Map<String, Object> row = outboxRow(approvalId, "EXPIRE");
         assertEquals("PENDING", row.get("send_status"));
         String payload = (String) row.get("payload_json");
         assertEquals("EXPIRE", JsonPath.read(payload, "$.action"));
@@ -113,11 +118,14 @@ class NotifyOutboxWriteTest extends ApprovalTestBase {
         UserHolder.saveUser(admin);
     }
 
-    private Map<String, Object> outboxRow(Long approvalId) {
-        Map<String, Object> row = jdbcTemplate.queryForMap(
+    /** 按动作取那一行 outbox（建单 SUBMIT / 状态变更各落一行） */
+    private Map<String, Object> outboxRow(Long approvalId, String action) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT * FROM notify_outbox WHERE biz_id = ?", approvalId);
-        assertNotNull(row.get("id"));
-        return row;
+        return rows.stream()
+                .filter(r -> ((String) r.get("payload_json")).contains("\"action\":\"" + action + "\""))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("没找到 " + action + " 事件行"));
     }
 
     private ApprovalActionDTO dto(String comment) {
