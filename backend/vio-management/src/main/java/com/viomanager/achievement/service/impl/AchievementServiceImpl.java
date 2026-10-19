@@ -28,6 +28,7 @@ import com.viomanager.material.support.MaterialEvidenceLinker;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
 import com.viomanager.material.support.MemberIdSupport;
+import com.viomanager.material.support.TeamOrgScopeSupport;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -74,6 +75,9 @@ public class AchievementServiceImpl implements AchievementService {
     /** A06 佐证上传后补交材料侧系统佐证项（接口清单 §5「分子补齐」） */
     @Resource
     private MaterialEvidenceLinker evidenceLinker;
+
+    @Resource
+    private TeamOrgScopeSupport orgScope;
 
     @Override
     public Result<List<AchievementVO>> list(AchievementQueryDTO dto) {
@@ -189,6 +193,8 @@ public class AchievementServiceImpl implements AchievementService {
         if (achievement == null) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "成果不存在");
         }
+        //0.5 部门管理员组织子树校验（越权 1003；超管/学生不受影响，学生由下方队长校验负责）
+        orgScope.assertTeamInScope(achievement.getTeamId());
         //仅当前队长可上传/覆盖佐证（A06，5007）
         Long memberId = memberIdSupport.currentMemberId(UserHolder.getUser());
         if (memberId == null || achievement.getTeamId() == null

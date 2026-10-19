@@ -23,13 +23,18 @@ import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
 import com.viomanager.material.support.MemberIdSupport;
 import com.viomanager.material.support.MaterialZipBatchSupport;
+import com.viomanager.material.support.TeamOrgScopeSupport;
 import com.viomanager.material.vo.BatchMatchResultVO;
 import com.viomanager.material.vo.MaterialSubmitVO;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
  *  - team / team_member 表 SQL 集中在 MaterialTeamQuerySupport（TODO(联调) 注释在该类逐方法标注）；
  *  - 当前用户的人员档案 ID 反查抽在 MemberIdSupport（material / achievement 两包共用）。
  */
+@Slf4j
 @Service
 public class MaterialSubmissionServiceImpl implements MaterialSubmissionService {
 
@@ -73,6 +79,9 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
     @Resource
     private MemberIdSupport memberIdSupport;
 
+    @Resource
+    private TeamOrgScopeSupport orgScope;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Result<MaterialSubmitVO> submit(Long requirementId, MaterialSubmitDTO dto) {
@@ -89,6 +98,8 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (dto.getFileSize() == null || dto.getFileSize() <= 0) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "fileSize 必须为正数（字节）");
         }
+        //0.5 部门管理员组织子树校验（越权 1003；超管/学生不受影响，学生由第 6 步在册成员校验负责）
+        orgScope.assertTeamInScope(dto.getTeamId());
         //1.材料要求存在（selectById 经 @TableLogic 自动滤已删）
         MaterialRequirement requirement = requirementMapper.selectById(requirementId);
         if (requirement == null) {
@@ -167,11 +178,11 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
     }
 
     /**
-     * zip 批量上传（MS03）：7 步校验（与单份提交同口径同顺序）→ 两层匹配与落库（MaterialZipBatchSupport，
-     * 同一事务）→ 齐全率重算。"真实解压未经实测、当前走兜底匹配"的说明见该 Support 类 Javadoc。
+     * zip 批量上传（MS03）：7 步校验（与单份提交同口径同顺序）→ 事务外读 zip 条目名（两层匹配的
+     * 第一层，读失败降级为压缩包名单条目）→ 事务内两层匹配落库 + 齐全率重算（zipBatch.persistMatches）。
+     * ⚠️ 本方法不加 @Transactional：MinIO 读流的网络 IO 不能占用数据库事务，落库段自带事务边界。
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Result<BatchMatchResultVO> batchUpload(MaterialBatchUploadDTO dto) {
         //0.入参完整性（空值防线，同单份提交第 0 步）
         if (dto.getTeamId() == null) {
@@ -186,6 +197,8 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (dto.getFileName() == null || dto.getFileName().isBlank()) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "fileName 不能为空");
         }
+        //0.5 部门管理员组织子树校验（越权 1003；超管/学生不受影响，学生由第 5 步在册成员校验负责）
+        orgScope.assertTeamInScope(dto.getTeamId());
         //1.任务存在
         MaterialTask task = taskMapper.selectById(dto.getTaskId());
         if (task == null) {
@@ -218,11 +231,33 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (!dto.getFileName().toLowerCase().endsWith(".zip")) {
             throw new BizException(MaterialErrorCode.FILE_FORMAT_NOT_ALLOWED, "批量上传仅支持 zip 压缩包");
         }
-        //两层匹配 + 未交要求落库（同一事务），随后重算齐全率
-        BatchMatchResultVO vo = zipBatch.matchAndInsert(task, team, memberId, user.getRealName(),
-                dto, ownedZip.getFileSize() == null ? 0L : ownedZip.getFileSize());
-        completionService.recompute(dto.getTeamId());
+        //8.事务外读 zip 条目名：MinIO 网络 IO 不占数据库事务；读失败降级为压缩包名单条目（兜底层）
+        List<String> names = readZipEntryNames(dto.getFileId(), dto.getFileName());
+        //9.事务内两层匹配落库 + 齐全率重算（重算失败提交一并回滚）
+        BatchMatchResultVO vo = zipBatch.persistMatches(task, team, memberId, user.getRealName(),
+                dto, ownedZip.getFileSize() == null ? 0L : ownedZip.getFileSize(), names);
         return Result.ok(vo);
+    }
+
+    /**
+     * 第一层：经骨架口子 openCheckedStream 读 zip 流并解出全部条目名（只取名，不读内容）。
+     * 文件不存在 / 染毒 / 存储不可用等异常降级为压缩包名单条目（第二层兜底），绝不让接口 500。
+     * 必须在事务外调用（MinIO 网络 IO 不占数据库事务）。
+     * TODO(联调) 存储方案恢复后回归验证第一层真实解压路径
+     */
+    private List<String> readZipEntryNames(Long fileId, String fallbackName) {
+        try (ZipInputStream zip = new ZipInputStream(fileService.openCheckedStream(fileId))) {
+            List<String> names = new ArrayList<>();
+            for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+                if (!entry.isDirectory()) {
+                    names.add(entry.getName());
+                }
+            }
+            return names;
+        } catch (Exception e) {
+            log.warn("zip 真实解压失败（对象存储不可用？），降级为压缩包名匹配：{}", e.getMessage());
+            return Collections.singletonList(fallbackName);
+        }
     }
 
     /** 从文件名提扩展名：小写、不含点；没有扩展名返回空串（与文件服务 FileServiceImpl 同款写法） */
