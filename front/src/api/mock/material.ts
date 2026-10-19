@@ -55,17 +55,19 @@ export function toTaskView(t: MockTask): MaterialTask {
 }
 
 export function toReqView(r: MaterialRequirement): MaterialRequirement {
-  return { id: r.id, taskId: r.taskId, materialType: r.materialType, requiredFlag: r.requiredFlag, allowedFormats: r.allowedFormats.slice(), namingRule: r.namingRule, maxSizeMb: r.maxSizeMb }
+  return { id: r.id, taskId: r.taskId, materialType: r.materialType, name: r.name, requiredFlag: r.requiredFlag, allowedFormats: r.allowedFormats.slice(), namingRule: r.namingRule, maxSizeMb: r.maxSizeMb }
 }
 
-/** 要求表单校验（PC1 验收：要求表单校验） */
+/** 要求表单校验（PC1 验收：要求表单校验；文案对齐后端 service 口径） */
 function validateRequirement(body: Record<string, unknown>): string | null {
-  const type = String(body.type ?? '')
+  // ⚠️ 原读 body.type 是错的（前端发的是 materialType），mock 建要求一直误报类型非法——2026-10-19 修
+  const type = String(body.materialType ?? '')
   let typeOk = false
   for (const t of MATERIAL_TYPES) {
     if (t.value === type) typeOk = true
   }
   if (!typeOk) return '材料类型必须是 12 种预设之一'
+  if (!String(body.name ?? '').trim()) return '要求名称不能为空'
   const formats = Array.isArray(body.allowedFormats) ? (body.allowedFormats as string[]) : []
   if (formats.length === 0) return '至少允许一种文件格式'
   const maxMb = Number(body.maxSizeMb)
@@ -175,7 +177,7 @@ registerMock({
     if (err) return fail(1001, err)
     const created = {
       id: nextReqId(), taskId: t.id,
-      materialType: String(ctx.body.materialType), requiredFlag: Number(ctx.body.requiredFlag) === 1 ? 1 : 0,
+      materialType: String(ctx.body.materialType), name: String(ctx.body.name ?? '').trim(), requiredFlag: Number(ctx.body.requiredFlag) === 1 ? 1 : 0,
       allowedFormats: (ctx.body.allowedFormats as string[]).map((f) => f.toLowerCase()),
       namingRule: String(ctx.body.namingRule ?? ''), maxSizeMb: Number(ctx.body.maxSizeMb)
     }
@@ -192,7 +194,8 @@ registerMock({
     if (!r) return fail(5001, '材料要求不存在')
     const err = validateRequirement(ctx.body)
     if (err) return fail(1001, err)
-    r.materialType = String(ctx.body.type)
+    r.materialType = String(ctx.body.materialType ?? '')
+    r.name = String(ctx.body.name ?? '').trim()
     r.requiredFlag = Number(ctx.body.requiredFlag) === 1 ? 1 : 0
     r.allowedFormats = (ctx.body.allowedFormats as string[]).map((f) => f.toLowerCase())
     r.namingRule = String(ctx.body.namingRule ?? '')

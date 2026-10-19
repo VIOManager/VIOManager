@@ -89,11 +89,15 @@ onMounted(load)
 
       <table class="ledger">
         <thead>
-          <tr><th>类型</th><th>必传</th><th>允许格式</th><th>命名规则</th><th>状态</th><th>当前文件</th><th style="width: 150px">上传/覆盖</th></tr>
+          <tr><th>材料</th><th>必传</th><th>允许格式</th><th>命名规则</th><th>状态</th><th>当前文件</th><th style="width: 150px">上传/覆盖</th></tr>
         </thead>
         <tbody>
           <tr v-for="it in tm.items" :key="it.requirement.id">
-            <td style="color: var(--vio-ink); font-weight: 600">{{ MATERIAL_TYPE_LABEL[it.requirement.materialType] ?? it.requirement.materialType }}</td>
+            <td>
+              <!-- 名称为主标识（MR01 必填），类型中文名小字辅助；旧数据无名称时回退类型 -->
+              <div style="color: var(--vio-ink); font-weight: 600">{{ it.requirement.name || (MATERIAL_TYPE_LABEL[it.requirement.materialType] ?? it.requirement.materialType) }}</div>
+              <div class="fs" style="font-size: 11px">{{ MATERIAL_TYPE_LABEL[it.requirement.materialType] ?? it.requirement.materialType }}</div>
+            </td>
             <td><span class="stamp" :class="it.requirement.requiredFlag === 1 ? 'warn' : 'ok'">{{ it.requirement.requiredFlag === 1 ? '必传' : '选传' }}</span></td>
             <td class="mono" style="font-size: 12px">{{ it.requirement.allowedFormats.join(' / ') }}</td>
             <td class="fs">{{ it.requirement.namingRule || '—' }}</td>

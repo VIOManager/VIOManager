@@ -2,6 +2,9 @@
 /**
  * 审批中心页（/approval，FS5，契约 P01–P09）
  * 三视角 tab：待办（仅管理员，学生调 TODO 后端回 1003）/ 我发起的 / 我是目标人
+ *   超管只显示"待办"：两个参与人视角对其都无意义——超管没有发起审批的业务场景（学期切换等
+ *   超管动作直接执行不走申请单），且种子超管未绑人员档案，MINE/TARGET 后端回 1003
+ *   （lzh 2026-10-19 拍板）
  * 操作入口全部在详情抽屉（按当前视角显隐按钮，最终权限以后端判定为准——规范 §5.3）
  * 红点联动：打开详情即按当前视角标记已读（P07 置位幂等），处理操作后刷新 P08 红点
  */
@@ -19,6 +22,9 @@ const user = useUserStore()
 const approval = useApprovalStore()
 
 const isAdmin = user.role !== 'STUDENT'
+
+/** 超管判定：MINE/TARGET 两个参与人视角对其隐藏（页面头注释里的口径） */
+const isSuperAdmin = user.role === 'SUPER_ADMIN'
 
 // ── 三视角与筛选 ──
 const view = ref<ApprovalView>(isAdmin ? 'TODO' : 'MINE')
@@ -38,8 +44,12 @@ const detailId = ref('')
 const tabs = computed(() => {
   const out: Array<{ key: ApprovalView; label: string; badge: number }> = []
   if (isAdmin) out.push({ key: 'TODO', label: '待办', badge: 0 })
-  out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
-  out.push({ key: 'TARGET', label: '我是目标人', badge: approval.todoCount })
+  // 超管只留"待办"；部门管理员与学生保留两个参与人视角——
+  // 他们的成果提审/授权申请/发给他们的邀请通知照常汇总在这两栏
+  if (!isSuperAdmin) {
+    out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
+    out.push({ key: 'TARGET', label: '我是目标人', badge: approval.todoCount })
+  }
   return out
 })
 
@@ -58,6 +68,11 @@ async function load() {
     })
     list.value = r.list
     total.value = r.total
+  } catch {
+    // 加载失败（网络/业务拒绝如 1003）：清掉旧列表，避免残留上一个视角的数据造成误读；
+    // 错误提示已由 http.ts 统一弹出，这里只兜住不外抛
+    list.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
@@ -79,6 +94,8 @@ async function loadMore() {
     })
     list.value = list.value.concat(r.list)
     total.value = r.total
+  } catch {
+    // 追加失败：保住已加载的行，仅结束本次加载；提示由 http.ts 统一弹
   } finally {
     loading.value = false
   }

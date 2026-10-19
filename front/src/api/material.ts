@@ -30,6 +30,8 @@ export interface MaterialRequirement {
   taskId: string
   /** 12 种预设类型之一（后端 materialType；中文名用 materialTypeLabel 或前端字典翻译） */
   materialType: string
+  /** 要求名称（MR01 必填，如"报名表PDF版"；2026-10-19 补——原前端漏了此字段，后端回"要求名称不能为空"） */
+  name: string
   /** 后端为 0/1 整数（1=必传） */
   requiredFlag: number
   /** 允许扩展名小写白名单，如 ['pdf','docx']（后端 allowedFormats） */
@@ -96,13 +98,13 @@ export function apiRequirements(taskId: string): Promise<MaterialRequirement[]> 
 }
 export function apiCreateRequirement(
   taskId: string,
-  body: { materialType: string; requiredFlag: number; allowedFormats: string[]; namingRule: string; maxSizeMb: number }
+  body: { materialType: string; name: string; requiredFlag: number; allowedFormats: string[]; namingRule: string; maxSizeMb: number }
 ): Promise<MaterialRequirement> {
   return postIdem('/api/materials/tasks/' + taskId + '/requirements', body, crypto.randomUUID())
 }
 export function apiUpdateRequirement(
   id: string,
-  body: { materialType: string; requiredFlag: number; allowedFormats: string[]; namingRule: string; maxSizeMb: number }
+  body: { materialType: string; name: string; requiredFlag: number; allowedFormats: string[]; namingRule: string; maxSizeMb: number }
 ): Promise<null> {
   return putIdem('/api/materials/requirements/' + id, body, crypto.randomUUID())
 }

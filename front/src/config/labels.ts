@@ -160,15 +160,17 @@ export interface MaterialTypeDef {
 
 export const MATERIAL_TYPES: MaterialTypeDef[] = [
   { value: 'REGISTRATION_FORM', label: '报名表', defaultFormats: ['pdf', 'docx'] },
-  { value: 'PROJECT_PROPOSAL', label: '项目书', defaultFormats: ['pdf'] },
-  { value: 'COMMITMENT_LETTER', label: '承诺书', defaultFormats: ['pdf'] },
+  // ⚠️ 五个值 2026-10-19 对齐后端 MaterialTypeEnum 原文：原 PROJECT_PROPOSAL / COMMITMENT_LETTER /
+  // STUDENT_ID_COPY / DEFENSE_SLIDES / AWARD_CERTIFICATE 是 mock 期自造值，后端不认，选了必报 1001
+  { value: 'PROJECT_PLAN', label: '项目书', defaultFormats: ['pdf'] },
+  { value: 'COMMITMENT', label: '承诺书', defaultFormats: ['pdf'] },
   { value: 'ID_COPY', label: '身份证复印件', defaultFormats: ['pdf', 'jpg'] },
-  { value: 'STUDENT_ID_COPY', label: '学生证复印件', defaultFormats: ['pdf', 'jpg'] },
+  { value: 'STUDENT_CARD_COPY', label: '学生证复印件', defaultFormats: ['pdf', 'jpg'] },
   { value: 'TEAM_PHOTO', label: '团队合照', defaultFormats: ['jpg', 'png'] },
-  { value: 'DEFENSE_SLIDES', label: '答辩PPT', defaultFormats: ['pptx', 'pdf'] },
+  { value: 'DEFENSE_PPT', label: '答辩PPT', defaultFormats: ['pptx', 'pdf'] },
   { value: 'RESEARCH_REPORT', label: '研究报告', defaultFormats: ['pdf', 'docx'] },
   { value: 'SOURCE_CODE', label: '源代码', defaultFormats: ['zip', 'rar'] },
-  { value: 'AWARD_CERTIFICATE', label: '获奖证书', defaultFormats: ['pdf', 'jpg'] },
+  { value: 'AWARD_CERT', label: '获奖证书', defaultFormats: ['pdf', 'jpg'] },
   { value: 'EVIDENCE', label: '佐证材料', defaultFormats: ['pdf', 'jpg', 'zip'] },
   { value: 'OTHER', label: '其他', defaultFormats: ['pdf', 'zip'] }
 ]
