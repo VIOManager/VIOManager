@@ -9,6 +9,7 @@ import com.viomanager.approval.handler.ApprovalHandlerRegistry;
 import com.viomanager.approval.mapper.ApprovalMapper;
 import com.viomanager.approval.mapper.ApprovalRecordMapper;
 import com.viomanager.approval.service.IApprovalActionService;
+import com.viomanager.approval.support.ApprovalOutboxSupport;
 import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.ApprovalErrorCode;
@@ -49,6 +50,9 @@ public class ApprovalActionServiceImpl implements IApprovalActionService {
 
     @Resource
     private OrgScopeSupport orgScopeSupport;
+
+    @Resource
+    private ApprovalOutboxSupport approvalOutboxSupport;
 
     @Override
     @Transactional
@@ -141,6 +145,9 @@ public class ApprovalActionServiceImpl implements IApprovalActionService {
         record.setIp(currentIp());
         record.setCreatedAt(LocalDateTime.now());
         approvalRecordMapper.insert(record);
+        //5.5 同事务写本地消息表（插入点③）：事件与审批结果原子落库，relay 异步投递。
+        //    本行失败会回滚整个动作——不允许"审批已生效、通知事件丢失"的静默不一致
+        approvalOutboxSupport.recordStatusChange(approval, action, toStatus);
         //6.回调路由：批准 / 驳回落到业务线 Handler（未注册用兜底，记日志不动作）；取消不回调。
         //   创建型审批的 bizId 此刻是 null（对象还没建），onApproved 返回新建对象 ID 后回填单据
         ApprovalHandler handler = handlerRegistry.get(approval.getBizType());

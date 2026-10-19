@@ -22,15 +22,19 @@ import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.enums.MaterialErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.Result;
+import com.viomanager.file.entity.FileObject;
 import com.viomanager.file.service.IFileService;
+import com.viomanager.material.support.MaterialEvidenceLinker;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
 import com.viomanager.material.support.MemberIdSupport;
+import com.viomanager.material.support.TeamOrgScopeSupport;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +46,10 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AchievementServiceImpl implements AchievementService {
+
+    /** A03 合法成果类型（接口清单口径五种；common/enums 无既有枚举，先在本类收敛，不新建枚举类） */
+    private static final Set<String> ACHIEVEMENT_TYPES =
+            Set.of("AWARD", "RATING", "QUALIFICATION", "ACTIVITY", "OTHER");
 
     @Resource
     private AchievementMapper achievementMapper;
@@ -64,6 +72,13 @@ public class AchievementServiceImpl implements AchievementService {
     @Resource
     private MemberIdSupport memberIdSupport;
 
+    /** A06 佐证上传后补交材料侧系统佐证项（接口清单 §5「分子补齐」） */
+    @Resource
+    private MaterialEvidenceLinker evidenceLinker;
+
+    @Resource
+    private TeamOrgScopeSupport orgScope;
+
     @Override
     public Result<List<AchievementVO>> list(AchievementQueryDTO dto) {
         return querySupport.list(dto);
@@ -83,6 +98,9 @@ public class AchievementServiceImpl implements AchievementService {
         }
         if (dto.getType() == null || dto.getType().isBlank()) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "type 不能为空");
+        }
+        if (!ACHIEVEMENT_TYPES.contains(dto.getType())) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "成果类型非法");
         }
         if (dto.getName() == null || dto.getName().isBlank()) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "name 不能为空");
@@ -127,6 +145,14 @@ public class AchievementServiceImpl implements AchievementService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Long id, AchievementUpdateDTO dto) {
+        //0.入参完整性：name / award_date 列 NOT NULL，null 落库会触发 MySQL 1048 兜底 1000，先拦成 1001；
+        //   level / description 列可空，传 null = 置空，不校验
+        if (dto.getName() == null || dto.getName().isBlank()) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "成果名称不能为空");
+        }
+        if (dto.getAchievedAt() == null) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "获奖日期不能为空");
+        }
         //只改四个字段（PUT 全量替换，含置空）；0 行 = 不存在或已删
         UpdateWrapper<Achievement> wrapper = new UpdateWrapper<>();
         wrapper.eq("id", id)
@@ -167,15 +193,18 @@ public class AchievementServiceImpl implements AchievementService {
         if (achievement == null) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "成果不存在");
         }
+        //0.5 部门管理员组织子树校验（越权 1003；超管/学生不受影响，学生由下方队长校验负责）
+        orgScope.assertTeamInScope(achievement.getTeamId());
         //仅当前队长可上传/覆盖佐证（A06，5007）
         Long memberId = memberIdSupport.currentMemberId(UserHolder.getUser());
         if (memberId == null || achievement.getTeamId() == null
                 || !teamQuery.isTeamLeader(achievement.getTeamId(), memberId)) {
             throw new BizException(MaterialErrorCode.EVIDENCE_LEADER_ONLY);
         }
-        //文件归属：fileId 必须为当前队长本人上传，文件名以文件表权威值覆盖自报（防伪造 fileId 与假名落库）
-        dto.setFileName(fileService.loadOwnedFile(
-                dto.getFileId(), UserHolder.getUser().getUserId()).getOriginalName());
+        //文件归属：fileId 必须为当前队长本人上传，文件名/大小以文件表权威值覆盖自报（防伪造 fileId 与假名落库）
+        FileObject ownedFile = fileService.loadOwnedFile(
+                dto.getFileId(), UserHolder.getUser().getUserId());
+        dto.setFileName(ownedFile.getOriginalName());
         //单文件覆盖式：失效旧版 → 插新版本（uploadedAt 手工赋值，业务时间列不归审计填充器）
         achievementFileMapper.invalidateCurrent(id, "EVIDENCE");
         Integer maxVersion = achievementFileMapper.selectMaxVersionNo(id, "EVIDENCE");
@@ -194,6 +223,11 @@ public class AchievementServiceImpl implements AchievementService {
                 .set("evidence_file_id", dto.getFileId())
                 .set("evidence_file_name", dto.getFileName());
         achievementMapper.update(null, wrapper);
+        //§5「分子补齐」：该队已有系统佐证要求时，把这份佐证同步记为材料侧已交并重算齐全率
+        //（接口清单 §5 明确 A06 与 MS02 两条路径同效；否则队长传完佐证齐全率仍不回升）
+        evidenceLinker.linkEvidenceSubmission(achievement.getTeamId(), achievement.getContestId(),
+                dto.getFileId(), ownedFile.getOriginalName(), ownedFile.getFileSize(),
+                memberId, UserHolder.getUser() == null ? null : UserHolder.getUser().getRealName());
     }
 
     @Override

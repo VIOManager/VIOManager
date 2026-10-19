@@ -10,6 +10,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 插入点④端到端验证（方案 Step 4）：真连本机 RocketMQ。
@@ -24,6 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
         "rocketmq.name-server=localhost:9876",
         "vio.approval.expire-days=0",
         "spring.datasource.hikari.maximum-pool-size=2"})
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ApprovalExpireMqTest {
 
     @Resource
@@ -41,6 +43,8 @@ class ApprovalExpireMqTest {
     void cleanUp() {
         if (approvalId != null) {
             jdbcTemplate.update("DELETE FROM approval_record WHERE approval_id = ?", approvalId);
+            //过期也是状态变更（Step5 起同事务写 outbox），一并清掉
+            jdbcTemplate.update("DELETE FROM notify_outbox WHERE biz_id = ?", approvalId);
             jdbcTemplate.update("DELETE FROM approval WHERE id = ?", approvalId);
         }
     }

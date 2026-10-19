@@ -22,6 +22,7 @@ import com.viomanager.material.service.MaterialSubmissionService;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
 import com.viomanager.material.support.MemberIdSupport;
+import com.viomanager.material.support.TeamOrgScopeSupport;
 import com.viomanager.material.support.MaterialZipBatchSupport;
 import com.viomanager.material.vo.BatchMatchResultVO;
 import com.viomanager.material.vo.MaterialSubmitVO;
@@ -73,6 +74,10 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
     @Resource
     private MemberIdSupport memberIdSupport;
 
+    /** 数据范围：部门管理员只能操作本部门组织子树的队伍（docs/README.md 第 28 条） */
+    @Resource
+    private TeamOrgScopeSupport orgScope;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Result<MaterialSubmitVO> submit(Long requirementId, MaterialSubmitDTO dto) {
@@ -99,6 +104,8 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (team == null) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "赛队不存在");
         }
+        //2.5 数据范围：部门管理员只能操作本部门组织子树的队伍，越权 1003
+        orgScope.assertTeamInScope(dto.getTeamId());
         //3.材料任务存在（requirement.task_id 是建要求时的冗余列）
         MaterialTask task = taskMapper.selectById(requirement.getTaskId());
         if (task == null) {
@@ -113,9 +120,20 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
             throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "已过截止时间，禁止提交或覆盖");
         }
         //6.在册成员：队长或队员均可（team_member.status CONFIRMED / UNCONFIRMED 都算在队）→ 5003
+        //  ⚠️ 2026-10-19 组长拍板：部门管理员（DEPT_ADMIN）可代队伍提交材料，跳过在册校验；
+        //     超级管理员仍不代提交（越权面过大），须用队员账号操作。
+        //     代提交人记在 submitted_by / submitted_by_name，审计可追溯。
+        //  ⚠️ submitted_by 列 NOT NULL（V1 DDL）：任何提交人都必须有人员档案。
+        //     纯管理账号（sys_user.member_id 为 NULL）先挡在这里，避免把 null 写进 NOT NULL 列
+        //     触发 SQL 异常变成"系统繁忙"，也避免报错文案含糊。
+        // TODO(联调) 部门管理员目前不限组织子树（组长口径"能交就行"）；如需按部门收敛，在此加 org 子树判定。
         CurrentUser user = UserHolder.getUser();
         Long memberId = memberIdSupport.currentMemberId(user);
-        if (memberId == null || !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
+        if (memberId == null) {
+            throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER,
+                    "该账号未绑定人员档案，不能提交材料；请使用该队在册队员账号提交");
+        }
+        if (!isDeptAdmin(user) && !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
             throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER);
         }
         //7.文件归属：fileId 必须为当前用户上传，fileName / fileSize 以文件表权威值覆盖客户端自报
@@ -139,7 +157,8 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (dto.getFileSize() > limitMb * 1024L * 1024L) {
             throw new BizException(MaterialErrorCode.FILE_TOO_LARGE);
         }
-        //覆盖上传：同一事务内先失效旧版再插新版本（并发封口说明见 MaterialSubmissionMapper 注释）
+        //覆盖上传（并发两道防线，见 MaterialSubmissionMapper 注释）：先锁同键行 → 失效旧版 → 插新版本
+        submissionMapper.lockByRequirementAndTeam(requirementId, dto.getTeamId());
         submissionMapper.invalidateCurrent(requirementId, dto.getTeamId());
         Integer maxVersion = submissionMapper.selectMaxVersionNo(requirementId, dto.getTeamId());
         int newVersion = (maxVersion == null ? 0 : maxVersion) + 1;
@@ -169,8 +188,9 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
      * zip 批量上传（MS03）：7 步校验（与单份提交同口径同顺序）→ 两层匹配与落库（MaterialZipBatchSupport，
      * 同一事务）→ 齐全率重算。"真实解压未经实测、当前走兜底匹配"的说明见该 Support 类 Javadoc。
      */
+    //刻意不加 @Transactional：前 7 步全是只读校验 + 读 zip 条目名（网络 IO），
+    //事务边界收在 zipBatch.matchAndInsert（落库 + 齐全率重算），避免读对象存储时占着数据库连接
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Result<BatchMatchResultVO> batchUpload(MaterialBatchUploadDTO dto) {
         //0.入参完整性（空值防线，同单份提交第 0 步）
         if (dto.getTeamId() == null) {
@@ -195,6 +215,8 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (team == null) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "赛队不存在");
         }
+        //2.5 数据范围：部门管理员只能操作本部门组织子树的队伍，越权 1003
+        orgScope.assertTeamInScope(dto.getTeamId());
         //3.比赛匹配 → 5004
         if (!Objects.equals(task.getContestId(), team.getContestId())) {
             throw new BizException(MaterialErrorCode.CONTEST_MISMATCH);
@@ -203,24 +225,39 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (task.getDeadline() != null && LocalDateTime.now().isAfter(task.getDeadline())) {
             throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "已过截止时间，禁止提交");
         }
-        //5.在册成员（队长或队员）→ 5003
+        //5.在册成员（队长或队员）→ 5003；部门管理员可代提交（同 MS02 第 6 步口径）。
+        //  submitted_by 列 NOT NULL → 无人员档案的纯管理账号先行拦截，避免 SQL 异常。
         CurrentUser user = UserHolder.getUser();
         Long memberId = memberIdSupport.currentMemberId(user);
-        if (memberId == null || !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
+        if (memberId == null) {
+            throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER,
+                    "该账号未绑定人员档案，不能提交材料；请使用该队在册队员账号提交");
+        }
+        if (!isDeptAdmin(user) && !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
             throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER);
         }
-        //6.文件归属：fileId 必须为当前用户上传，fileName 以文件表权威值覆盖自报（zip 后缀判定用权威名）
-        dto.setFileName(fileService.loadOwnedFile(
-                dto.getFileId(), user.getUserId()).getOriginalName());
+        //6.文件归属：fileId 必须为当前用户上传，fileName / fileSize 以文件表权威值覆盖自报
+        //   （zip 后缀判定用权威名；压缩包真实大小要落到各条合成提交记录上）
+        FileObject ownedZip = fileService.loadOwnedFile(dto.getFileId(), user.getUserId());
+        dto.setFileName(ownedZip.getOriginalName());
         //7.仅支持 zip 压缩包（忽略大小写）→ 5001
         if (!dto.getFileName().toLowerCase().endsWith(".zip")) {
             throw new BizException(MaterialErrorCode.FILE_FORMAT_NOT_ALLOWED, "批量上传仅支持 zip 压缩包");
         }
-        //两层匹配 + 未交要求落库（同一事务），随后重算齐全率
-        BatchMatchResultVO vo =
-                zipBatch.matchAndInsert(task, team, memberId, user.getRealName(), dto);
-        completionService.recompute(dto.getTeamId());
+        //8.事务外读 zip 条目名（网络 IO 不占数据库事务；读失败本方法内部已降级为压缩包名匹配）
+        List<String> zipNames = zipBatch.readZipEntryNames(dto.getFileId(), dto.getFileName());
+        //两层匹配 + 未交要求落库 + 齐全率重算（同一事务，见 MaterialZipBatchSupport）
+        BatchMatchResultVO vo = zipBatch.matchAndInsert(task, team, memberId, user.getRealName(),
+                dto, ownedZip.getFileSize() == null ? 0L : ownedZip.getFileSize(), zipNames);
         return Result.ok(vo);
+    }
+
+    /**
+     * 部门管理员判定（2026-10-19 组长拍板：部门管理员可代队伍提交材料，超级管理员不代提交）。
+     * 口径与各 Controller 的 @RequireRole 中 DEPT_ADMIN 取值一致。
+     */
+    private static boolean isDeptAdmin(CurrentUser user) {
+        return user != null && "DEPT_ADMIN".equals(user.getRole());
     }
 
     /** 从文件名提扩展名：小写、不含点；没有扩展名返回空串（与文件服务 FileServiceImpl 同款写法） */
