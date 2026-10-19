@@ -225,16 +225,17 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (!isDeptAdmin(user) && !teamQuery.isTeamMember(dto.getTeamId(), memberId)) {
             throw new BizException(MaterialErrorCode.NOT_TEAM_MEMBER);
         }
-        //6.文件归属：fileId 必须为当前用户上传，fileName 以文件表权威值覆盖自报（zip 后缀判定用权威名）
-        dto.setFileName(fileService.loadOwnedFile(
-                dto.getFileId(), user.getUserId()).getOriginalName());
+        //6.文件归属：fileId 必须为当前用户上传，fileName / fileSize 以文件表权威值覆盖自报
+        //   （zip 后缀判定用权威名；压缩包真实大小要落到各条合成提交记录上）
+        FileObject ownedZip = fileService.loadOwnedFile(dto.getFileId(), user.getUserId());
+        dto.setFileName(ownedZip.getOriginalName());
         //7.仅支持 zip 压缩包（忽略大小写）→ 5001
         if (!dto.getFileName().toLowerCase().endsWith(".zip")) {
             throw new BizException(MaterialErrorCode.FILE_FORMAT_NOT_ALLOWED, "批量上传仅支持 zip 压缩包");
         }
         //两层匹配 + 未交要求落库（同一事务），随后重算齐全率
-        BatchMatchResultVO vo =
-                zipBatch.matchAndInsert(task, team, memberId, user.getRealName(), dto);
+        BatchMatchResultVO vo = zipBatch.matchAndInsert(task, team, memberId, user.getRealName(),
+                dto, ownedZip.getFileSize() == null ? 0L : ownedZip.getFileSize());
         completionService.recompute(dto.getTeamId());
         return Result.ok(vo);
     }

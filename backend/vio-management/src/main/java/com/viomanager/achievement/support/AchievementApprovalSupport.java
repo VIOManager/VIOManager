@@ -62,9 +62,18 @@ public class AchievementApprovalSupport {
             createSubmitApproval(achievement, team, dto, user, memberId);
             return;
         }
-        //管理员：直接录入生效（owner_member_id 列非空，账号须已绑定人员档案）
+        //管理员：直接录入生效。owner_member_id 列非空 ——
+        //纯管理账号（sys_user.member_id 为 NULL，如 demo 的 admin）不能作为成果归属人，
+        //回退为该队队长：管理员代录的成果仍归属队伍，A07 本人导出 / A08 聚合均按 owner 收敛，
+        //记在管理员名下会让该成果永远进不了学生本人的导出（实测过的问题）。
         if (memberId == null) {
-            throw new BizException(CommonErrorCode.PARAM_INVALID, "当前账号未绑定人员档案，无法作为成果归属人");
+            Long leaderMemberId = team.getLeaderMemberId();
+            if (leaderMemberId == null) {
+                throw new BizException(CommonErrorCode.PARAM_INVALID,
+                        "当前账号未绑定人员档案且该队无队长，无法确定成果归属人；请改用已绑定档案的账号录入");
+            }
+            achievement.setOwnerMemberId(leaderMemberId);
+            achievement.setOwnerName(teamQuery.loadLeaderName(dto.getTeamId(), leaderMemberId));
         }
         achievement.setStatus("APPROVED");
         achievement.setSubmitChannel("ADMIN");
