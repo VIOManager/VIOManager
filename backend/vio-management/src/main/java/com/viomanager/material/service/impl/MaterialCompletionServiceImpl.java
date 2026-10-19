@@ -14,6 +14,7 @@ import com.viomanager.material.mapper.MaterialSubmissionMapper;
 import com.viomanager.material.mapper.MaterialTaskMapper;
 import com.viomanager.material.service.MaterialCompletionService;
 import com.viomanager.material.service.MaterialRequirementService;
+import com.viomanager.material.support.MaterialCompletionRecalculator;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.MyTeamRow;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
@@ -66,46 +67,17 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
     @Resource
     private MemberIdSupport memberIdSupport;
 
+    @Resource
+    private MaterialCompletionRecalculator recalculator;
+
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void recompute(Long teamId) {
-        //1.队伍不存在直接返回（重算是幂等收敛动作，不抛错）
-        TeamRow team = teamQuery.loadTeam(teamId);
-        if (team == null) {
-            return;
-        }
-        //2.该比赛的材料任务：一赛一任务是建任务的强规则，selectList 容错取第一条
-        List<MaterialTask> tasks = taskMapper.selectList(
-                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
-        if (tasks.isEmpty()) {
-            return;
-        }
-        MaterialTask task = tasks.get(0);
-        //3.任务下全部未删要求（含选传：选传项进分母，不计入缺项）
-        List<MaterialRequirement> reqs = requirementMapper.selectList(
-                new QueryWrapper<MaterialRequirement>().eq("task_id", task.getId()));
-        if (reqs.isEmpty()) {
-            return;
-        }
-        //4.统计：有 is_current=1 提交的算已交；没交且必传的计缺项
-        Set<Long> submittedReqIds = new HashSet<>(
-                submissionMapper.selectCurrentRequirementIds(teamId));
-        int submitted = 0;
-        int requiredMissing = 0;
-        for (MaterialRequirement req : reqs) {
-            if (submittedReqIds.contains(req.getId())) {
-                submitted++;
-            } else if (req.getRequiredFlag() != null && req.getRequiredFlag() == 1) {
-                requiredMissing++;
-            }
-        }
-        //5.齐全率：0–100 整数，分母是全部要求数（含选传）
-        int completeRate = Math.round(submitted * 100.0f / reqs.size());
-        //6.队伍材料状态
-        String materialStatus = submitted == 0 ? "NOT_STARTED"
-                : requiredMissing > 0 ? "PENDING" : "SUBMITTED";
-        //7.回写 team 两列（经 MaterialTeamQuerySupport 走 B 线口子）
-        teamQuery.updateTeamMaterial(teamId, materialStatus, completeRate);
+        recalculator.recompute(teamId);
+    }
+
+    @Override
+    public void recomputeByContest(Long contestId) {
+        recalculator.recomputeByContest(contestId);
     }
 
     @Override
