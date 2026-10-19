@@ -2,6 +2,9 @@
 /**
  * 审批中心页（/approval，FS5，契约 P01–P09）
  * 三视角 tab：待办（仅管理员，学生调 TODO 后端回 1003）/ 我发起的 / 我是目标人
+ *   超管只显示"待办"：两个参与人视角对其都无意义——超管没有发起审批的业务场景（学期切换等
+ *   超管动作直接执行不走申请单），且种子超管未绑人员档案，MINE/TARGET 后端回 1003
+ *   （lzh 2026-10-19 拍板）
  * 操作入口全部在详情抽屉（按当前视角显隐按钮，最终权限以后端判定为准——规范 §5.3）
  * 红点联动：打开详情即按当前视角标记已读（P07 置位幂等），处理操作后刷新 P08 红点
  */
@@ -12,12 +15,16 @@ import type { ApprovalItem, ApprovalRole, ApprovalView } from '@/api/approval'
 import { APPROVAL_STATUS_LABEL, APPROVAL_TYPE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
 import { useApprovalStore } from '@/stores/approval'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import ApprovalDetailDrawer from './ApprovalDetailDrawer.vue'
 
 const user = useUserStore()
 const approval = useApprovalStore()
 
 const isAdmin = user.role !== 'STUDENT'
+
+/** 超管判定：MINE/TARGET 两个参与人视角对其隐藏（页面头注释里的口径） */
+const isSuperAdmin = user.role === 'SUPER_ADMIN'
 
 // ── 三视角与筛选 ──
 const view = ref<ApprovalView>(isAdmin ? 'TODO' : 'MINE')
@@ -37,14 +44,46 @@ const detailId = ref('')
 const tabs = computed(() => {
   const out: Array<{ key: ApprovalView; label: string; badge: number }> = []
   if (isAdmin) out.push({ key: 'TODO', label: '待办', badge: 0 })
-  out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
-  out.push({ key: 'TARGET', label: '我是目标人', badge: approval.todoCount })
+  // 超管只留"待办"；部门管理员与学生保留两个参与人视角——
+  // 他们的成果提审/授权申请/发给他们的邀请通知照常汇总在这两栏
+  if (!isSuperAdmin) {
+    out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
+    out.push({ key: 'TARGET', label: '我是目标人', badge: approval.todoCount })
+  }
   return out
 })
 
+/** 首次加载 / 切视角 / 筛选 / 处理完成刷新：清空回第 1 批 */
 async function load() {
   loading.value = true
   try {
+    page.value = 1
+    const r = await apiApprovalList({
+      view: view.value,
+      status: statusFilter.value || undefined,
+      bizType: typeFilter.value || undefined,
+      keyword: keyword.value || undefined,
+      page: 1,
+      size
+    })
+    list.value = r.list
+    total.value = r.total
+  } catch {
+    // 加载失败（网络/业务拒绝如 1003）：清掉旧列表，避免残留上一个视角的数据造成误读；
+    // 错误提示已由 http.ts 统一弹出，这里只兜住不外抛
+    list.value = []
+    total.value = 0
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 滚动到底追加下一批（ScrollLoader 的 reach 回调） */
+async function loadMore() {
+  if (loading.value || list.value.length >= total.value) return
+  loading.value = true
+  try {
+    page.value++
     const r = await apiApprovalList({
       view: view.value,
       status: statusFilter.value || undefined,
@@ -53,8 +92,10 @@ async function load() {
       page: page.value,
       size
     })
-    list.value = r.list
+    list.value = list.value.concat(r.list)
     total.value = r.total
+  } catch {
+    // 追加失败：保住已加载的行，仅结束本次加载；提示由 http.ts 统一弹
   } finally {
     loading.value = false
   }
@@ -62,12 +103,10 @@ async function load() {
 
 function switchView(v: ApprovalView) {
   view.value = v
-  page.value = 1
   void load()
 }
 
 function onSearch() {
-  page.value = 1
   void load()
 }
 
@@ -170,12 +209,7 @@ onMounted(load)
         </tbody>
       </table>
       <p v-if="!loading && list.length === 0" class="empty-note">暂无审批单</p>
-    </div>
-
-    <div v-if="total > size" class="pages mono">
-      <button class="btn-line" :disabled="page <= 1" @click="page--; load()">上一页</button>
-      <span>第 {{ page }} 页 · 共 {{ total }} 单</span>
-      <button class="btn-line" :disabled="page * size >= total" @click="page++; load()">下一页</button>
+      <ScrollLoader :loading="loading" :no-more="list.length >= total" :loaded="list.length" :total="total" @reach="loadMore" />
     </div>
 
     <ApprovalDetailDrawer v-model="drawerVisible" :approval-id="detailId" :view="view" @changed="onChanged" />
@@ -185,16 +219,18 @@ onMounted(load)
 <style scoped>
 .vtabs { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .vtab {
-  padding: 7px 18px;
-  border: 1px solid var(--vio-rule);
-  background: var(--vio-sheet);
-  color: var(--vio-ink-2);
+  padding: 5px 16px;
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-panel);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  color: var(--vio2-ink-2);
   font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s var(--vio-ease);
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.vtab em { font-style: normal; margin-left: 6px; font-size: 11px; color: var(--vio-seal); font-weight: 700; }
-.vtab.active { border-color: var(--vio-ink); color: var(--vio-ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--vio-ink); }
-.stamp.dim { color: var(--vio-ink-3); border-color: var(--vio-rule); }
-.pages { display: flex; align-items: center; gap: 14px; margin-top: 14px; font-size: 12px; color: var(--vio-ink-3); }
+.vtab:hover { transform: translate(-1px, -1px); color: var(--vio2-ink); }
+.vtab.active { background: var(--vio2-yellow); color: #101010; }
+.vtab em { font-style: normal; margin-left: 6px; font-size: 11px; color: var(--vio2-pink); font-weight: 700; }
+.vtab.active em { background: #101010; color: var(--vio2-yellow); padding: 0 4px; }
 </style>

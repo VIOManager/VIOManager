@@ -49,19 +49,20 @@ async function onSubmit() {
     >{{ theme.current === 'light' ? '☾ 深色' : '☀ 浅色' }}</button>
     <div class="stage">
       <div class="left">
-        <p class="kicker mono">VIOMANAGER — SEASON 2026F · WEEK 06</p>
-        <h1>科创协作<br />管理平台<span class="dot">.</span></h1>
-        <p class="desc">以学期为周期，统一管理赛事、赛队、材料、成果、排班与团队知识。覆盖超级管理员、部门管理员、学生用户三端。</p>
+        <span class="sticker mono">2026 秋季学期 · 第六教学周</span>
+        <h1>把<span class="blk">科创协作</span><br />钉在<span class="blk p">一块黑板</span>上。</h1>
+        <p class="desc">赛事报名、组队材料、成果归档、排班与知识沉淀——以学期为周期，为 <b>186 名成员</b> 与 <b>47 支赛队</b> 提供三端协同管理。</p>
         <div class="stats">
           <div class="stat"><b class="mono">186</b><span class="mono">在册成员</span></div>
-          <div class="stat"><b class="mono">12</b><span class="mono">进行中比赛</span></div>
-          <div class="stat"><b class="mono">47</b><span class="mono">活跃赛队</span></div>
-          <div class="stat"><b class="mono">09</b><span class="mono">待办审批</span></div>
+          <div class="stat y"><b class="mono">12</b><span class="mono">进行中比赛</span></div>
+          <div class="stat l"><b class="mono">47</b><span class="mono">活跃赛队</span></div>
+          <div class="stat g"><b class="mono">09</b><span class="mono">待办审批</span></div>
         </div>
         <div class="stripes" aria-hidden="true"></div>
       </div>
       <form class="panel" @submit.prevent="onSubmit">
         <span class="tag mono">LOGIN · 登录口</span>
+        <span class="flag mono">ACCESS / 登记入口</span>
         <h2>欢迎回来</h2>
         <label class="field">
           <span class="mono">登录名 / 学工号</span>
@@ -141,17 +142,41 @@ async function onSubmit() {
   gap: 64px;
   align-items: center;
 }
-.kicker { font-size: 11px; letter-spacing: 0.3em; color: var(--vio2-ink-3); margin-bottom: 18px; }
+/* 学期贴纸：粉底黑字，微旋转（双主题恒色） */
+.sticker {
+  display: inline-block;
+  background: var(--vio2-pink);
+  color: #101010;
+  border: 2px solid var(--vio2-bd);
+  box-shadow: 4px 4px 0 var(--vio2-shadow);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 3px 12px 4px;
+  margin-bottom: 22px;
+  transform: rotate(-1.5deg);
+}
 .left h1 {
   font-family: var(--vio2-din);
   font-weight: 900;
-  font-size: 64px;
-  line-height: 1.12;
+  font-size: 56px;
+  line-height: 1.3;
   letter-spacing: 0.02em;
   color: var(--vio2-ink);
 }
-.left h1 .dot { color: var(--vio2-yellow); -webkit-text-stroke: 2px var(--vio2-ink); }
+/* 标题彩色块：黄底主词 / 丁香紫底次词，贴纸感（双主题恒色，字恒黑） */
+.left h1 .blk {
+  display: inline-block;
+  background: var(--vio2-yellow);
+  color: #101010;
+  border: 3px solid var(--vio2-bd);
+  box-shadow: 5px 5px 0 var(--vio2-shadow);
+  padding: 0 14px;
+  transform: rotate(-1deg);
+}
+.left h1 .blk.p { background: var(--vio2-lilac); }
 .desc { margin-top: 20px; max-width: 400px; font-size: 14px; color: var(--vio2-ink-2); line-height: 2; }
+.desc b { font-weight: 700; color: var(--vio2-ink); }
 .stats { margin-top: 34px; display: flex; gap: 14px; flex-wrap: wrap; }
 .stat {
   background: var(--vio2-panel);
@@ -162,6 +187,11 @@ async function onSubmit() {
 }
 .stat b { display: block; font-size: 24px; font-weight: 900; color: var(--vio2-ink); }
 .stat span { font-size: 10px; letter-spacing: 0.14em; color: var(--vio2-ink-3); }
+/* 数据块四色：白 / 黄 / 丁香紫 / 绿，彩底恒黑字（双主题恒色） */
+.stat.y { background: var(--vio2-yellow); }
+.stat.l { background: var(--vio2-lilac); }
+.stat.g { background: var(--vio2-green); }
+.stat.y b, .stat.y span, .stat.l b, .stat.l span, .stat.g b, .stat.g span { color: #101010; }
 .stripes {
   margin-top: 34px;
   width: 240px;
@@ -189,6 +219,20 @@ async function onSubmit() {
   letter-spacing: 0.12em;
   padding: 2px 10px 3px;
   transform: rotate(-2deg);
+}
+/* 表单卡右上小旗：黑底黄字（双主题恒色） */
+.flag {
+  position: absolute;
+  top: -14px;
+  right: 22px;
+  background: var(--vio2-head);
+  color: var(--vio2-yellow);
+  border: 2px solid var(--vio2-bd);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  padding: 3px 10px 4px;
+  transform: rotate(2deg);
 }
 .panel h2 {
   font-family: var(--vio2-din);

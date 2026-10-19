@@ -10,6 +10,7 @@ import com.viomanager.approval.entity.ApprovalRecord;
 import com.viomanager.approval.mapper.ApprovalMapper;
 import com.viomanager.approval.mapper.ApprovalRecordMapper;
 import com.viomanager.approval.service.IApprovalQueryService;
+import com.viomanager.approval.support.UnreadCounter;
 import com.viomanager.approval.vo.ApprovalDetailVO;
 import com.viomanager.approval.vo.ApprovalRecordVO;
 import com.viomanager.approval.vo.ApprovalVO;
@@ -49,6 +50,9 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
 
     @Resource
     private OrgScopeSupport orgScopeSupport;
+
+    @Resource
+    private UnreadCounter unreadCounter;
 
     @Override
     public Result<PageResult<ApprovalVO>> list(ApprovalQueryDTO dto) {
@@ -151,23 +155,16 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
     @Override
     public Result<UnreadCountVO> unreadCount() {
         CurrentUser user = UserHolder.getUser();
-        UnreadCountVO vo = new UnreadCountVO();
         //1.当前用户没绑人员档案（纯管理账号）→ 两类红点都是 0
         Long memberId = currentMemberId(user);
         if (memberId == null) {
+            UnreadCountVO vo = new UnreadCountVO();
             vo.setTodoCount(0);
             vo.setResultCount(0);
             return Result.ok(vo);
         }
-        //2.待处理数：发给我的邀请 / 解散通知（PENDING 且未读）
-        Long todoCount = approvalMapper.selectCount(new QueryWrapper<Approval>()
-                .eq("target_member_id", memberId).eq("status", "PENDING").eq("target_read", 0));
-        //3.结果数：我发起的申请已出结果但我没看
-        Long resultCount = approvalMapper.selectCount(new QueryWrapper<Approval>()
-                .eq("applicant_id", memberId).ne("status", "PENDING").eq("applicant_read", 0));
-        vo.setTodoCount(todoCount == null ? 0 : todoCount);
-        vo.setResultCount(resultCount == null ? 0 : resultCount);
-        return Result.ok(vo);
+        //2.计数口径收口到 UnreadCounter：读路径与消费者重算回写走同一段逻辑，数字不会漂移
+        return Result.ok(unreadCounter.countFor(memberId));
     }
 
     /** 详情可见性：超管 / 发起人 / 目标人 / 审批组织子树内管理员，其余 6002 */

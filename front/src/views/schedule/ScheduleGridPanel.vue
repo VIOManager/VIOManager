@@ -8,7 +8,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiCancelSchedule, apiCreateSchedules, apiFreeSlotMembers, apiScheduleExport, apiScheduleRules, apiSchedules } from '@/api/schedule'
 import type { FreeMember, ScheduleCell, ScheduleRule } from '@/api/schedule'
-import { apiOrgTree } from '@/api/org'
+import { apiOrgTreeSafe } from '@/api/org'
 import type { OrgNode } from '@/api/org'
 import { SLOT_LABEL, WEEKDAY_LABEL } from '@/config/labels'
 import { BizError } from '@/api/http'
@@ -133,7 +133,7 @@ function flatten(nodes: OrgNode[], out: Array<{ id: string; name: string }>) {
 }
 
 onMounted(async () => {
-  const tree = await apiOrgTree()
+  const tree = await apiOrgTreeSafe()
   const out: Array<{ id: string; name: string }> = []
   flatten(tree, out)
   orgs.value = out

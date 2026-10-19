@@ -73,7 +73,7 @@ registerMock({
     if (!me) return fail(1003, '仅学生成员可提交周报')
     const weekNo = Number(ctx.body.weekNo ?? 0)
     const sem = activeSemester()
-    if (!weekNo || weekNo < 1 || weekNo > sem.weekCount) return fail(8047, '周次超出学期教学周数')
+    if (!weekNo || weekNo < 1 || weekNo > sem.totalWeeks) return fail(8047, '周次超出学期教学周数')
     const workContent = String(ctx.body.workContent ?? '').trim()
     if (!workContent) return fail(1001, '工作内容不能为空')
     for (const w of weeklies) {

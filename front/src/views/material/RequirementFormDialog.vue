@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * 材料要求新建/编辑弹窗（PC1，MR01/MR02）
- * 12 种预设类型（labels.ts 唯一来源）；类型切换时格式白名单带出默认值
- * 校验：类型必选、格式至少一种、大小 1–200MB（前端提示 + 后端 1001 兜底）
+ * 12 种预设类型（labels.ts 唯一来源）；类型切换时格式白名单带出默认值、名称空时带出类型中文名
+ * 校验：名称必填、类型必选、格式至少一种、大小 1–200MB（前端提示 + 后端 1001 兜底）
  */
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -28,25 +28,33 @@ watch(visible, (v) => emit('update:modelValue', v))
 /** 常见格式白名单（要求表单可选项） */
 const FORMAT_OPTIONS = ['pdf', 'doc', 'docx', 'jpg', 'png', 'pptx', 'xlsx', 'zip', 'rar']
 
-const form = reactive({ materialType: '', requiredFlag: 1, allowedFormats: [] as string[], namingRule: '', maxSizeMb: 10 })
+const form = reactive({ materialType: '', name: '', requiredFlag: 1, allowedFormats: [] as string[], namingRule: '', maxSizeMb: 10 })
 const saving = ref(false)
 
 function reset() {
   form.materialType = props.requirement ? props.requirement.materialType : ''
+  form.name = props.requirement ? props.requirement.name : ''
   form.requiredFlag = props.requirement ? props.requirement.requiredFlag : 1
   form.allowedFormats = props.requirement ? props.requirement.allowedFormats.slice() : []
   form.namingRule = props.requirement ? props.requirement.namingRule : ''
   form.maxSizeMb = props.requirement ? props.requirement.maxSizeMb : 10
 }
 
-/** 类型切换：未手动改过格式时带出该类型默认格式 */
+/** 类型切换：未手动改过格式时带出该类型默认格式；名称为空时带出类型中文名（可改） */
 function onTypeChange(v: string) {
   for (const t of MATERIAL_TYPES) {
-    if (t.value === v) form.allowedFormats = t.defaultFormats.slice()
+    if (t.value === v) {
+      form.allowedFormats = t.defaultFormats.slice()
+      if (!form.name.trim()) form.name = t.label
+    }
   }
 }
 
 async function onSave() {
+  if (!form.name.trim()) {
+    ElMessage.warning('请填写要求名称')
+    return
+  }
   if (!form.materialType) {
     ElMessage.warning('请选择材料类型')
     return
@@ -61,7 +69,7 @@ async function onSave() {
   }
   saving.value = true
   try {
-    const body = { materialType: form.materialType, requiredFlag: form.requiredFlag, allowedFormats: form.allowedFormats, namingRule: form.namingRule.trim(), maxSizeMb: form.maxSizeMb }
+    const body = { materialType: form.materialType, name: form.name.trim(), requiredFlag: form.requiredFlag, allowedFormats: form.allowedFormats, namingRule: form.namingRule.trim(), maxSizeMb: form.maxSizeMb }
     if (props.requirement) {
       await apiUpdateRequirement(props.requirement.id, body)
     } else {
@@ -79,6 +87,9 @@ async function onSave() {
 <template>
   <el-dialog v-model="visible" :title="requirement ? '编辑材料要求' : '添加材料要求'" width="520px">
     <el-form label-width="92px" @submit.prevent>
+      <el-form-item label="要求名称" required>
+        <el-input v-model="form.name" placeholder="如：报名表PDF版（选类型后自动带出，可改）" maxlength="50" />
+      </el-form-item>
       <el-form-item label="材料类型" required>
         <el-select v-model="form.materialType" placeholder="12 种预设类型" style="width: 100%" @change="onTypeChange">
           <el-option v-for="t in MATERIAL_TYPES" :key="t.value" :value="t.value" :label="t.label" />

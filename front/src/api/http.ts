@@ -6,7 +6,7 @@
  *   1002      清 token 踢回登录页（登录过期/改密后旧 token/账号停用）
  *   1005      提示"请勿重复提交"（幂等命中）
  *   其余业务码 ElMessage 弹 message，reject 交页面兜底
- *   HTTP 层异常（断网/5xx）统一兜底提示
+ *   HTTP 层异常（断网/5xx 无响应体）统一兜底提示；带统一响应体的 4xx 按业务码分流弹真实 message
  * ⚠️ 安全：token 注入 Authorization 头只允许在本文件做，页面禁止手工拼（规范 §5.3）
  * ⚠️ 安全：本文件只做展示层分流，不构成任何权限依据
  */
@@ -67,6 +67,28 @@ http.interceptors.response.use(
   },
   (err) => {
     const silent = ((err.config ?? {}) as unknown as { silent?: boolean }).silent === true
+    // HTTP 层 401：后端 JWT 过滤器直接回 401 状态码 + code 1002 响应体（后端重启/令牌过期走这里，
+    // 不经过上方 2xx 分支的 1002 处理）——同样清 token 踢回登录，
+    // 否则用户只会看到误导性的"网络异常"满屏刷（2026-10-17 组织管理排查定位）
+    if (err.response?.status === 401) {
+      const body = err.response.data as Result
+      sessionStorage.removeItem(TOKEN_KEY)
+      if (!silent) ElMessage.error(body?.message || '登录已失效，请重新登录')
+      window.location.assign('/login')
+      return Promise.reject(new BizError(1002, body?.message ?? '未登录或令牌已过期'))
+    }
+    // HTTP 4xx/5xx 但带统一响应体：后端部分业务拒绝直接回 HTTP 403/400 + code/message 响应体
+    // （如审批中心 P01 视角对无档案账号回 1003"当前账号未绑定人员档案"），与 2xx 分支同口径
+    // 弹真实 message——否则原因被"网络异常"吞掉（2026-10-19 审批中心超管视角排查定位）
+    const errBody = err.response?.data as Result | undefined
+    if (errBody && typeof errBody.code === 'number') {
+      if (errBody.code === 1005) {
+        if (!silent) ElMessage.warning('请勿重复提交')
+        return Promise.reject(new BizError(errBody.code, errBody.message))
+      }
+      if (!silent) ElMessage.error(errBody.message || '操作失败')
+      return Promise.reject(new BizError(errBody.code, errBody.message))
+    }
     if (!silent) ElMessage.error('网络异常，请稍后重试')
     return Promise.reject(err)
   }

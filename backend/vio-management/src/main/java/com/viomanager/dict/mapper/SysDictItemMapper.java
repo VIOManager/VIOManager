@@ -28,4 +28,21 @@ public interface SysDictItemMapper extends BaseMapper<SysDictItem> {
             + "WHERE dict_code = #{dictCode} AND status = 1 AND deleted = 0 "
             + "ORDER BY sort_no, id")
     List<SysDictItem> selectEnabledByCode(@Param("dictCode") String dictCode);
+
+    /**
+     * D02 查重：字典内值唯一（含待审核与已驳回）。
+     * 学生提交链路上的查询必须声明 ALL——BaseMapper 的 selectCount 没挂注解会被默认拒绝拦下。
+     */
+    @DataScope(scope = DataScope.Scope.ALL)
+    @Select("SELECT COUNT(*) FROM sys_dict_item "
+            + "WHERE dict_code = #{dictCode} AND item_value = #{itemValue} AND deleted = 0")
+    int countByValue(@Param("dictCode") String dictCode, @Param("itemValue") String itemValue);
+
+    /**
+     * D02 排序号：当前最大 sort_no（无行返回 0），新补充项排在其后。同上需声明 ALL。
+     */
+    @DataScope(scope = DataScope.Scope.ALL)
+    @Select("SELECT COALESCE(MAX(sort_no), 0) FROM sys_dict_item "
+            + "WHERE dict_code = #{dictCode} AND deleted = 0")
+    int maxSortNo(@Param("dictCode") String dictCode);
 }
