@@ -1,13 +1,13 @@
 /**
  * 项目管理 mock 接口层·成员与指导教师（PR06–PR10，从 project.ts 拆出控制行数）
- * 不走审批（PRD §3.9 审批清单不含项目加人）；写操作仅项目所有人（7002）
+ * 不走审批（PRD §3.9 审批清单不含项目加人）；写操作=所有人或管理员（2026-10-16 拍板，7002）
  */
 import { fail, ok, registerMock } from './registry'
 import { meAsMember } from './member'
 import { members } from './member-data'
 import { nowText } from './approval-data'
 import { projectAdvisors, projectMembers, visibleTo } from './project-data'
-import { findProject, viewCtx } from './project'
+import { canManageMock, findProject, viewCtx } from './project'
 // ── PR06–PR10 成员与指导教师（不走审批）──
 
 registerMock({
@@ -17,7 +17,13 @@ registerMock({
     const p = findProject(ctx.params.id)
     if (!p) return fail(7001, '项目不存在')
     if (!visibleTo(p, viewCtx(ctx.token))) return fail(7003, '无权查看该项目')
-    return ok(projectMembers.filter((m) => m.projectId === p.id))
+    // 出参对齐真后端契约：memberName/projectRole/joinAt（内部存量是 name/role/joinedAt）
+    return ok(projectMembers.filter((m) => m.projectId === p.id).map((m) => ({
+      memberId: m.memberId,
+      memberName: m.name,
+      projectRole: m.role,
+      joinAt: m.joinedAt
+    })))
   }
 })
 
@@ -28,7 +34,7 @@ registerMock({
     const p = findProject(ctx.params.id)
     if (!p) return fail(7001, '项目不存在')
     const vc = viewCtx(ctx.token)
-    if (!vc.meId || p.ownerId !== vc.meId) return fail(7002, '仅项目所有人可操作')
+    if (!canManageMock(p, vc)) return fail(7002, '仅项目所有人或管理员可操作')
     const memberId = String(ctx.body.memberId ?? '')
     const target = members.find((m) => m.id === memberId)
     if (!target) return fail(1004, '人员不存在')
@@ -47,7 +53,7 @@ registerMock({
     const p = findProject(ctx.params.id)
     if (!p) return fail(7001, '项目不存在')
     const vc = viewCtx(ctx.token)
-    if (!vc.meId || p.ownerId !== vc.meId) return fail(7002, '仅项目所有人可操作')
+    if (!canManageMock(p, vc)) return fail(7002, '仅项目所有人或管理员可操作')
     for (const m of projectMembers) {
       if (m.projectId === p.id && m.memberId === ctx.params.memberId) {
         if (m.role === 'OWNER') return fail(7002, '所有人不可移除')
@@ -66,7 +72,7 @@ registerMock({
     const p = findProject(ctx.params.id)
     if (!p) return fail(7001, '项目不存在')
     const vc = viewCtx(ctx.token)
-    if (!vc.meId || p.ownerId !== vc.meId) return fail(7002, '仅项目所有人可操作')
+    if (!canManageMock(p, vc)) return fail(7002, '仅项目所有人或管理员可操作')
     const memberId = String(ctx.body.memberId ?? '')
     const target = members.find((m) => m.id === memberId)
     if (!target) return fail(1004, '人员不存在')
@@ -86,7 +92,7 @@ registerMock({
     const p = findProject(ctx.params.id)
     if (!p) return fail(7001, '项目不存在')
     const vc = viewCtx(ctx.token)
-    if (!vc.meId || p.ownerId !== vc.meId) return fail(7002, '仅项目所有人可操作')
+    if (!canManageMock(p, vc)) return fail(7002, '仅项目所有人或管理员可操作')
     for (const a of projectAdvisors) {
       if (a.projectId === p.id && a.memberId === ctx.params.memberId) {
         projectAdvisors.splice(projectAdvisors.indexOf(a), 1)

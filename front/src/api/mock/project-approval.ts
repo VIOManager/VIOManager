@@ -8,6 +8,7 @@ import { registerApprovalHandler, nowText } from './approval-data'
 import { milestones, projectTasks, teamProjectRefs, viewGrants } from './project-data'
 import { projects } from './project-data'
 import { teams } from './team-data'
+import type { MockMilestone } from './project-data'
 
 let taskSeq = 100
 
@@ -20,36 +21,42 @@ function payloadOf(raw: string): Record<string, unknown> {
   }
 }
 
+/** 节点生效动作（审批回调 onApproved 与超管创建直生效共用，2026-10-16 拍板同口径）：
+ *  转 APPROVED + 给挂载该比赛的每个 ACTIVE 项目同步生成任务（防重：同节点不重复建） */
+export function applyMilestoneApproved(m: MockMilestone, approvedBy: string): void {
+  if (m.status === 'APPROVED') return
+  m.status = 'APPROVED'
+  m.approvedAt = nowText()
+  m.approvedBy = approvedBy
+  // 同步：挂载该比赛的 ACTIVE 赛队 → 其 ACTIVE 项目各建一条节点任务
+  const projectIds: string[] = []
+  for (const r of teamProjectRefs) {
+    if (r.status !== 'ACTIVE') continue
+    const t = teams.find((x) => x.id === r.teamId)
+    if (!t || t.contestId !== m.contestId) continue
+    const proj = projects.find((x) => x.id === r.projectId && x.status === 'ACTIVE')
+    if (proj && projectIds.indexOf(proj.id) < 0) projectIds.push(proj.id)
+  }
+  for (const pid of projectIds) {
+    let dup = false
+    for (const t of projectTasks) {
+      if (t.projectId === pid && t.milestoneNodeId === m.id) dup = true
+    }
+    if (dup) continue
+    projectTasks.push({
+      id: 'pt' + taskSeq++, projectId: pid, title: m.name, description: m.description,
+      assigneeMemberId: '', assigneeName: '', dueDate: m.nodeTime, priority: 'HIGH', status: 'TODO',
+      sortNo: 90, milestoneNodeId: m.id, completedAt: '', completedByName: ''
+    })
+  }
+  m.synced = true
+}
+
 registerApprovalHandler('MILESTONE_APPROVE', {
   onApproved: (a) => {
     const p = payloadOf(a.payloadJson)
     const m = milestones.find((x) => x.id === String(p.milestoneId ?? ''))
-    if (!m || m.status === 'APPROVED') return
-    m.status = 'APPROVED'
-    m.approvedAt = nowText()
-    m.approvedBy = a.handledBy
-    // 同步：挂载该比赛的 ACTIVE 赛队 → 其 ACTIVE 项目各建一条节点任务
-    const projectIds: string[] = []
-    for (const r of teamProjectRefs) {
-      if (r.status !== 'ACTIVE') continue
-      const t = teams.find((x) => x.id === r.teamId)
-      if (!t || t.contestId !== m.contestId) continue
-      const proj = projects.find((x) => x.id === r.projectId && x.status === 'ACTIVE')
-      if (proj && projectIds.indexOf(proj.id) < 0) projectIds.push(proj.id)
-    }
-    for (const pid of projectIds) {
-      let dup = false
-      for (const t of projectTasks) {
-        if (t.projectId === pid && t.milestoneNodeId === m.id) dup = true
-      }
-      if (dup) continue
-      projectTasks.push({
-        id: 'pt' + taskSeq++, projectId: pid, title: m.name, description: m.description,
-        assigneeMemberId: '', assigneeName: '', dueDate: m.nodeTime, priority: 'HIGH', status: 'TODO',
-        sortNo: 90, milestoneNodeId: m.id, completedAt: '', completedByName: ''
-      })
-    }
-    m.synced = true
+    if (m) applyMilestoneApproved(m, a.handledBy)
   },
   onRejected: (a) => {
     const p = payloadOf(a.payloadJson)

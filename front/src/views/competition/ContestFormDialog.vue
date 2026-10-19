@@ -3,6 +3,8 @@
  * 比赛创建/编辑弹窗（C03/C04；也承接待处理池确认预填 P02）
  * 模板选定后规则走 RulesEditor override 模式（只存被覆盖的键）
  * 时间窗校验：报名起 < 报名止 < 比赛起 < 比赛止（前端先挡一道，后端仍兜底）
+ * 起止四字段是时间字段：契约 yyyy-MM-dd HH:mm:ss（规范 §2.1），datetime picker 直出该格式
+ * （2026-10-19 修复：原 date picker 只出 YYYY-MM-DD，后端 LocalDateTime 解析失败报 1001）
  */
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -11,6 +13,10 @@ import type { ContestTemplate, RulesMap } from '@/api/contest'
 import { apiSemestersSafe } from '@/api/semester'
 import type { Semester } from '@/api/semester'
 import RulesEditor from '@/components/RulesEditor.vue'
+
+/** datetime picker 仅选日期时的默认时刻：起始类=当天 00:00:00，截止类=当天 23:59:59 */
+const dayStart = new Date(2000, 0, 1, 0, 0, 0)
+const dayEnd = new Date(2000, 0, 1, 23, 59, 59)
 
 const visible = defineModel<boolean>({ required: true })
 const props = defineProps<{
@@ -103,14 +109,14 @@ async function onSubmit() {
       </el-form-item>
       <el-form-item label="报名起止">
         <div style="display: flex; gap: 8px; width: 100%">
-          <el-date-picker v-model="form.signupStart" type="date" value-format="YYYY-MM-DD" style="width: 50%" />
-          <el-date-picker v-model="form.signupEnd" type="date" value-format="YYYY-MM-DD" style="width: 50%" />
+          <el-date-picker v-model="form.signupStart" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" :default-time="dayStart" placeholder="报名开始" style="width: 50%" />
+          <el-date-picker v-model="form.signupEnd" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" :default-time="dayEnd" placeholder="报名截止" style="width: 50%" />
         </div>
       </el-form-item>
       <el-form-item label="比赛起止">
         <div style="display: flex; gap: 8px; width: 100%">
-          <el-date-picker v-model="form.contestStart" type="date" value-format="YYYY-MM-DD" style="width: 50%" />
-          <el-date-picker v-model="form.contestEnd" type="date" value-format="YYYY-MM-DD" style="width: 50%" />
+          <el-date-picker v-model="form.contestStart" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" :default-time="dayStart" placeholder="比赛开始" style="width: 50%" />
+          <el-date-picker v-model="form.contestEnd" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" :default-time="dayEnd" placeholder="比赛结束" style="width: 50%" />
         </div>
       </el-form-item>
       <el-form-item label="联系人"><el-input v-model="form.contact" placeholder="姓名 + 手机号" /></el-form-item>

@@ -94,6 +94,15 @@ function statusStamp(s: string): string {
   return 'dim'
 }
 
+/** 列表起止显示：到日、同年省略右端年份（"2026-11-20 ~ 12-05"）；完整时分秒在详情抽屉。
+ *  完整时间段每列 ~320px 会把名称列挤到 60px，比赛名折行导致行高参差（2026-10-19 间距修复） */
+function rangeOf(start: string, end: string): string {
+  if (!start && !end) return '— ~ —'
+  const s = start ? start.slice(0, 10) : '—'
+  const e = !end ? '—' : (start.slice(0, 4) === end.slice(0, 4) ? end.slice(5, 10) : end.slice(0, 10))
+  return s + ' ~ ' + e
+}
+
 onMounted(async () => {
   void load()
   semesters.value = await apiSemestersSafe()
@@ -131,17 +140,27 @@ onMounted(async () => {
       </div>
 
       <div class="panel">
-        <table class="ledger">
+        <table class="ledger cols-fixed">
           <thead>
-            <tr><th>名称</th><th>学期</th><th>状态</th><th>报名起止</th><th>比赛起止</th><th class="num">赛道</th><th class="num">赛队</th><th style="width: 60px">操作</th></tr>
+            <!-- 固定布局（cols-fixed）：列宽只认此处设定，内容不再撑列；名称列拿剩余宽度 -->
+            <tr>
+              <th>名称</th>
+              <th style="width: 170px">学期</th>
+              <th style="width: 80px">状态</th>
+              <th style="width: 165px">报名起止</th>
+              <th style="width: 165px">比赛起止</th>
+              <th class="num" style="width: 44px">赛道</th>
+              <th class="num" style="width: 44px">赛队</th>
+              <th style="width: 60px">操作</th>
+            </tr>
           </thead>
           <tbody>
             <tr v-for="c in visible" :key="c.id" class="linkrow" @click="openDetail(c.id)">
-              <td style="color: var(--vio-ink); font-weight: 600">{{ c.name }}</td>
+              <td class="name-cell" style="color: var(--vio-ink); font-weight: 600" :title="c.name">{{ c.name }}</td>
               <td class="nw">{{ c.semesterName }}</td>
               <td><span class="stamp" :class="statusStamp(c.status)">{{ CONTEST_STATUS_LABEL[c.status] }}</span></td>
-              <td class="mono nw">{{ c.signupStart || '—' }} ~ {{ c.signupEnd || '—' }}</td>
-              <td class="mono nw">{{ c.contestStart || '—' }} ~ {{ c.contestEnd || '—' }}</td>
+              <td class="mono nw">{{ rangeOf(c.signupStart, c.signupEnd) }}</td>
+              <td class="mono nw">{{ rangeOf(c.contestStart, c.contestEnd) }}</td>
               <td class="num mono">{{ c.trackCount }}</td>
               <td class="num mono">{{ c.teamCount }}</td>
               <td><button class="btn-act" @click.stop="openDetail(c.id)">详情</button></td>
@@ -162,6 +181,10 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* 名称单元格单行省略：超长比赛名截断显示（悬停 title / 详情抽屉看全名），
+   保证每行单行、行距一致（2026-10-19 间距修复） */
+.cols-fixed { table-layout: fixed; }
+.cols-fixed td.name-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
 .tab {
   background: var(--vio2-panel);

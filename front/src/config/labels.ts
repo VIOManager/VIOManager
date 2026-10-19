@@ -229,19 +229,19 @@ export const PROJECT_VISIBILITY_LABEL: Record<string, string> = {
   PUBLIC: '全平台可见'
 }
 
-/** 项目任务优先级 */
+/** 项目任务优先级（PR22 契约仅 LOW/NORMAL/HIGH；URGENT 是 mock 自造值，后端会拒） */
 export const TASK_PRIORITY_LABEL: Record<string, string> = {
   LOW: '低',
   NORMAL: '普通',
-  HIGH: '高',
-  URGENT: '紧急'
+  HIGH: '高'
 }
 
-/** 项目任务状态 */
+/** 项目任务状态（PR21 四态；BLOCKED 缺失会渲染 undefined） */
 export const TASK_STATUS_LABEL: Record<string, string> = {
   TODO: '待办',
   DOING: '进行中',
-  DONE: '已完成'
+  DONE: '已完成',
+  BLOCKED: '受阻'
 }
 
 /** 比赛时间节点类型（项目清单 §3.4） */
