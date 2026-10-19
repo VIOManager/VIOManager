@@ -58,7 +58,8 @@ public class MaterialZipBatchSupport {
      * 匹配到的要求（含已交过被跳过的）记入 matched；没匹配到任何要求的条目名记入 unmatched。
      */
     public BatchMatchResultVO matchAndInsert(MaterialTask task, TeamRow team, Long memberId,
-                                             String realName, MaterialBatchUploadDTO dto) {
+                                             String realName, MaterialBatchUploadDTO dto,
+                                             long zipFileSize) {
         //1.第一层：真实解压读条目名；失败（存储不可用等）降级为压缩包名单条目，绝不让接口 500
         List<String> names;
         try {
@@ -71,6 +72,11 @@ public class MaterialZipBatchSupport {
         List<MaterialRequirement> reqs = requirementMapper.selectList(
                 new QueryWrapper<MaterialRequirement>().eq("task_id", dto.getTaskId())
                         .orderByAsc("sort_no").orderByAsc("id"));
+        //并发防线（与 MS02 / A06 同一把锁，见 MaterialSubmissionMapper 注释）：先逐要求锁住该队的
+        //提交行再读已交集合——否则两个并发批量都读到"未交"，各插一条 version_no=1 / is_current=1
+        for (MaterialRequirement req : reqs) {
+            submissionMapper.lockByRequirementAndTeam(req.getId(), dto.getTeamId());
+        }
         Set<Long> submittedReqIds = new HashSet<>(
                 submissionMapper.selectCurrentRequirementIds(dto.getTeamId()));
         //3.逐要求匹配：命中即记 matched；未交过的落库（versionNo 取历史最大 +1，无历史即为 1）
@@ -94,8 +100,11 @@ public class MaterialZipBatchSupport {
             submission.setSemesterId(task.getSemesterId());
             submission.setOrgId(team.getOrgId());
             submission.setFileId(dto.getFileId());
-            submission.setFileName(team.getName() + "-" + label + ".pdf");
-            submission.setFileSize(0L);
+            //兜底层（以及真实解压层）落库的 fileId 都是整个压缩包，取不出单个条目，
+            //所以文件名后缀用 .zip、大小用压缩包真实大小 —— 否则会出现"记录名是 .pdf、
+            //下载下来却是 zip"的误导，MS04 下载的文件名也与内容不符。
+            submission.setFileName(team.getName() + "-" + label + ".zip");
+            submission.setFileSize(zipFileSize);
             submission.setIsCurrent(1);
             submission.setVersionNo((maxVersion == null ? 0 : maxVersion) + 1);
             submission.setSubmittedBy(memberId);

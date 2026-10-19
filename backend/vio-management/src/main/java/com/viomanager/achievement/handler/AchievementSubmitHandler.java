@@ -2,6 +2,7 @@ package com.viomanager.achievement.handler;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.viomanager.achievement.entity.Achievement;
@@ -9,7 +10,6 @@ import com.viomanager.achievement.mapper.AchievementMapper;
 import com.viomanager.approval.handler.ApprovalHandler;
 import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
-import com.viomanager.material.entity.MaterialRequirement;
 import com.viomanager.material.entity.MaterialTask;
 import com.viomanager.material.mapper.MaterialRequirementMapper;
 import com.viomanager.material.mapper.MaterialTaskMapper;
@@ -25,13 +25,15 @@ import org.springframework.stereotype.Component;
 
 /**
  * 成果提交审批回调（bizType=ACHIEVEMENT_SUBMIT，§5 联动）：
- * 批准 → 成果置 APPROVED + 给队伍的材料任务自动追加一条"佐证材料"必交项 + 重算齐全率；
+ * 批准 → 成果置 APPROVED；未带佐证的成果给队伍材料任务追加一条"佐证材料"必交项并重算齐全率，
+ * 已带佐证的只按比赛整场重算（接口清单 §5「有审批通过成果但未传佐证的队伍」才加必交项）；
  * 驳回 → 成果置 REJECTED，不动材料侧任何数据。
  *
  * 契约与幂等说明（ApprovalHandler 契约）：
  *  1. 骨架保证回调"至多一次"，且与审批处理在**同一事务**内；本 Handler 全部是数据库操作
  *     → **无需自建幂等**（事务内的库操作失败会连同审批结果一起回滚，契约第 1 条）。
- *  2. 幂等的第二层保证：EVIDENCE 要求"已存在则不再新增"——同一队伍通过 2 条成果只加 1 条佐证项。
+ *  2. 幂等的第二层保证：EVIDENCE 要求"已存在则不再新增"（insertEvidenceIfAbsent 原子插入，
+ *     并发也只落一条）——同一队伍通过 2 条成果只加 1 条佐证项。
  *  3. 待审批（PENDING）的成果**不占用**佐证必交项：只有审批通过才触发，且本 Handler 只在 onApproved 里加。
  *
  * 联动核心 linkEvidenceRequirement 同时服务管理员直录路径（AchievementApprovalSupport 的调用点位），
@@ -89,8 +91,8 @@ public class AchievementSubmitHandler implements ApprovalHandler {
                 .set("approved_at", LocalDateTime.now())
                 .set("approved_by", approverUserId());
         achievementMapper.update(null, wrapper);
-        //3+4.联动：给队伍材料任务追加佐证必交项（已有则跳过）并重算齐全率
-        linkEvidenceRequirement(achievement.getTeamId());
+        //3+4.联动：未带佐证的成果追加佐证必交项并重算本队；已带佐证的只整场重算（§5 口径）
+        handleSection5Linkage(achievement);
         //5.返回成果 ID（创建型审批，骨架用它回填 approval.biz_id）
         return achievement.getId();
     }
@@ -110,17 +112,41 @@ public class AchievementSubmitHandler implements ApprovalHandler {
         UpdateWrapper<Achievement> wrapper = new UpdateWrapper<>();
         //驳回意见（comment）在回调签名与 payloadJson 里都拿不到——留空
         // TODO(骨架) 建议后续把 comment 随 payloadJson 下发或扩展回调上下文，届时回填 reject_reason
+        //状态前置条件：只驳待审批的——已 APPROVED 的成果若被改成 REJECTED，材料侧的佐证项
+        //与齐全率不会随驳回回滚，会形成永久不一致；0 行（已被并发改状态）记 warn 放弃
         wrapper.eq("id", achievement.getId())
+                .eq("status", "PENDING")
                 .set("status", "REJECTED")
                 .set("reject_reason", null);
-        achievementMapper.update(null, wrapper);
+        if (achievementMapper.update(null, wrapper) == 0) {
+            log.warn("ACHIEVEMENT_SUBMIT 驳回回调：成果 {} 已不是待审批状态，跳过驳回（材料侧联动不回滚）",
+                    achievement.getId());
+            return;
+        }
         //驳回不加佐证必交项、不重算齐全率（PENDING 成果不占用佐证项）
+    }
+
+    /**
+     * §5 联动统一入口（审批批准回调与管理员直录两路共用）：
+     * 成果已带佐证（evidenceFileId 非空）→ 不追加必交项，仅重算本队状态保持收敛
+     * （个人成果 teamId 为空时无材料侧可算，直接返回）。
+     * 成果未带佐证 → 走 {@link #linkEvidenceRequirement} 追加必交项并重算。
+     */
+    public void handleSection5Linkage(Achievement achievement) {
+        if (achievement.getEvidenceFileId() != null) {
+            if (achievement.getTeamId() != null) {
+                completionService.recompute(achievement.getTeamId());
+            }
+            return;
+        }
+        linkEvidenceRequirement(achievement.getTeamId());
     }
 
     /**
      * §5 联动核心（审批批准与管理员直录两路共用）：
      * 该队所在比赛的材料任务下没有 EVIDENCE 要求时追加一条 system_generated=1 的必交项，
      * 随后重算齐全率——要求数 +1 而提交数不变 → 齐全率下降，队伍状态可能转 PENDING。
+     * ⚠️ 调用方保证只在「成果未带佐证」时调用（已带佐证的走 handleSection5Linkage 整场重算分支）。
      */
     public void linkEvidenceRequirement(Long teamId) {
         TeamRow team = teamQuery.loadTeam(teamId);
@@ -128,34 +154,23 @@ public class AchievementSubmitHandler implements ApprovalHandler {
             log.warn("§5 联动找不到队伍，跳过佐证必交项追加：teamId={}", teamId);
             return;
         }
-        //一赛一任务是建任务的强规则，selectList 容错取第一条
+        //一赛一任务是建任务的强规则；orderByAsc("id") 定序，多任务容错时取第一条不再漂移
         List<MaterialTask> tasks = taskMapper.selectList(
-                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
+                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId())
+                        .orderByAsc("id"));
         if (tasks.isEmpty()) {
             log.warn("§5 联动：队伍 {} 所在比赛没有材料任务，跳过佐证必交项追加", teamId);
             return;
         }
         MaterialTask task = tasks.get(0);
-        //已有 EVIDENCE 要求（含 system_generated=1 的历史项）则不再新增——"通过 2 条成果只加 1 条佐证项"
-        Long existed = requirementMapper.selectCount(new QueryWrapper<MaterialRequirement>()
-                .eq("task_id", task.getId()).eq("material_type", "EVIDENCE"));
-        if (existed == null || existed == 0) {
-            MaterialRequirement requirement = new MaterialRequirement();
-            requirement.setTaskId(task.getId());
-            requirement.setContestId(task.getContestId());
-            requirement.setMaterialType("EVIDENCE");
-            requirement.setName("佐证材料");
-            requirement.setRequiredFlag(1);
-            requirement.setFormats("pdf,jpg,zip");
-            requirement.setMaxSizeMb(20);
-            requirement.setNamingRule("队名-成果名-佐证");
-            //系统追加项：管理端不可增删（MR02/MR03 拦截的就是这个标记）
-            requirement.setSystemGenerated(1);
-            requirement.setSortNo(999);
-            requirementMapper.insert(requirement);
-        }
-        //重算齐全率（无新增时重算一次也幂等无害）
-        completionService.recompute(teamId);
+        //原子插入（INSERT ... SELECT ... WHERE NOT EXISTS）：同任务已有未删 EVIDENCE 要求时返回 0
+        //并跳过——"通过 2 条成果只加 1 条佐证项"，且并发通过两条审批单也只可能落一条
+        requirementMapper.insertEvidenceIfAbsent(IdWorker.getId(), task.getId(), task.getContestId(),
+                "佐证材料", "pdf,jpg,zip", "队名-成果名-佐证");
+        //重算齐全率：要求集 +1 而提交数不变 → 齐全率下降，队伍状态可能转 PENDING。
+        //🔴 要求按比赛共享（material_requirement 无 team_id），新增 EVIDENCE 会让该比赛
+        //   所有队伍分母 +1，故必须按比赛批量重算，不能只重算触发的那一支队伍（P0#1）。
+        completionService.recomputeByContest(team.getContestId());
     }
 
     /** 从 payloadJson 解析成果 ID（提交时写入的是字符串化雪花 ID）；任何异常都吞掉返回 null */
