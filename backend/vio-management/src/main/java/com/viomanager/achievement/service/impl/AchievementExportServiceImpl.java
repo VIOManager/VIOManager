@@ -13,6 +13,7 @@ import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MemberIdSupport;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -81,6 +82,36 @@ public class AchievementExportServiceImpl implements AchievementExportService {
     /** POI 写 xlsx：表头 + 每成果一行；文件名带时间戳 */
     private void writeExcel(List<Achievement> achievements, Map<Long, String> teamNames,
                             HttpServletResponse response) {
+        //1.先在内存里生成完整 xlsx：响应一旦开始写就无法回写错误体（骨架业务异常是 HTTP 200 + JSON），
+        //  直接往 response.getOutputStream() 写会让用户下载到被 JSON 尾巴污染/截断的损坏文件。
+        byte[] xlsxBytes;
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+            XSSFSheet sheet = workbook.createSheet("获奖清单");
+            String[] headers = {"成果名称", "类型", "等级", "获奖日期", "归属人", "队伍"};
+            XSSFRow headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                headerRow.createCell(i).setCellValue(headers[i]);
+            }
+            int rowIdx = 1;
+            for (Achievement achievement : achievements) {
+                XSSFRow row = sheet.createRow(rowIdx++);
+                row.createCell(0).setCellValue(achievement.getName());
+                row.createCell(1).setCellValue(achievement.getAchievementType());
+                row.createCell(2).setCellValue(nullToEmpty(achievement.getLevel()));
+                row.createCell(3).setCellValue(achievement.getAwardDate() == null
+                        ? "" : achievement.getAwardDate().toString());
+                row.createCell(4).setCellValue(nullToEmpty(achievement.getOwnerName()));
+                row.createCell(5).setCellValue(achievement.getTeamId() == null
+                        ? "" : nullToEmpty(teamNames.get(achievement.getTeamId())));
+            }
+            workbook.write(buffer);
+            xlsxBytes = buffer.toByteArray();
+        } catch (IOException e) {
+            log.error("获奖导出生成失败：{}", e.getMessage());
+            throw new BizException(CommonErrorCode.INTERNAL_ERROR, "导出失败");
+        }
+        //2.生成成功后才写响应头与内容；此阶段失败只能记日志（状态码已不可改）
         try {
             response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             String fileName = "获奖导出_" + LocalDateTime.now()
@@ -88,31 +119,11 @@ public class AchievementExportServiceImpl implements AchievementExportService {
             String encodedName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
             response.setHeader("Content-Disposition",
                     "attachment; filename=\"" + encodedName + "\"; filename*=UTF-8''" + encodedName);
-            try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-                XSSFSheet sheet = workbook.createSheet("获奖清单");
-                String[] headers = {"成果名称", "类型", "等级", "获奖日期", "归属人", "队伍"};
-                XSSFRow headerRow = sheet.createRow(0);
-                for (int i = 0; i < headers.length; i++) {
-                    headerRow.createCell(i).setCellValue(headers[i]);
-                }
-                int rowIdx = 1;
-                for (Achievement achievement : achievements) {
-                    XSSFRow row = sheet.createRow(rowIdx++);
-                    row.createCell(0).setCellValue(achievement.getName());
-                    row.createCell(1).setCellValue(achievement.getAchievementType());
-                    row.createCell(2).setCellValue(nullToEmpty(achievement.getLevel()));
-                    row.createCell(3).setCellValue(achievement.getAwardDate() == null
-                            ? "" : achievement.getAwardDate().toString());
-                    row.createCell(4).setCellValue(nullToEmpty(achievement.getOwnerName()));
-                    row.createCell(5).setCellValue(achievement.getTeamId() == null
-                            ? "" : nullToEmpty(teamNames.get(achievement.getTeamId())));
-                }
-                //输出流由容器管理，这里只关工作簿
-                workbook.write(response.getOutputStream());
-            }
+            response.setContentLength(xlsxBytes.length);
+            response.getOutputStream().write(xlsxBytes);
+            response.flushBuffer();
         } catch (IOException e) {
-            log.error("获奖导出写流失败：{}", e.getMessage());
-            throw new BizException(CommonErrorCode.INTERNAL_ERROR, "导出失败");
+            log.error("获奖导出写响应失败：{}", e.getMessage());
         }
     }
 
