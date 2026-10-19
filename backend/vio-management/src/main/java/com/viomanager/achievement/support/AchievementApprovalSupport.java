@@ -111,11 +111,12 @@ public class AchievementApprovalSupport {
     }
 
     /**
-     * §5 联动调用点位：有审批通过成果但未传佐证的队伍，必交项额外加 1 条"成果佐证材料"
-     * （material_requirement.system_generated=1，管理端不可增删）。
-     * 联动逻辑在 AchievementSubmitHandler.linkEvidenceRequirement，与审批批准回调共用同一段。
+     * §5 联动调用点位（与审批批准回调共用 AchievementSubmitHandler.handleSection5Linkage）：
+     * 有审批通过成果但未传佐证的队伍，必交项额外加 1 条"成果佐证材料"
+     * （material_requirement.system_generated=1，管理端不可增删）；
+     * 管理员直录已带佐证的成果不追加必交项，仅按比赛整场重算。
      */
     private void triggerSection5Linkage(Achievement achievement) {
-        achievementSubmitHandler.linkEvidenceRequirement(achievement.getTeamId());
+        achievementSubmitHandler.handleSection5Linkage(achievement);
     }
 }

@@ -33,6 +33,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,10 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AchievementServiceImpl implements AchievementService {
+
+    /** A03 合法成果类型（接口清单口径五种；common/enums 无既有枚举，先在本类收敛，不新建枚举类） */
+    private static final Set<String> ACHIEVEMENT_TYPES =
+            Set.of("AWARD", "RATING", "QUALIFICATION", "ACTIVITY", "OTHER");
 
     @Resource
     private AchievementMapper achievementMapper;
@@ -90,6 +95,9 @@ public class AchievementServiceImpl implements AchievementService {
         if (dto.getType() == null || dto.getType().isBlank()) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "type 不能为空");
         }
+        if (!ACHIEVEMENT_TYPES.contains(dto.getType())) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "成果类型非法");
+        }
         if (dto.getName() == null || dto.getName().isBlank()) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "name 不能为空");
         }
@@ -133,6 +141,14 @@ public class AchievementServiceImpl implements AchievementService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Long id, AchievementUpdateDTO dto) {
+        //0.入参完整性：name / award_date 列 NOT NULL，null 落库会触发 MySQL 1048 兜底 1000，先拦成 1001；
+        //   level / description 列可空，传 null = 置空，不校验
+        if (dto.getName() == null || dto.getName().isBlank()) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "成果名称不能为空");
+        }
+        if (dto.getAchievedAt() == null) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "获奖日期不能为空");
+        }
         //只改四个字段（PUT 全量替换，含置空）；0 行 = 不存在或已删
         UpdateWrapper<Achievement> wrapper = new UpdateWrapper<>();
         wrapper.eq("id", id)

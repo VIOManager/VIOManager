@@ -72,6 +72,11 @@ public class MaterialZipBatchSupport {
         List<MaterialRequirement> reqs = requirementMapper.selectList(
                 new QueryWrapper<MaterialRequirement>().eq("task_id", dto.getTaskId())
                         .orderByAsc("sort_no").orderByAsc("id"));
+        //并发防线（与 MS02 / A06 同一把锁，见 MaterialSubmissionMapper 注释）：先逐要求锁住该队的
+        //提交行再读已交集合——否则两个并发批量都读到"未交"，各插一条 version_no=1 / is_current=1
+        for (MaterialRequirement req : reqs) {
+            submissionMapper.lockByRequirementAndTeam(req.getId(), dto.getTeamId());
+        }
         Set<Long> submittedReqIds = new HashSet<>(
                 submissionMapper.selectCurrentRequirementIds(dto.getTeamId()));
         //3.逐要求匹配：命中即记 matched；未交过的落库（versionNo 取历史最大 +1，无历史即为 1）

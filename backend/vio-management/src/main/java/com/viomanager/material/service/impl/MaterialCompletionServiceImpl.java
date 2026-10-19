@@ -74,9 +74,10 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         if (team == null) {
             return;
         }
-        //2.该比赛的材料任务：一赛一任务是建任务的强规则，selectList 容错取第一条
+        //2.该比赛的材料任务：一赛一任务是建任务的强规则；orderByAsc("id") 定序，容错取第一条不再漂移
         List<MaterialTask> tasks = taskMapper.selectList(
-                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
+                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId())
+                        .orderByAsc("id"));
         if (tasks.isEmpty()) {
             return;
         }
@@ -115,9 +116,10 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         if (team == null) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "赛队不存在");
         }
-        //2.该比赛的材料任务：没配任务按 404 拒绝（与 MS02 校验链同口径）
+        //2.该比赛的材料任务：没配任务按 404 拒绝（与 MS02 校验链同口径）；orderByAsc("id") 定序取第一条
         List<MaterialTask> tasks = taskMapper.selectList(
-                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
+                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId())
+                        .orderByAsc("id"));
         if (tasks.isEmpty()) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "材料任务不存在");
         }
@@ -167,9 +169,10 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         //2.我在册（CONFIRMED/UNCONFIRMED）且 ACTIVE 的队伍
         List<MyTeamMaterialVO> voList = new ArrayList<>();
         for (MyTeamRow team : teamQuery.loadMyTeams(memberId)) {
-            //3.该队所在比赛没配材料任务 → 跳过这支队伍（不报错、不出现在数组里）
+            //3.该队所在比赛没配材料任务 → 跳过这支队伍（不报错、不出现在数组里）；orderByAsc("id") 定序
             List<MaterialTask> tasks = taskMapper.selectList(
-                    new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
+                    new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId())
+                            .orderByAsc("id"));
             if (tasks.isEmpty()) {
                 continue;
             }
