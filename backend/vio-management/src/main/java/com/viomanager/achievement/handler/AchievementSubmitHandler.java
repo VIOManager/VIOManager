@@ -112,10 +112,17 @@ public class AchievementSubmitHandler implements ApprovalHandler {
         UpdateWrapper<Achievement> wrapper = new UpdateWrapper<>();
         //驳回意见（comment）在回调签名与 payloadJson 里都拿不到——留空
         // TODO(骨架) 建议后续把 comment 随 payloadJson 下发或扩展回调上下文，届时回填 reject_reason
+        //状态前置条件：只驳待审批的——已 APPROVED 的成果若被改成 REJECTED，材料侧的佐证项
+        //与齐全率不会随驳回回滚，会形成永久不一致；0 行（已被并发改状态）记 warn 放弃
         wrapper.eq("id", achievement.getId())
+                .eq("status", "PENDING")
                 .set("status", "REJECTED")
                 .set("reject_reason", null);
-        achievementMapper.update(null, wrapper);
+        if (achievementMapper.update(null, wrapper) == 0) {
+            log.warn("ACHIEVEMENT_SUBMIT 驳回回调：成果 {} 已不是待审批状态，跳过驳回（材料侧联动不回滚）",
+                    achievement.getId());
+            return;
+        }
         //驳回不加佐证必交项、不重算齐全率（PENDING 成果不占用佐证项）
     }
 

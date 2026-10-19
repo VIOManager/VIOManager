@@ -2,48 +2,42 @@ package com.viomanager.material.support;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.viomanager.common.enums.MaterialTypeEnum;
-import com.viomanager.file.service.IFileService;
 import com.viomanager.material.dto.MaterialBatchUploadDTO;
 import com.viomanager.material.entity.MaterialRequirement;
 import com.viomanager.material.entity.MaterialSubmission;
 import com.viomanager.material.entity.MaterialTask;
 import com.viomanager.material.mapper.MaterialRequirementMapper;
 import com.viomanager.material.mapper.MaterialSubmissionMapper;
+import com.viomanager.material.service.MaterialCompletionService;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
 import com.viomanager.material.vo.BatchMatchResultVO;
 import jakarta.annotation.Resource;
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * zip 批量上传支撑（MS03）：解压读条目 + 两层匹配 + 未交要求的落库。
+ * zip 批量上传支撑（MS03）：两层匹配 + 未交要求的落库。
  * 匹配规则：名字（zip 条目名 / 兜底的压缩包名）包含要求类型的中文名（MaterialTypeEnum.labelOf）。
  *
  * ⚠️ 两层匹配（C 线接口清单 §3 MS03）：
- *  - 第一层（优先）：经骨架文件服务 openCheckedStream 读 zip 流并解出条目名再逐条匹配；
- *    读流失败（对象存储不可用 / 染毒等）catch 后降级第二层，绝不让接口 500。
- *  - 第二层（兜底）：拿压缩包名本身当唯一"条目名"做包含匹配，如"报名表+项目书.zip"能匹配到
- *    报名表、项目书两条要求；一个要求都没匹配上时，unmatched 就是压缩包名本身。
+ *  - 第一层（优先）：zip 条目名——由调用方（MaterialSubmissionServiceImpl.batchUpload）**在事务外**
+ *    经骨架文件服务 openCheckedStream 读出后传入（MinIO 网络 IO 不占数据库事务）；
+ *  - 第二层（兜底）：读流失败（对象存储不可用 / 染毒等）时调用方拿压缩包名本身当唯一"条目名"
+ *    做包含匹配，如"报名表+项目书.zip"能匹配到报名表、项目书两条要求；
+ *    一个要求都没匹配上时，unmatched 就是压缩包名本身。
  *
- * ⚠️ 存储不可用期间第一层走不到，真实解压路径待存储恢复后回归验证
- *    （2026-10-13 风格整改时已把代理截流写法换成 openCheckedStream 直读，路径更简单）。
+ * ⚠️ 事务边界：公开入口是 persistMatches（@Transactional，落库 + 齐全率重算同事务）；
+ * matchAndInsert 已收为私有，防止绕过事务直接调用。
  */
-// TODO(联调) 存储方案恢复后回归验证第一层真实解压路径
 @Slf4j
 @Component
 public class MaterialZipBatchSupport {
-
-    @Resource
-    private IFileService fileService;
 
     @Resource
     private MaterialRequirementMapper requirementMapper;
@@ -51,24 +45,32 @@ public class MaterialZipBatchSupport {
     @Resource
     private MaterialSubmissionMapper submissionMapper;
 
+    @Resource
+    private MaterialCompletionService completionService;
+
     /**
-     * 两层匹配并落库（在调用方的事务内执行）。入参校验已由调用方按 MS02 同口径 7 步完成。
+     * 事务边界（MS03）：条目名已由调用方在事务外读好传入，本方法只做两层匹配落库 + 齐全率重算，
+     * 网络 IO 不再占用数据库事务（重算失败提交一并回滚）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public BatchMatchResultVO persistMatches(MaterialTask task, TeamRow team, Long memberId, String realName,
+                                             MaterialBatchUploadDTO dto, long zipFileSize, List<String> names) {
+        BatchMatchResultVO vo = matchAndInsert(task, team, memberId, realName, dto, zipFileSize, names);
+        completionService.recompute(dto.getTeamId());
+        return vo;
+    }
+
+    /**
+     * 两层匹配并落库（persistMatches 事务内）。入参校验已由调用方按 MS02 同口径 7 步完成，
+     * 条目名 names 也已由调用方在事务外读好（第一层真实解压 / 第二层压缩包名兜底）。
      * 已有 is_current=1 提交的要求跳过不重复覆盖；未交的插入合成提交记录
-     * （fileName = 队名-类型中文名.pdf、fileSize=0、多条要求共用压缩包 fileId）。
+     * （fileName = 队名-类型中文名.zip、fileSize=0、多条要求共用压缩包 fileId）。
      * 匹配到的要求（含已交过被跳过的）记入 matched；没匹配到任何要求的条目名记入 unmatched。
      */
-    public BatchMatchResultVO matchAndInsert(MaterialTask task, TeamRow team, Long memberId,
-                                             String realName, MaterialBatchUploadDTO dto,
-                                             long zipFileSize) {
-        //1.第一层：真实解压读条目名；失败（存储不可用等）降级为压缩包名单条目，绝不让接口 500
-        List<String> names;
-        try {
-            names = readZipEntryNames(dto.getFileId());
-        } catch (Exception e) {
-            log.warn("zip 真实解压失败（对象存储不可用？），降级为压缩包名匹配：{}", e.getMessage());
-            names = Collections.singletonList(dto.getFileName());
-        }
-        //2.任务下全部未删要求（sort_no / id 升序）+ 该队已有当前版的要求集（已交跳过的判定依据）
+    private BatchMatchResultVO matchAndInsert(MaterialTask task, TeamRow team, Long memberId,
+                                              String realName, MaterialBatchUploadDTO dto,
+                                              long zipFileSize, List<String> names) {
+        //1.任务下全部未删要求（sort_no / id 升序）+ 该队已有当前版的要求集（已交跳过的判定依据）
         List<MaterialRequirement> reqs = requirementMapper.selectList(
                 new QueryWrapper<MaterialRequirement>().eq("task_id", dto.getTaskId())
                         .orderByAsc("sort_no").orderByAsc("id"));
@@ -79,7 +81,7 @@ public class MaterialZipBatchSupport {
         }
         Set<Long> submittedReqIds = new HashSet<>(
                 submissionMapper.selectCurrentRequirementIds(dto.getTeamId()));
-        //3.逐要求匹配：命中即记 matched；未交过的落库（versionNo 取历史最大 +1，无历史即为 1）
+        //2.逐要求匹配：命中即记 matched；未交过的落库（versionNo 取历史最大 +1，无历史即为 1）
         List<BatchMatchResultVO.MatchedItem> matched = new ArrayList<>();
         for (MaterialRequirement req : reqs) {
             String label = MaterialTypeEnum.labelOf(req.getMaterialType());
@@ -114,7 +116,7 @@ public class MaterialZipBatchSupport {
             submission.setSubmittedAt(LocalDateTime.now());
             submissionMapper.insert(submission);
         }
-        //4.没匹配到任何要求的条目名 → unmatched（兜底层里就是压缩包名本身）
+        //3.没匹配到任何要求的条目名 → unmatched（兜底层里就是压缩包名本身）
         List<String> unmatched = new ArrayList<>();
         for (String name : names) {
             if (!matchesAnyRequirement(name, reqs)) {
@@ -142,21 +144,5 @@ public class MaterialZipBatchSupport {
             }
         }
         return false;
-    }
-
-    /**
-     * 第一层：经骨架口子 openCheckedStream 读 zip 流并解出全部条目名（只取名，不读内容）。
-     * 文件不存在 / 染毒 / 存储不可用等异常由调用方 catch 后降级兜底层。
-     */
-    private List<String> readZipEntryNames(Long fileId) throws IOException {
-        try (ZipInputStream zip = new ZipInputStream(fileService.openCheckedStream(fileId))) {
-            List<String> names = new ArrayList<>();
-            for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
-                if (!entry.isDirectory()) {
-                    names.add(entry.getName());
-                }
-            }
-            return names;
-        }
     }
 }

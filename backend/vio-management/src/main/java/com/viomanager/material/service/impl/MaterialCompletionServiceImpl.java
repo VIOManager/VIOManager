@@ -18,6 +18,7 @@ import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.MyTeamRow;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
 import com.viomanager.material.support.MemberIdSupport;
+import com.viomanager.material.support.TeamOrgScopeSupport;
 import com.viomanager.material.vo.MaterialRequirementVO;
 import com.viomanager.material.vo.MaterialSubmitInfoVO;
 import com.viomanager.material.vo.MyTeamMaterialVO;
@@ -66,6 +67,9 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
     @Resource
     private MemberIdSupport memberIdSupport;
 
+    @Resource
+    private TeamOrgScopeSupport orgScope;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void recompute(Long teamId) {
@@ -111,6 +115,8 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
 
     @Override
     public Result<TeamMaterialRowVO> teamOverview(Long teamId) {
+        //0.部门管理员组织子树裁剪（越权 1003；超管/学生不受影响，MS01 本就是管理端口）
+        orgScope.assertTeamInScope(teamId);
         //1.队伍必须存在
         TeamRow team = teamQuery.loadTeam(teamId);
         if (team == null) {
