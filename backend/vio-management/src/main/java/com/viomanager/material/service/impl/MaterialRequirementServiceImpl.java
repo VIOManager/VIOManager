@@ -16,7 +16,6 @@ import com.viomanager.material.mapper.MaterialRequirementMapper;
 import com.viomanager.material.mapper.MaterialSubmissionMapper;
 import com.viomanager.material.mapper.MaterialTaskMapper;
 import com.viomanager.material.service.MaterialRequirementService;
-import com.viomanager.material.support.MaterialCompletionRecalculator;
 import com.viomanager.material.vo.MaterialRequirementVO;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
@@ -36,8 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * ⚠️ systemGenerated 守卫：§5 联动产生的佐证要求（systemGenerated=1）管理端不可改不可删
  * （MR02 / MR03 拦截，见 MaterialRequirement 实体注释）。
- * allowedFormats 形态转换：入参 List → 逐个归一化（trim / 去前导 *. 与 . / 小写 / 去重）→ 落库逗号分隔串，
- * 归一化后为空按"不限格式"落 null；出参逗号串 → List（空串归空 List）。
+ * allowedFormats 形态转换：入参 List → 落库逗号分隔串；出参逗号串 → List（空串归空 List）。
  */
 @Service
 public class MaterialRequirementServiceImpl implements MaterialRequirementService {
@@ -56,10 +54,6 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
 
     @Resource
     private MaterialSubmissionMapper submissionMapper;
-
-    /** 要求集变动后按比赛批量重算（材料要求按比赛共享，会改变全场队伍分母） */
-    @Resource
-    private MaterialCompletionRecalculator recalculator;
 
     @Override
     public Result<List<MaterialRequirementVO>> listByTask(Long taskId) {
@@ -105,8 +99,6 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
         requirement.setNamingRule(dto.getNamingRule());
         requirement.setSystemGenerated(0);
         requirementMapper.insert(requirement);
-        //5.要求集 +1 → 该比赛所有队伍分母变化，按比赛批量重算齐全率（P0#1）
-        recalculator.recomputeByContest(task.getContestId());
         return Result.ok(toVO(requirement));
     }
 
@@ -136,8 +128,6 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
             //并发兜底：查出后要求恰好被他人删除
             throw new BizException(CommonErrorCode.NOT_FOUND, "材料要求不存在");
         }
-        //5.必传标记/类型可能变化 → 该比赛所有队伍的分母与状态判定受影响，批量重算（P0#1）
-        recalculator.recomputeByContest(requirement.getContestId());
     }
 
     @Override
@@ -158,8 +148,6 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
         checkNotSystemGenerated(requirement, "系统生成的佐证要求不可删除");
         //4.逻辑删除（@TableLogic 把 delete 转成 UPDATE deleted=1，不物理删）
         requirementMapper.deleteById(id);
-        //5.要求集 -1 → 该比赛所有队伍分母变化，按比赛批量重算齐全率（P0#1）
-        recalculator.recomputeByContest(requirement.getContestId());
     }
 
     /** 系统生成守卫（MR02 / MR03 共用）：systemGenerated=1 按给定文案 403 拒绝 */
@@ -171,8 +159,8 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
 
     /**
      * 校验并归一创建 / 编辑共用的五个字段：不合法即抛 PARAM_INVALID（文案照接口清单），
-     * 合法返回可直接落库的归一值（name 已 trim；formats 已归一化——trim / 去前导 *. 与 . /
-     * 小写 / 去重——归一后为空返回 null 表示不限格式；requiredFlag 已补默认）。
+     * 合法返回可直接落库的归一值（name 已 trim，formats 已 trim / 去空 / 去重并拼好逗号串，
+     * requiredFlag 已补默认）。
      */
     private ValidatedFields validate(String materialType, String name, Integer requiredFlag,
                                      List<String> allowedFormats, Integer maxSizeMb) {
@@ -182,26 +170,20 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
         if (name == null || name.isBlank()) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "要求名称不能为空");
         }
-        //格式列表逐个归一化：trim → 去前导 *. 与 . → 小写；空串丢弃（LinkedHashSet 保序去重）。
-        //管理端录 .pdf / *.pdf / PDF 都归一为 pdf，避免原样落库后白名单永远比对不中（提交侧恒 5001）
+        //格式列表逐个 trim、滤空、去重（LinkedHashSet 保序去重）
         Set<String> seenFormats = new LinkedHashSet<>();
         if (allowedFormats != null) {
             for (String format : allowedFormats) {
-                if (format == null) {
-                    continue;
-                }
-                String normalized = normalizeFormat(format);
-                if (!normalized.isEmpty()) {
-                    seenFormats.add(normalized);
+                String trimmed = format == null ? "" : format.trim();
+                if (!trimmed.isEmpty()) {
+                    seenFormats.add(trimmed);
                 }
             }
         }
         List<String> formats = new ArrayList<>(seenFormats);
-        //归一化后为空仍按"必填"拦截：空串/纯空白/纯符号归一化后为空，若当成"不限格式"会放开所有扩展名
         if (formats.isEmpty()) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "至少允许一种文件格式");
         }
-        String formatsJoined = String.join(",", formats);
         if (maxSizeMb != null && (maxSizeMb < MAX_SIZE_MB_MIN || maxSizeMb > MAX_SIZE_MB_MAX)) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "单文件大小限制须在 1–200MB 之间");
         }
@@ -210,19 +192,8 @@ public class MaterialRequirementServiceImpl implements MaterialRequirementServic
         if (flag != 0 && flag != 1) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "requiredFlag 只能是 0（选传）或 1（必传）");
         }
-        return new ValidatedFields(materialType, name.trim(), flag, formatsJoined, maxSizeMb);
-    }
-
-    /** 单个格式归一化：trim → 去前导 *. 与 . → 小写（如 " *.PDF " → "pdf"） */
-    private String normalizeFormat(String format) {
-        String normalized = format.trim();
-        while (normalized.startsWith("*.")) {
-            normalized = normalized.substring(2);
-        }
-        while (normalized.startsWith(".")) {
-            normalized = normalized.substring(1);
-        }
-        return normalized.toLowerCase();
+        return new ValidatedFields(materialType, name.trim(), flag,
+                String.join(",", formats), maxSizeMb);
     }
 
     /** 实体转出参：类型附中文名，allowed_formats 逗号串拆回 List */
