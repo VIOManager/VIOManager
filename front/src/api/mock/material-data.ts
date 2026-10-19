@@ -15,6 +15,8 @@ export interface MockRequirement {
   id: string
   taskId: string
   materialType: string
+  /** 要求名称（MR01 必填，2026-10-19 对齐后端补） */
+  name: string
   requiredFlag: number
   allowedFormats: string[]
   namingRule: string
@@ -62,12 +64,13 @@ export const archivedTasks: MockTask[] = [
 ]
 
 export const requirements: MockRequirement[] = [
-  { id: 'r1', taskId: 'k1', materialType: 'REGISTRATION_FORM', requiredFlag: true ? 1 : 0, allowedFormats: ['pdf', 'docx'], namingRule: '队名-报名表', maxSizeMb: 10 },
-  { id: 'r2', taskId: 'k1', materialType: 'PROJECT_PROPOSAL', requiredFlag: true ? 1 : 0, allowedFormats: ['pdf'], namingRule: '', maxSizeMb: 20 },
-  { id: 'r3', taskId: 'k1', materialType: 'COMMITMENT_LETTER', requiredFlag: true ? 1 : 0, allowedFormats: ['pdf'], namingRule: '', maxSizeMb: 10 },
-  { id: 'r4', taskId: 'k1', materialType: 'TEAM_PHOTO', requiredFlag: true ? 1 : 0, allowedFormats: ['jpg', 'png'], namingRule: '队名-合照', maxSizeMb: 10 },
-  { id: 'r5', taskId: 'k2', materialType: 'REGISTRATION_FORM', requiredFlag: true ? 1 : 0, allowedFormats: ['pdf', 'docx'], namingRule: '', maxSizeMb: 10 },
-  { id: 'r6', taskId: 'k2', materialType: 'RESEARCH_REPORT', requiredFlag: true ? 1 : 0, allowedFormats: ['pdf', 'docx'], namingRule: '', maxSizeMb: 20 }
+  // 材料类型值 2026-10-19 对齐后端 MaterialTypeEnum（原 PROJECT_PROPOSAL/COMMITMENT_LETTER 为 mock 期自造）
+  { id: 'r1', taskId: 'k1', materialType: 'REGISTRATION_FORM', name: '报名表', requiredFlag: true ? 1 : 0, allowedFormats: ['pdf', 'docx'], namingRule: '队名-报名表', maxSizeMb: 10 },
+  { id: 'r2', taskId: 'k1', materialType: 'PROJECT_PLAN', name: '项目书', requiredFlag: true ? 1 : 0, allowedFormats: ['pdf'], namingRule: '', maxSizeMb: 20 },
+  { id: 'r3', taskId: 'k1', materialType: 'COMMITMENT', name: '承诺书', requiredFlag: true ? 1 : 0, allowedFormats: ['pdf'], namingRule: '', maxSizeMb: 10 },
+  { id: 'r4', taskId: 'k1', materialType: 'TEAM_PHOTO', name: '团队合照', requiredFlag: true ? 1 : 0, allowedFormats: ['jpg', 'png'], namingRule: '队名-合照', maxSizeMb: 10 },
+  { id: 'r5', taskId: 'k2', materialType: 'REGISTRATION_FORM', name: '报名表', requiredFlag: true ? 1 : 0, allowedFormats: ['pdf', 'docx'], namingRule: '', maxSizeMb: 10 },
+  { id: 'r6', taskId: 'k2', materialType: 'RESEARCH_REPORT', name: '研究报告', requiredFlag: true ? 1 : 0, allowedFormats: ['pdf', 'docx'], namingRule: '', maxSizeMb: 20 }
 ]
 
 export const submissions: MockSubmission[] = [

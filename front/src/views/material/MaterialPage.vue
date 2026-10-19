@@ -178,11 +178,12 @@ onMounted(async () => {
           <div class="panel">
             <table class="ledger">
               <thead>
-                <tr><th>类型</th><th>必传</th><th>允许格式</th><th>命名规则</th><th class="num">大小上限</th><th style="width: 130px">操作</th></tr>
+                <tr><th>名称</th><th>类型</th><th>必传</th><th>允许格式</th><th>命名规则</th><th class="num">大小上限</th><th style="width: 130px">操作</th></tr>
               </thead>
               <tbody>
                 <tr v-for="r in currentReqs" :key="r.id">
-                  <td style="color: var(--vio-ink); font-weight: 600">{{ MATERIAL_TYPE_LABEL[r.materialType] ?? r.materialType }}</td>
+                  <td style="color: var(--vio-ink); font-weight: 600">{{ r.name || '—' }}</td>
+                  <td class="fs">{{ MATERIAL_TYPE_LABEL[r.materialType] ?? r.materialType }}</td>
                   <td><span class="stamp" :class="r.requiredFlag === 1 ? 'warn' : 'ok'">{{ r.requiredFlag === 1 ? '必传' : '选传' }}</span></td>
                   <td class="mono" style="font-size: 12px">{{ r.allowedFormats.join(' / ') }}</td>
                   <td class="fs">{{ r.namingRule || '—' }}</td>

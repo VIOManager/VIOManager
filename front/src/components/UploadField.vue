@@ -108,18 +108,23 @@ function reset() {
 
 <style scoped>
 .hidden-input { display: none; }
+/* 上传钮对齐全站 btn-line 粗野规格（2026-10-19 修：原为旧版 1px 细边框白底样式，
+   S3 换皮后与全站按钮严重不搭——人员证件照/签名、材料上传等全走这里） */
 .btn {
-  padding: 7px 18px;
-  background: var(--vio-sheet);
-  border: 1px solid var(--vio-ink);
-  color: var(--vio-ink);
-  font-size: 13px;
+  padding: 6px 15px;
+  background: var(--vio2-panel);
+  border: 2px solid var(--vio2-bd);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  color: var(--vio2-ink-2);
+  font-size: 12.5px;
+  font-weight: 700;
   border-radius: 0;
   cursor: pointer;
-  transition: all 0.25s var(--vio-ease);
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.btn:hover:not(:disabled) { background: var(--vio-blue-ink); color: #F6F7F2; }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn:hover:not(:disabled) { background: var(--vio2-lilac); color: #101010; transform: translate(-1px, -1px); }
+.btn:active:not(:disabled) { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--vio2-shadow); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .file-line { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; }
 .name { color: var(--vio-ink); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .size { color: var(--vio-ink-3); font-size: 11.5px; }
