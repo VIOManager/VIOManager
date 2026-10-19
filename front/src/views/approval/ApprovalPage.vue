@@ -2,6 +2,8 @@
 /**
  * 审批中心页（/approval，FS5，契约 P01–P09）
  * 三视角 tab：待办（仅管理员，学生调 TODO 后端回 1003）/ 我发起的 / 我是目标人
+ *   "我发起的"对超管隐藏：超管没有发起审批的业务场景（学期切换等超管动作直接执行不走申请单，
+ *   单子只由业务模块动作产生），该视角对超管永远为空（lzh 2026-10-19 拍板）
  * 操作入口全部在详情抽屉（按当前视角显隐按钮，最终权限以后端判定为准——规范 §5.3）
  * 红点联动：打开详情即按当前视角标记已读（P07 置位幂等），处理操作后刷新 P08 红点
  */
@@ -19,6 +21,9 @@ const user = useUserStore()
 const approval = useApprovalStore()
 
 const isAdmin = user.role !== 'STUDENT'
+
+/** 超管判定："我发起的"视角对其隐藏（页面头注释里的口径） */
+const isSuperAdmin = user.role === 'SUPER_ADMIN'
 
 // ── 三视角与筛选 ──
 const view = ref<ApprovalView>(isAdmin ? 'TODO' : 'MINE')
@@ -38,7 +43,8 @@ const detailId = ref('')
 const tabs = computed(() => {
   const out: Array<{ key: ApprovalView; label: string; badge: number }> = []
   if (isAdmin) out.push({ key: 'TODO', label: '待办', badge: 0 })
-  out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
+  // 超管不发起申请，"我发起的"不展示（部门管理员与学生保留——他们的成果提审/授权申请等照常汇总在这）
+  if (!isSuperAdmin) out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
   out.push({ key: 'TARGET', label: '我是目标人', badge: approval.todoCount })
   return out
 })
