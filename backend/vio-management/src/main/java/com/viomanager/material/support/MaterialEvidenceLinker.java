@@ -73,9 +73,10 @@ public class MaterialEvidenceLinker {
             log.debug("A06 联动：队伍 {} 不存在，跳过材料侧补交", teamId);
             return;
         }
-        //3.该比赛的任务（一赛一任务是建任务的强规则，容错取第一条）
+        //3.该比赛的任务（一赛一任务是建任务的强规则；orderByAsc("id") 定序，容错取第一条不再漂移）
         List<MaterialTask> tasks = taskMapper.selectList(
-                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
+                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId())
+                        .orderByAsc("id"));
         if (tasks.isEmpty()) {
             log.debug("A06 联动：比赛 {} 未配材料任务，跳过材料侧补交", team.getContestId());
             return;
@@ -92,7 +93,8 @@ public class MaterialEvidenceLinker {
             return;
         }
         MaterialRequirement requirement = requirements.get(0);
-        //5.覆盖式 upsert（与 MS02 同口径）：先失旧版、再取历史最大版本 +1
+        //5.覆盖式 upsert（与 MS02 同口径，含并发两道防线）：先锁同键行 → 失旧版 → 取历史最大版本 +1
+        submissionMapper.lockByRequirementAndTeam(requirement.getId(), teamId);
         submissionMapper.invalidateCurrent(requirement.getId(), teamId);
         Integer maxVersionNo = submissionMapper.selectMaxVersionNo(requirement.getId(), teamId);
         MaterialSubmission submission = new MaterialSubmission();

@@ -139,7 +139,8 @@ public class MaterialSubmissionServiceImpl implements MaterialSubmissionService 
         if (dto.getFileSize() > limitMb * 1024L * 1024L) {
             throw new BizException(MaterialErrorCode.FILE_TOO_LARGE);
         }
-        //覆盖上传：同一事务内先失效旧版再插新版本（并发封口说明见 MaterialSubmissionMapper 注释）
+        //覆盖上传（并发两道防线，见 MaterialSubmissionMapper 注释）：先锁同键行 → 失效旧版 → 插新版本
+        submissionMapper.lockByRequirementAndTeam(requirementId, dto.getTeamId());
         submissionMapper.invalidateCurrent(requirementId, dto.getTeamId());
         Integer maxVersion = submissionMapper.selectMaxVersionNo(requirementId, dto.getTeamId());
         int newVersion = (maxVersion == null ? 0 : maxVersion) + 1;
