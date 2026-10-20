@@ -24,8 +24,11 @@ public interface SysDictItemMapper extends BaseMapper<SysDictItem> {
      * （A 线的审核页面与本接口共用一份数据口径）。
      */
     @DataScope(scope = DataScope.Scope.ALL)
-    @Select("SELECT * FROM sys_dict_item "
-            + "WHERE dict_code = #{dictCode} AND status = 1 AND deleted = 0 "
+    //显式列名（2026-10-20 组长规矩：SQL 禁 SELECT *）——列全列上但逐个点名，
+    //未来表加宽列（如大 JSON）不会被这里静默带出
+    @Select("SELECT id, dict_code, item_value, item_label, source, audit_status, sort_no, status, "
+            + "deleted, created_at, created_by, updated_at, updated_by "
+            + "FROM sys_dict_item WHERE dict_code = #{dictCode} AND status = 1 AND deleted = 0 "
             + "ORDER BY sort_no, id")
     List<SysDictItem> selectEnabledByCode(@Param("dictCode") String dictCode);
 

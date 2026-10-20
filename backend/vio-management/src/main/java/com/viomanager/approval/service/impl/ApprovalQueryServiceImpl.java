@@ -91,7 +91,9 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
             wrapper.like("biz_title", dto.getKeyword());
         }
         wrapper.orderByDesc("created_at");
-        //3.分页查询转 VO
+        //3.分页查询转 VO：列表只要 VO 的窄列——biz_payload 快照列宽（详情页才用），
+        //分页白拉它最亏（2026-10-20 组长规矩：SQL 禁 SELECT *，隐式全列同理）
+        wrapper.select(Approval.class, info -> !"biz_payload".equals(info.getColumn()));
         Page<Approval> page = approvalMapper.selectPage(
                 new Page<>(dto.getPage(), dto.getSize()), wrapper);
         List<ApprovalVO> voList = new ArrayList<>();

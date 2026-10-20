@@ -6,6 +6,7 @@ import jakarta.annotation.Resource;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
@@ -155,6 +156,39 @@ public class OrgScopeSupport {
         } else {
             evictOrgCache();
         }
+    }
+
+    /**
+     * 预热/续温（2026-10-20 组长规矩：必要的热路径先做缓存预热，别让重启后的第一个用户付费）。
+     * 全量组织一次查询、内存里算好每个组织的子树族、整族写回——39 个组织 O(n²) 也就千次
+     * 字符串前缀比较，比逐组织查库便宜得多。启动时与每 8 分钟由 OrgCacheWarmUp 调用
+     * （TTL 10 分钟，续在过期前）；组织写操作的主动失效照常生效，续温读的是当前库态，两者不冲突。
+     * 返回预热的组织数；Redis 故障走既有熔断降级，读路径仍是 cache-aside 兜底。
+     */
+    public int warmAll() {
+        if (!cacheEnabled || breakerOpen()) {
+            return 0;
+        }
+        List<Map<String, Object>> rows;
+        try {
+            rows = jdbcTemplate.queryForList(
+                    "SELECT id, path FROM sys_org WHERE deleted = 0 AND path IS NOT NULL");
+        } catch (DataAccessException e) {
+            trip(e);
+            return 0;
+        }
+        for (Map<String, Object> row : rows) {
+            Long orgId = ((Number) row.get("id")).longValue();
+            String path = (String) row.get("path");
+            List<Long> subtree = new ArrayList<>(rows.size());
+            for (Map<String, Object> other : rows) {
+                if (((String) other.get("path")).startsWith(path)) {
+                    subtree.add(((Number) other.get("id")).longValue());
+                }
+            }
+            putCache(orgId, subtree);
+        }
+        return rows.size();
     }
 
     // ---------- 私有支撑 ----------
