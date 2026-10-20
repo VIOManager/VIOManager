@@ -158,9 +158,11 @@ onMounted(async () => {
                 <td class="num mono">{{ t.teamComplete }} / {{ t.teamTotal }}</td>
                 <td class="mono" style="font-size: 12px">{{ t.deadline }}</td>
                 <td>
+                  <!-- 行内操作统一 btn-act 小钮：此前混用 34px 大钮（编辑/删除），190px 操作列装不下
+                       三个按钮换行错位 + 高矮不齐（2026-10-19 lzh"比例崩了"反馈实测定位） -->
                   <button class="btn-act" @click="openReqs(t)">要求</button>
-                  <button class="btn-line" style="margin-left: 6px" @click="openTaskEdit(t)">编辑</button>
-                  <button class="btn-line" style="margin-left: 6px" @click="onDeleteTask(t)">删除</button>
+                  <button class="btn-act" style="margin-left: 6px" @click="openTaskEdit(t)">编辑</button>
+                  <button class="btn-act danger" style="margin-left: 6px" @click="onDeleteTask(t)">删除</button>
                 </td>
               </tr>
             </tbody>
@@ -178,19 +180,20 @@ onMounted(async () => {
           <div class="panel">
             <table class="ledger">
               <thead>
-                <tr><th>类型</th><th>必传</th><th>允许格式</th><th>命名规则</th><th class="num">大小上限</th><th style="width: 130px">操作</th></tr>
+                <tr><th>名称</th><th>类型</th><th>必传</th><th>允许格式</th><th>命名规则</th><th class="num">大小上限</th><th style="width: 130px">操作</th></tr>
               </thead>
               <tbody>
                 <tr v-for="r in currentReqs" :key="r.id">
-                  <td style="color: var(--vio-ink); font-weight: 600">{{ MATERIAL_TYPE_LABEL[r.materialType] ?? r.materialType }}</td>
+                  <td style="color: var(--vio-ink); font-weight: 600">{{ r.name || '—' }}</td>
+                  <td class="fs">{{ MATERIAL_TYPE_LABEL[r.materialType] ?? r.materialType }}</td>
                   <td><span class="stamp" :class="r.requiredFlag === 1 ? 'warn' : 'ok'">{{ r.requiredFlag === 1 ? '必传' : '选传' }}</span></td>
                   <td class="mono" style="font-size: 12px">{{ r.allowedFormats.join(' / ') }}</td>
                   <td class="fs">{{ r.namingRule || '—' }}</td>
                   <td class="num mono">{{ r.maxSizeMb }} MB</td>
                   <td>
-                    <button class="btn-line" @click="openReqEdit(r)">编辑</button>
-                    <button class="btn-line" style="margin-left: 6px" @click="onDeleteReq(r)">删除</button>
-                  </td>
+                  <button class="btn-act" @click="openReqEdit(r)">编辑</button>
+                  <button class="btn-act danger" style="margin-left: 6px" @click="onDeleteReq(r)">删除</button>
+                </td>
                 </tr>
               </tbody>
             </table>

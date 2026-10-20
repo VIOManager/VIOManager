@@ -4,11 +4,13 @@
  * 2026-10-14 联调对齐：路径统一改为后端实现的 /api/materials/** 前缀
  *    （后端 MaterialXxxController 实测路由，与前端对接文档旧路径不同）
  * 关键约束：提交记录存在则要求/任务禁删（5005/5006）；覆盖上传版本号 +1 旧版失效
- * ⚠️ apiTaskOverview 契约分歧：后端 MS01 只有按队伍查的单对象概览
- *    （GET /api/materials/teams/{teamId}/overview），前端管理端"一任务一矩阵"无对应接口，
- *    待 C 线确认形状后前端改造——本函数暂保留旧调用，联调期该区块会报资源不存在
+ * ⚠️ apiTaskOverview 契约分歧（2026-10-19 已解决）：后端 MS01 只有按队伍查的单对象概览
+ *    （GET /api/materials/teams/{teamId}/overview），没有「任务 × 队伍」矩阵接口。
+ *    现由前端组合实现：B 线 apiTeams(contestId) 取 ACTIVE 队伍 → 逐队调 MS01 → 拼成矩阵。
+ *    不再请求后端不存在的 /tasks/{taskId}/overview（原实现联调必 404）。
  */
 import { get, post, postIdem, putIdem, delIdem, download } from './http'
+import { apiTeams } from './team'
 
 export interface MaterialTask {
   id: string
@@ -30,6 +32,8 @@ export interface MaterialRequirement {
   taskId: string
   /** 12 种预设类型之一（后端 materialType；中文名用 materialTypeLabel 或前端字典翻译） */
   materialType: string
+  /** 要求名称（MR01 必填，如"报名表PDF版"；2026-10-19 补——原前端漏了此字段，后端回"要求名称不能为空"） */
+  name: string
   /** 后端为 0/1 整数（1=必传） */
   requiredFlag: number
   /** 允许扩展名小写白名单，如 ['pdf','docx']（后端 allowedFormats） */
@@ -96,13 +100,13 @@ export function apiRequirements(taskId: string): Promise<MaterialRequirement[]> 
 }
 export function apiCreateRequirement(
   taskId: string,
-  body: { materialType: string; requiredFlag: number; allowedFormats: string[]; namingRule: string; maxSizeMb: number }
+  body: { materialType: string; name: string; requiredFlag: number; allowedFormats: string[]; namingRule: string; maxSizeMb: number }
 ): Promise<MaterialRequirement> {
   return postIdem('/api/materials/tasks/' + taskId + '/requirements', body, crypto.randomUUID())
 }
 export function apiUpdateRequirement(
   id: string,
-  body: { materialType: string; requiredFlag: number; allowedFormats: string[]; namingRule: string; maxSizeMb: number }
+  body: { materialType: string; name: string; requiredFlag: number; allowedFormats: string[]; namingRule: string; maxSizeMb: number }
 ): Promise<null> {
   return putIdem('/api/materials/requirements/' + id, body, crypto.randomUUID())
 }
@@ -112,19 +116,33 @@ export function apiDeleteRequirement(id: string): Promise<null> {
 }
 
 // ── 提交与下载（MS）──
-/** 管理端队伍提交概览：⚠️ 契约分歧见文件头注——后端仅按队伍查单对象，矩阵接口待 C 线定 */
-export function apiTaskOverview(taskId: string): Promise<TeamMaterialRow[]> {
-  return get('/api/materials/tasks/' + taskId + '/overview')
+/**
+ * 管理端「任务 × 队伍」提交矩阵。
+ * 后端没有这个聚合接口——MS01 只提供按队伍查的单对象概览
+ * （GET /api/materials/teams/{teamId}/overview），故这里用「B 线队伍列表 + 逐队 MS01」组合实现。
+ * 管理端单个比赛的队伍量级很小（演示 2 支），N+1 可接受；队伍概览 404/1004 时该队跳过不出现在表里。
+ */
+export async function apiTaskOverview(task: { contestId: string }): Promise<TeamMaterialRow[]> {
+  const teams = await apiTeams({ contestId: task.contestId })
+  const active = teams.filter((t) => t.status === 'ACTIVE')
+  const rows = await Promise.all(
+    active.map((t) =>
+      get<TeamMaterialRow>('/api/materials/teams/' + t.id + '/overview').catch(() => null)
+    )
+  )
+  return rows.filter((r): r is TeamMaterialRow => r !== null)
 }
 /** 学生端我的材料：本人所在每支队伍的任务/要求/提交状态（仅学生角色） */
 export function apiMyMaterials(): Promise<MyTeamMaterial[]> {
   return get('/api/materials/my')
 }
-/** 单条提交/覆盖上传（后端 MS02：覆盖式提交天然幂等不要求幂等头）：5002 过截止 / 5003 非在队成员 / 5004 格式不符 */
+/** 单条提交/覆盖上传（后端 MS02：覆盖式提交天然幂等不要求幂等头）：5002 过截止 / 5003 非在队成员 / 5004 格式不符
+ *  ⚠️ fileSize 必填：后端强制校验「fileSize 必须为正数（字节）」，漏传直接 1001 */
 export function apiSubmitMaterial(requirementId: string, body: {
   teamId: string
   fileId: string
   fileName: string
+  fileSize: number
 }): Promise<{ version: number }> {
   return post('/api/materials/requirements/' + requirementId + '/submit', body)
 }

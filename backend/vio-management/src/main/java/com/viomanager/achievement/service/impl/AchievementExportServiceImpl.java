@@ -9,6 +9,7 @@ import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.enums.MaterialErrorCode;
 import com.viomanager.common.exception.BizException;
+import com.viomanager.datascop.OrgScopeSupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MemberIdSupport;
 import jakarta.annotation.Resource;
@@ -48,6 +49,9 @@ public class AchievementExportServiceImpl implements AchievementExportService {
     @Resource
     private MemberIdSupport memberIdSupport;
 
+    @Resource
+    private OrgScopeSupport orgScope;
+
     @Override
     public void export(Long teamId, HttpServletResponse response) {
         //1.范围：学生只导本人（按归属人，与队长/队员身份无关）；管理员全量或按队伍筛
@@ -62,6 +66,16 @@ public class AchievementExportServiceImpl implements AchievementExportService {
         if (teamId != null) {
             wrapper.eq("team_id", teamId);
         }
+        //部门管理员数据范围：只导本部门组织子树（docs/README.md 第 28 条）；超管全量不受影响。
+        //子树为空（未绑组织 / 组织已删）按"无可导出成果"拒绝，绝不退化成全量导出；
+        //子树查询复用骨架统一收口 datascop.OrgScopeSupport（Redis cache-aside + 熔断降级）
+        if (user != null && "DEPT_ADMIN".equals(user.getRole())) {
+            List<Long> subtreeOrgIds = orgScope.subtreeIdsOrEmpty(user.getOrgId());
+            if (subtreeOrgIds.isEmpty()) {
+                throw new BizException(CommonErrorCode.NOT_FOUND, "没有可导出的成果");
+            }
+            wrapper.in("org_id", subtreeOrgIds);
+        }
         List<Achievement> achievements = achievementMapper.selectList(wrapper);
         //2.5008 闸门：范围内存在待审批或已驳回成果即拒（错误码表口径，宁拒不漏）
         for (Achievement achievement : achievements) {
@@ -72,15 +86,17 @@ public class AchievementExportServiceImpl implements AchievementExportService {
         if (achievements.isEmpty()) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "没有可导出的成果");
         }
-        //3.队伍名列（批量查免 N+1）
+        //3.队伍名 + 归属人名（均批量查免 N+1）：
+        //  owner_name 冗余列历史数据可能为空，归属人以 member 档案姓名为准，档案查不到再回退冗余列
         Map<Long, String> teamNames = teamQuery.loadTeamNames(collectTeamIds(achievements));
+        Map<Long, String> ownerNames = memberIdSupport.loadMemberNames(collectOwnerIds(achievements));
         //4.xlsx 流式回写
-        writeExcel(achievements, teamNames, response);
+        writeExcel(achievements, teamNames, ownerNames, response);
     }
 
     /** POI 写 xlsx：表头 + 每成果一行；文件名带时间戳 */
     private void writeExcel(List<Achievement> achievements, Map<Long, String> teamNames,
-                            HttpServletResponse response) {
+                            Map<Long, String> ownerNames, HttpServletResponse response) {
         try {
             response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             String fileName = "获奖导出_" + LocalDateTime.now()
@@ -103,7 +119,7 @@ public class AchievementExportServiceImpl implements AchievementExportService {
                     row.createCell(2).setCellValue(nullToEmpty(achievement.getLevel()));
                     row.createCell(3).setCellValue(achievement.getAwardDate() == null
                             ? "" : achievement.getAwardDate().toString());
-                    row.createCell(4).setCellValue(nullToEmpty(achievement.getOwnerName()));
+                    row.createCell(4).setCellValue(ownerNameOf(achievement, ownerNames));
                     row.createCell(5).setCellValue(achievement.getTeamId() == null
                             ? "" : nullToEmpty(teamNames.get(achievement.getTeamId())));
                 }
@@ -125,6 +141,31 @@ public class AchievementExportServiceImpl implements AchievementExportService {
             }
         }
         return new ArrayList<>(ids);
+    }
+
+    /** 收集非空 ownerMemberId 去重（查归属人姓名用） */
+    private List<Long> collectOwnerIds(List<Achievement> achievements) {
+        Set<Long> ids = new HashSet<>();
+        for (Achievement achievement : achievements) {
+            if (achievement.getOwnerMemberId() != null) {
+                ids.add(achievement.getOwnerMemberId());
+            }
+        }
+        return new ArrayList<>(ids);
+    }
+
+    /**
+     * 归属人姓名：以 member 档案姓名为权威来源（冗余列 owner_name 历史数据可能为空，
+     * 与 A01 列表接口取人名的口径保持一致）；档案查不到时回退冗余列，再不行留空。
+     */
+    private String ownerNameOf(Achievement achievement, Map<Long, String> ownerNames) {
+        if (achievement.getOwnerMemberId() != null) {
+            String fromMember = ownerNames.get(achievement.getOwnerMemberId());
+            if (fromMember != null && !fromMember.isBlank()) {
+                return fromMember;
+            }
+        }
+        return nullToEmpty(achievement.getOwnerName());
     }
 
     private String nullToEmpty(String value) {

@@ -6,7 +6,7 @@
  *   1002      清 token 踢回登录页（登录过期/改密后旧 token/账号停用）
  *   1005      提示"请勿重复提交"（幂等命中）
  *   其余业务码 ElMessage 弹 message，reject 交页面兜底
- *   HTTP 层异常（断网/5xx）统一兜底提示
+ *   HTTP 层异常（断网/5xx 无响应体）统一兜底提示；带统一响应体的 4xx 按业务码分流弹真实 message
  * ⚠️ 安全：token 注入 Authorization 头只允许在本文件做，页面禁止手工拼（规范 §5.3）
  * ⚠️ 安全：本文件只做展示层分流，不构成任何权限依据
  */
@@ -77,6 +77,18 @@ http.interceptors.response.use(
       window.location.assign('/login')
       return Promise.reject(new BizError(1002, body?.message ?? '未登录或令牌已过期'))
     }
+    // HTTP 4xx/5xx 但带统一响应体：后端部分业务拒绝直接回 HTTP 403/400 + code/message 响应体
+    // （如审批中心 P01 视角对无档案账号回 1003"当前账号未绑定人员档案"），与 2xx 分支同口径
+    // 弹真实 message——否则原因被"网络异常"吞掉（2026-10-19 审批中心超管视角排查定位）
+    const errBody = err.response?.data as Result | undefined
+    if (errBody && typeof errBody.code === 'number') {
+      if (errBody.code === 1005) {
+        if (!silent) ElMessage.warning('请勿重复提交')
+        return Promise.reject(new BizError(errBody.code, errBody.message))
+      }
+      if (!silent) ElMessage.error(errBody.message || '操作失败')
+      return Promise.reject(new BizError(errBody.code, errBody.message))
+    }
     if (!silent) ElMessage.error('网络异常，请稍后重试')
     return Promise.reject(err)
   }
@@ -120,9 +132,33 @@ export async function delIdem<T>(url: string, idempotencyKey: string): Promise<T
   return (await http.delete(url, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
 }
 
-/** 文件流下载（导出/打包）：blob 拉取后触发浏览器保存，文件名优先取响应头 */
+/** 文件流下载（导出/打包）：blob 拉取后触发浏览器保存，文件名优先取响应头。
+ *  ⚠️ 后端业务失败统一返回 HTTP 200 + {code,message} JSON（骨架 GlobalExceptionHandler 约定），
+ *  而 axios 只认状态码不会抛错 —— 若不判定，错误 JSON 会被当文件存成 xlsx/zip，用户打开即损坏文件。
+ *  故先看 content-type：是 JSON 就解析 message 提示并中断，不触发保存。 */
 export async function download(url: string, fallbackName: string): Promise<void> {
   const resp = (await http.get(url, { responseType: 'blob' })) as unknown as AxiosResponse<Blob>
+  const contentType = String(resp.headers?.['content-type'] ?? '')
+  if (contentType.includes('application/json')) {
+    let message = '下载失败'
+    let code = -1
+    try {
+      const body = JSON.parse(await (resp.data as Blob).text()) as Result
+      message = body?.message || message
+      code = body?.code ?? code
+    } catch {
+      // 解析失败用兜底文案，不把原始异常抛给用户
+    }
+    if (code === 1002) {
+      // 与拦截器口径一致：登录失效清 token 整页跳登录
+      sessionStorage.removeItem(TOKEN_KEY)
+      ElMessage.error(message || '登录已失效，请重新登录')
+      window.location.assign('/login')
+      return
+    }
+    ElMessage.error(message)
+    throw new BizError(code, message)
+  }
   const cd = String(resp.headers?.['content-disposition'] ?? '')
   const m = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(cd)
   const name = m ? decodeURIComponent(m[1].replace(/"/g, '')) : fallbackName

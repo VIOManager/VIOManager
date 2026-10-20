@@ -5,9 +5,16 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # SPA 路由兜底：vue-router history 模式，直接访问/刷新非根路径不 404
+    # SPA 路由兜底：vue-router history 模式，直接访问/刷新非根路径不 404；
+    # index.html 禁缓存（联调期容器频繁换版：旧页面引用的旧哈希资源已不存在，
+    # 懒加载路由会 404 打不开页面——no-cache 让浏览器每次回源拿最新资源清单）
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache";
     }
 
     # 知识库微服务（vio-kb 独立进程，默认宿主机 8091）；nginx 前缀取最长匹配，优先于 /api/

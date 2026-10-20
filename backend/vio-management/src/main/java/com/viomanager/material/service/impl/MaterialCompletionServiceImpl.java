@@ -14,10 +14,12 @@ import com.viomanager.material.mapper.MaterialSubmissionMapper;
 import com.viomanager.material.mapper.MaterialTaskMapper;
 import com.viomanager.material.service.MaterialCompletionService;
 import com.viomanager.material.service.MaterialRequirementService;
+import com.viomanager.material.support.MaterialCompletionRecalculator;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.MyTeamRow;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
 import com.viomanager.material.support.MemberIdSupport;
+import com.viomanager.material.support.TeamOrgScopeSupport;
 import com.viomanager.material.vo.MaterialRequirementVO;
 import com.viomanager.material.vo.MaterialSubmitInfoVO;
 import com.viomanager.material.vo.MyTeamMaterialVO;
@@ -66,58 +68,37 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
     @Resource
     private MemberIdSupport memberIdSupport;
 
+    @Resource
+    private TeamOrgScopeSupport orgScope;
+
+    @Resource
+    private MaterialCompletionRecalculator recalculator;
+
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void recompute(Long teamId) {
-        //1.队伍不存在直接返回（重算是幂等收敛动作，不抛错）
-        TeamRow team = teamQuery.loadTeam(teamId);
-        if (team == null) {
-            return;
-        }
-        //2.该比赛的材料任务：一赛一任务是建任务的强规则，selectList 容错取第一条
-        List<MaterialTask> tasks = taskMapper.selectList(
-                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
-        if (tasks.isEmpty()) {
-            return;
-        }
-        MaterialTask task = tasks.get(0);
-        //3.任务下全部未删要求（含选传：选传项进分母，不计入缺项）
-        List<MaterialRequirement> reqs = requirementMapper.selectList(
-                new QueryWrapper<MaterialRequirement>().eq("task_id", task.getId()));
-        if (reqs.isEmpty()) {
-            return;
-        }
-        //4.统计：有 is_current=1 提交的算已交；没交且必传的计缺项
-        Set<Long> submittedReqIds = new HashSet<>(
-                submissionMapper.selectCurrentRequirementIds(teamId));
-        int submitted = 0;
-        int requiredMissing = 0;
-        for (MaterialRequirement req : reqs) {
-            if (submittedReqIds.contains(req.getId())) {
-                submitted++;
-            } else if (req.getRequiredFlag() != null && req.getRequiredFlag() == 1) {
-                requiredMissing++;
-            }
-        }
-        //5.齐全率：0–100 整数，分母是全部要求数（含选传）
-        int completeRate = Math.round(submitted * 100.0f / reqs.size());
-        //6.队伍材料状态
-        String materialStatus = submitted == 0 ? "NOT_STARTED"
-                : requiredMissing > 0 ? "PENDING" : "SUBMITTED";
-        //7.回写 team 两列（经 MaterialTeamQuerySupport 走 B 线口子）
-        teamQuery.updateTeamMaterial(teamId, materialStatus, completeRate);
+        //实现收敛到 MaterialCompletionRecalculator（单份逻辑）：本服务已被
+        //MaterialRequirementService 依赖，若在这里放重算实现会与它形成循环依赖
+        recalculator.recompute(teamId);
+    }
+
+    @Override
+    public void recomputeByContest(Long contestId) {
+        recalculator.recomputeByContest(contestId);
     }
 
     @Override
     public Result<TeamMaterialRowVO> teamOverview(Long teamId) {
+        //0.部门管理员组织子树裁剪（越权 1003；超管/学生不受影响，MS01 本就是管理端口）
+        orgScope.assertTeamInScope(teamId);
         //1.队伍必须存在
         TeamRow team = teamQuery.loadTeam(teamId);
         if (team == null) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "赛队不存在");
         }
-        //2.该比赛的材料任务：没配任务按 404 拒绝（与 MS02 校验链同口径）
+        //2.该比赛的材料任务：没配任务按 404 拒绝（与 MS02 校验链同口径）；orderByAsc("id") 定序取第一条
         List<MaterialTask> tasks = taskMapper.selectList(
-                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
+                new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId())
+                        .orderByAsc("id"));
         if (tasks.isEmpty()) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "材料任务不存在");
         }
@@ -167,9 +148,10 @@ public class MaterialCompletionServiceImpl implements MaterialCompletionService 
         //2.我在册（CONFIRMED/UNCONFIRMED）且 ACTIVE 的队伍
         List<MyTeamMaterialVO> voList = new ArrayList<>();
         for (MyTeamRow team : teamQuery.loadMyTeams(memberId)) {
-            //3.该队所在比赛没配材料任务 → 跳过这支队伍（不报错、不出现在数组里）
+            //3.该队所在比赛没配材料任务 → 跳过这支队伍（不报错、不出现在数组里）；orderByAsc("id") 定序
             List<MaterialTask> tasks = taskMapper.selectList(
-                    new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId()));
+                    new QueryWrapper<MaterialTask>().eq("contest_id", team.getContestId())
+                            .orderByAsc("id"));
             if (tasks.isEmpty()) {
                 continue;
             }

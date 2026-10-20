@@ -12,6 +12,7 @@ import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.Result;
+import com.viomanager.datascop.OrgScopeSupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamMembership;
 import com.viomanager.material.support.MemberIdSupport;
@@ -42,10 +43,14 @@ public class AchievementQuerySupport {
     @Resource
     private MemberIdSupport memberIdSupport;
 
-    /** A01 成果列表：筛选（teamId / type / status / keyword 模糊）+ 学生数据范围 + 队名填充 */
+    @Resource
+    private OrgScopeSupport orgScope;
+
+    /** A01 成果列表：筛选（teamId / type / status / keyword 模糊）+ 学生/部门管理员数据范围 + 队名填充 */
     public Result<List<AchievementVO>> list(AchievementQueryDTO dto) {
         //学生数据范围：无队伍直接空数组，绝不返回全部
-        List<Long> visibleTeamIds = studentVisibleTeamIds(UserHolder.getUser());
+        CurrentUser user = UserHolder.getUser();
+        List<Long> visibleTeamIds = studentVisibleTeamIds(user);
         if (visibleTeamIds != null && visibleTeamIds.isEmpty()) {
             return Result.ok(new ArrayList<>());
         }
@@ -65,6 +70,16 @@ public class AchievementQuerySupport {
         if (visibleTeamIds != null) {
             wrapper.in("team_id", visibleTeamIds);
         }
+        //部门管理员数据范围：只看本部门组织子树（docs/README.md 第 28 条，越权数据不进列表）；
+        //子树为空（未绑组织 / 组织已删）直接空数组；超管与学生不受影响。
+        //子树查询复用骨架统一收口 datascop.OrgScopeSupport（Redis cache-aside + 熔断降级）
+        if (user != null && "DEPT_ADMIN".equals(user.getRole())) {
+            List<Long> subtreeOrgIds = orgScope.subtreeIdsOrEmpty(user.getOrgId());
+            if (subtreeOrgIds.isEmpty()) {
+                return Result.ok(new ArrayList<>());
+            }
+            wrapper.in("org_id", subtreeOrgIds);
+        }
         wrapper.orderByDesc("created_at");
         List<Achievement> achievements = achievementMapper.selectList(wrapper);
         if (achievements.isEmpty()) {
@@ -79,11 +94,11 @@ public class AchievementQuerySupport {
         if (achievement == null) {
             throw new BizException(CommonErrorCode.NOT_FOUND, "成果不存在");
         }
-        //权限：管理端或本队在册成员
+        //权限：管理端或本队在册成员，且队伍须仍为 ACTIVE——已解散队伍的成果对学生不可见（与 A08 对齐）
         CurrentUser user = UserHolder.getUser();
         Long memberId = memberIdSupport.currentMemberId(user);
         if (!isAdmin(user) && (memberId == null || achievement.getTeamId() == null
-                || !teamQuery.isTeamMember(achievement.getTeamId(), memberId))) {
+                || !isActiveTeamMember(achievement.getTeamId(), memberId))) {
             throw new BizException(CommonErrorCode.FORBIDDEN, "仅本队成员与管理端可查看");
         }
         Map<Long, String> teamNames = teamQuery.loadTeamNames(
@@ -155,7 +170,11 @@ public class AchievementQuerySupport {
         return vo;
     }
 
-    /** 学生视角可见队伍 ID：非学生返回 null（不筛）；学生无档案或无队伍返回空 List（页面空数组） */
+    /**
+     * 学生视角可见队伍 ID：非学生返回 null（不筛）；学生无档案或无队伍返回空 List（页面空数组）。
+     * 仅统计在册且 ACTIVE 的队伍（与 A08 同款过滤，复用 TeamMembership.teamStatus）——
+     * 已解散队伍的成果对学生不可见。
+     */
     private List<Long> studentVisibleTeamIds(CurrentUser user) {
         if (user == null || !"STUDENT".equals(user.getRole())) {
             return null;
@@ -164,10 +183,22 @@ public class AchievementQuerySupport {
         List<Long> teamIds = new ArrayList<>();
         if (memberId != null) {
             for (TeamMembership membership : teamQuery.loadMyTeamMemberships(memberId)) {
-                teamIds.add(membership.getTeamId());
+                if ("ACTIVE".equals(membership.getTeamStatus())) {
+                    teamIds.add(membership.getTeamId());
+                }
             }
         }
         return teamIds;
+    }
+
+    /** 学生是否该队在册成员且队伍仍 ACTIVE（照 A08 的成员判定写法，复用 TeamMembership.teamStatus） */
+    private boolean isActiveTeamMember(Long teamId, Long memberId) {
+        for (TeamMembership membership : teamQuery.loadMyTeamMemberships(memberId)) {
+            if (teamId.equals(membership.getTeamId()) && "ACTIVE".equals(membership.getTeamStatus())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 成果里的非空 teamId 去重列表（查队名用） */
