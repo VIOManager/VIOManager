@@ -52,8 +52,10 @@ public class ApprovalExpireTask {
      */
     @Transactional
     public int expireOverdue() {
-        //1.捞出到期未处理的单子
+        //1.捞出到期未处理的单子——只取 id：循环里只用它，SELECT * 会白拉整行
+        //  （含 biz_payload 大 JSON 列），兜底场景积压越多省得越多
         List<Approval> overdue = approvalMapper.selectList(new QueryWrapper<Approval>()
+                .select("id")
                 .eq("status", "PENDING").lt("expire_at", LocalDateTime.now()));
         int count = 0;
         for (Approval approval : overdue) {

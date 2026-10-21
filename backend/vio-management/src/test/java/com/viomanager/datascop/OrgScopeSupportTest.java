@@ -113,4 +113,20 @@ class OrgScopeSupportTest {
         assertEquals(2, rebuilt.size());
         assertTrue(rebuilt.contains(CHILD));
     }
+
+    @Test
+    void warmAllPreloadsEveryOrgSubtree() {
+        //1.清干净，确认未预热时父键不在
+        orgScopeSupport.evictOrgCache();
+        assertTrue(stringRedisTemplate.opsForSet().members(KEY_PREFIX + PARENT).isEmpty());
+        //2.预热：全量组织一次查询内存算族整族写入（返回数至少覆盖本测试的两个组织）
+        int warmed = orgScopeSupport.warmAll();
+        assertTrue(warmed >= 2, "预热应覆盖全部组织，实际 " + warmed);
+        //3.父子两键直接在缓存里，值与库算一致——重启后第一个用户不用付冷启动费
+        Set<String> parentMembers = stringRedisTemplate.opsForSet().members(KEY_PREFIX + PARENT);
+        assertFalse(parentMembers == null || parentMembers.isEmpty(), "父键应已预热");
+        assertTrue(parentMembers.contains(String.valueOf(PARENT)));
+        assertTrue(parentMembers.contains(String.valueOf(CHILD)));
+        assertEquals(1, stringRedisTemplate.opsForSet().members(KEY_PREFIX + CHILD).size());
+    }
 }

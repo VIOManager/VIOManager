@@ -6,9 +6,11 @@ import com.viomanager.approval.dto.ApprovalActionDTO;
 import com.viomanager.approval.dto.ApprovalCreateDTO;
 import com.viomanager.approval.service.ApprovalClient;
 import com.viomanager.approval.service.IApprovalActionService;
+import com.viomanager.approval.support.ApprovalUnreadCache;
 import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
 import jakarta.annotation.Resource;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -67,8 +69,8 @@ class NotifyStatusE2eTest {
             jdbcTemplate.update("DELETE FROM approval WHERE id = ?", approvalId);
         }
         jdbcTemplate.update("DELETE FROM sys_org WHERE id = ?", ORG_ID);
-        stringRedisTemplate.delete(ApprovalStatusListener.KEY_PREFIX + APPLICANT);
-        stringRedisTemplate.delete(ApprovalStatusListener.KEY_PREFIX + TARGET);
+        stringRedisTemplate.delete(ApprovalUnreadCache.KEY_PREFIX + APPLICANT);
+        stringRedisTemplate.delete(ApprovalUnreadCache.KEY_PREFIX + TARGET);
     }
 
     @Test
@@ -93,24 +95,30 @@ class NotifyStatusE2eTest {
 
         //3.等事件走完 relay → MQ → 消费者（60 秒窗口：2 秒 relay 节拍 + broker 转发
         //  + 消费者重平衡最坏 20 秒——套件里前面上下文的同组消费者刚离开时会更慢，留足余量；
-        //  broker 会保留消息，消费者晚订阅也不会丢）
-        String applicantKey = ApprovalStatusListener.KEY_PREFIX + APPLICANT;
-        String targetKey = ApprovalStatusListener.KEY_PREFIX + TARGET;
-        awaitHash(applicantKey);
-        awaitHash(targetKey);
+        //  broker 会保留消息，消费者晚订阅也不会丢）。注意建单的 SUBMIT 事件会先到，
+        //  键先以中间值出现（发起人 result=0），所以要等"最终值"而不是等键出现
+        String applicantKey = ApprovalUnreadCache.KEY_PREFIX + APPLICANT;
+        String targetKey = ApprovalUnreadCache.KEY_PREFIX + TARGET;
+        awaitValue(applicantKey, "result", "1");
+        awaitValue(targetKey, "todo", "0");
 
-        //4.断言红点：发起人 result=1（自己的单批了没看），目标人 todo=0（单已非 PENDING）
+        //4.断言红点终态：发起人 result=1（自己的单批了没看），目标人 todo=0（单已非 PENDING）
         assertEquals("0", hashGet(applicantKey, "todo"));
         assertEquals("1", hashGet(applicantKey, "result"));
         assertEquals("0", hashGet(targetKey, "todo"));
         assertEquals("0", hashGet(targetKey, "result"));
 
-        //5.重复消费幂等：把 outbox 里的原始 payload 再喂一次消费者，重算后数字不变
-        String payload = jdbcTemplate.queryForObject(
+        //5.重复消费幂等：把 outbox 里的 APPROVE 原始 payload 再喂一次消费者，重算后数字不变
+        List<String> payloads = jdbcTemplate.queryForList(
                 "SELECT payload_json FROM notify_outbox WHERE biz_id = ?", String.class, approvalId);
+        String payload = payloads.stream()
+                .filter(p -> p.contains("\"action\":\"APPROVE\""))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("没找到 APPROVE 事件行"));
         approvalStatusListener.onMessage(payload);
         assertEquals("1", hashGet(applicantKey, "result"));
-        assertEquals(1, jdbcTemplate.queryForObject(
+        //SUBMIT 与 APPROVE 两条事件都应已投递成 SENT
+        assertEquals(2, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM notify_outbox WHERE biz_id = ? AND send_status = 'SENT'",
                 Integer.class, approvalId));
     }
@@ -127,15 +135,17 @@ class NotifyStatusE2eTest {
         return approvalClient.createApproval(dto);
     }
 
-    private void awaitHash(String key) throws InterruptedException {
+    /** 轮询等某字段出现期望值（键可能先以 SUBMIT 中间值出现，等的是终态） */
+    private void awaitValue(String key, String field, String expected) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
         while (System.nanoTime() < deadline) {
-            if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+            if (expected.equals(hashGet(key, field))) {
                 return;
             }
             Thread.sleep(500);
         }
-        throw new AssertionError("60 秒内红点键未出现，链路断了：" + key);
+        throw new AssertionError("60 秒内红点未到终态：" + key + "." + field + " 期望 " + expected
+                + " 实际 " + hashGet(key, field));
     }
 
     private String hashGet(String key, String field) {
