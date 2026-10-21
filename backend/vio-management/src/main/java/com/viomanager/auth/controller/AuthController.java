@@ -9,6 +9,7 @@ import com.viomanager.common.util.IpUtil;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 认证接口：登录、改密。接口口径以骨架接口清单 A01/A02 为准。
+ * 认证接口：登录、改密、本人档案。接口口径以骨架接口清单 A01/A02 为准。
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -42,5 +43,14 @@ public class AuthController {
     @PutMapping("/password")
     public Result changePassword(@Valid @RequestBody PasswordDTO passwordDTO) {
         return userService.changePassword(passwordDTO);
+    }
+
+    /**
+     * 本人档案（论坛独立库方案 §二.3）：登录态，orgName 由 orgId 查 sys_org。
+     * 论坛服务在 forum_user 快照首建/组织变化时转发用户 JWT 调用此接口换组织名。
+     */
+    @GetMapping("/my-profile")
+    public Result myProfile() {
+        return userService.myProfile();
     }
 }
