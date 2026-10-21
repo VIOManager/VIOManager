@@ -87,14 +87,15 @@ ON DUPLICATE KEY UPDATE
     name = VALUES(name), semester_id = VALUES(semester_id), status = VALUES(status), source_type = VALUES(source_type);
 
 -- ---------------- 两支赛队：一支材料已交、一支未开始 ----------------
-INSERT INTO team (id, name, contest_id, semester_id, org_id, status, material_status, material_complete_rate)
+-- leader_member_id 必须带上：服务层一切队长校验读 team.leader_member_id，缺失则种子队解散/编辑/加人全部 1003（2026-10-16 冒烟抓出）
+INSERT INTO team (id, name, contest_id, semester_id, org_id, leader_member_id, status, material_status, material_complete_rate)
 VALUES
-    (501, '代码先锋队', 402, 301, 2, 'ACTIVE', 'SUBMITTED',  100.00),
-    (502, '芯火电子队', 402, 301, 3, 'ACTIVE', 'NOT_STARTED',  0.00)
+    (501, '代码先锋队', 402, 301, 2, 103, 'ACTIVE', 'SUBMITTED',  100.00),
+    (502, '芯火电子队', 402, 301, 3, 105, 'ACTIVE', 'NOT_STARTED',  0.00)
 ON DUPLICATE KEY UPDATE
     name = VALUES(name), contest_id = VALUES(contest_id), semester_id = VALUES(semester_id),
-    org_id = VALUES(org_id), status = VALUES(status), material_status = VALUES(material_status),
-    material_complete_rate = VALUES(material_complete_rate);
+    org_id = VALUES(org_id), leader_member_id = VALUES(leader_member_id), status = VALUES(status),
+    material_status = VALUES(material_status), material_complete_rate = VALUES(material_complete_rate);
 
 INSERT INTO team_member (id, team_id, member_id, member_name, is_leader, status)
 VALUES

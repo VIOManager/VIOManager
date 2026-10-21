@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   VIOManager 后端父工程：统一锁 Spring Boot 与依赖版本。
-  工程形态为 Maven 多模块（一父两子起步），约定见骨架方案 §2.1：
-  vio-common 底座 jar + vio-management 管理系统服务；vio-forum 阶段2 才创建。
+  工程形态为 Maven 多模块：vio-common 底座 jar + vio-management 管理系统服务
+  + vio-kb 知识库微服务 + vio-forum 论坛服务（独立库独立部署，2026-10-14 论坛方案 §二.2 落地）。
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -28,6 +28,8 @@
         <module>vio-management</module>
         <!-- 知识库微服务（feature/kb 新增；父 pom 属公共文件，PR 前群里报备） -->
         <module>vio-kb</module>
+        <!-- 论坛服务：独立库 vioforum 独立部署（父 pom 属公共文件，PR 前群里报备） -->
+        <module>vio-forum</module>
     </modules>
 
     <properties>

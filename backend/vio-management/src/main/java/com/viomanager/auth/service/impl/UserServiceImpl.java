@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.viomanager.auth.dto.LoginDTO;
 import com.viomanager.auth.dto.LoginVO;
+import com.viomanager.auth.dto.MyProfileVO;
 import com.viomanager.auth.dto.PasswordDTO;
 import com.viomanager.auth.entity.SysLoginLog;
 import com.viomanager.auth.entity.SysUser;
@@ -21,6 +22,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -43,6 +45,11 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
 
     @Resource
     private BCryptPasswordEncoder passwordEncoder;
+
+    /** 组织名查询（论坛独立库方案 §二.3）：orgId 直查 sys_org 走原生 SQL；
+     *  A 线组织模块已随 PR#19 合入 main，后续可重构为注入 OrgService，暂维持原实现口径 */
+    @Resource
+    private JdbcTemplate jdbcTemplate;
 
     /**
      * 假的 BCrypt 散列：账号不存在时也拿它跑一次 matches，对齐两种场景的耗时——
@@ -113,6 +120,24 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
         user.setDefaultPassword(0);
         updateById(user);
         return Result.ok();
+    }
+
+    @Override
+    public Result<MyProfileVO> myProfile() {
+        //1.只信 ThreadLocal 身份（JwtAuthFilter 已验签 + AuthTokenChecker 已查库校验停用/改密）
+        CurrentUser current = UserHolder.getUser();
+        MyProfileVO vo = new MyProfileVO();
+        vo.setUserId(current.getUserId());
+        vo.setRealName(current.getRealName());
+        vo.setRole(current.getRole());
+        vo.setOrgId(current.getOrgId());
+        //2.orgId 换组织名：超管不挂组织为 null；组织已删按空处理，消费方自行兜底
+        if (current.getOrgId() != null) {
+            String orgName = jdbcTemplate.queryForObject(
+                    "SELECT name FROM sys_org WHERE id = ? AND deleted = 0", String.class, current.getOrgId());
+            vo.setOrgName(orgName);
+        }
+        return Result.ok(vo);
     }
 
     /**
