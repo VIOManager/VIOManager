@@ -5,6 +5,7 @@ import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.enums.MemberErrorCode;
 import com.viomanager.common.exception.BizException;
+import com.viomanager.datascop.OrgScopeSupport;
 import com.viomanager.person.entity.Person;
 import jakarta.annotation.Resource;
 import java.util.List;
@@ -29,6 +30,9 @@ public class PersonViewerSupport {
 
     @Resource
     private PersonTeamSupport personTeamSupport;
+
+    @Resource
+    private OrgScopeSupport orgScopeSupport;
 
     /**
      * M02 详情视角判定（契约：超管/本部门管理员/本人全量，本队队长大部分，其他受限）。
@@ -117,31 +121,20 @@ public class PersonViewerSupport {
     }
 
     /**
-     * 部门管理员的组织子树 ID 列表（含自己）——M01 列表的服务端过滤
-     * （Mapper 改 SELF 后拦截器不再注入，此处照审批 ApprovalQueryServiceImpl 的查法）。
+     * 部门管理员的组织子树 ID 列表（含自己）——M01 列表的服务端过滤。
+     * 判定收口到 OrgScopeSupport（插入点①）：宽松口子保住现行为（没配组织/组织不存在返回空列表），
+     * 开 vio.cache.org-enabled 后自动带 Redis 缓存与降级直查库。
      */
     public List<Long> querySubtreeOrgIds(Long rootOrgId) {
-        if (rootOrgId == null) {
-            return List.of();
-        }
-        return jdbcTemplate.queryForList(
-                "SELECT id FROM sys_org WHERE path LIKE CONCAT("
-                        + "(SELECT path FROM sys_org WHERE id = ? AND deleted = 0), '%') AND deleted = 0",
-                Long.class, rootOrgId);
+        return orgScopeSupport.subtreeIdsOrEmpty(rootOrgId);
     }
 
     /**
      * 目标组织是否在 rootOrgId 的子树内（含 root 自身）——部门管理员的归属判定。
-     * 任一端为空（管理员没配组织 / 人员没挂组织）都判不在，走后续档位兜底。
+     * 收口到 OrgScopeSupport 后查询失败统一按"不在子树"处理（原实现异常直冒 500，
+     * 现 fail-closed 走受限档，更安全）；任一端为空仍判不在。
      */
     private boolean orgInMySubtree(Long rootOrgId, Long targetOrgId) {
-        if (rootOrgId == null || targetOrgId == null) {
-            return false;
-        }
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM sys_org WHERE id = ? AND deleted = 0 AND path LIKE CONCAT("
-                        + "(SELECT path FROM sys_org WHERE id = ? AND deleted = 0), '%')",
-                Integer.class, targetOrgId, rootOrgId);
-        return count != null && count > 0;
+        return orgScopeSupport.inSubtree(rootOrgId, targetOrgId);
     }
 }

@@ -8,7 +8,7 @@
  *   PR29 查看申请走 PROJECT_VIEW 审批；ONCE 授权看详情一次即消耗（PR03）
  *   PR02/PR20/PR26/PR29 带幂等头
  */
-import { del, get, post, postIdem, put } from './http'
+import { del, download, get, post, postIdem, put, upload } from './http'
 
 export type ProjectStatus = 'ACTIVE' | 'FINISHED' | 'ARCHIVED'
 export type ProjectVisibility = 'PRIVATE' | 'ORG' | 'PUBLIC'
@@ -29,28 +29,18 @@ export interface ProjectItem {
 export interface ProjectDetail extends ProjectItem {
   description: string
   remark: string
-  ownerId: string
-  orgId: string
-  semesterId: string
-  contestId: string
-  trackId: string
-  /** 当前登录人是否所有人（前端按钮显隐；最终权限后端判定） */
+  /** 当前登录人是否所有人（身份标记） */
   viewerIsOwner: boolean
-  /** 指导教师列表（清单未出独立读接口，暂挂详情扩展字段；TODO(联调)：以后端清单修订为准） */
-  advisors: ProjectAdvisor[]
+  /** 当前登录人是否可管理（所有人 or 管理员，2026-10-16 拍板口径；操作按钮显隐用，权限以后端判定为准） */
+  viewerCanManage: boolean
 }
 
+/** PR06 成员（契约字段：memberName/projectRole/joinAt，勿按 mock 旧形态写） */
 export interface ProjectMember {
   memberId: string
-  name: string
-  role: 'OWNER' | 'MEMBER'
-  joinedAt: string
-}
-
-export interface ProjectAdvisor {
-  memberId: string
-  name: string
-  college: string
+  memberName: string
+  projectRole: 'OWNER' | 'MEMBER'
+  joinAt: string
 }
 
 export interface ProjectTeamRef {
@@ -94,8 +84,8 @@ export interface Milestone {
   createdAt: string
 }
 
-export type TaskStatus = 'TODO' | 'DOING' | 'DONE'
-export type TaskPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
+export type TaskStatus = 'TODO' | 'DOING' | 'DONE' | 'BLOCKED'
+export type TaskPriority = 'LOW' | 'NORMAL' | 'HIGH'
 
 export interface ProjectTask {
   id: string
@@ -139,12 +129,22 @@ export interface ViewGrant {
 
 // ── PR01–PR05 项目主体 ──
 
-export function apiProjects(q?: { keyword?: string; status?: string; contestId?: string; semesterId?: string; orgId?: string }): Promise<ProjectItem[]> {
-  return get('/api/projects', (q ?? {}) as Record<string, unknown>)
+/** 后端统一分页形态（规范 §2.3）；mock 适配器回数组，两种形态在 api 层归一 */
+interface PageLike<T> {
+  list: T[]
+  total: number
+}
+
+export async function apiProjects(q?: { keyword?: string; status?: string; contestId?: string; semesterId?: string; orgId?: string }): Promise<ProjectItem[]> {
+  const resp = await get<PageLike<ProjectItem> | ProjectItem[]>('/api/projects', (q ?? {}) as Record<string, unknown>)
+  return Array.isArray(resp) ? resp : resp.list
 }
 
 export function apiCreateProject(body: {
-  name: string; description: string; contestId?: string; trackId?: string
+  name: string; description: string
+  /** 管理员代建（帮该成员创建，2026-10-16 需求）：不传=为自己建 */
+  ownerMemberId?: string
+  contestId?: string; trackId?: string
   semesterId?: string; orgId?: string; visibility?: string; startDate?: string; endDate?: string; remark?: string
 }): Promise<{ id: string }> {
   return postIdem('/api/projects', body, crypto.randomUUID())
@@ -192,8 +192,9 @@ export function apiProjectTeams(id: string): Promise<ProjectTeamRef[]> {
   return get('/api/projects/' + id + '/teams')
 }
 
+/** PR13 列表；项目模块后端未实现期间由 TeamProjectPanel 静默降级（2026-10-16），故走 silent 不弹错 */
 export function apiTeamProjects(teamId: string): Promise<TeamProjectItem[]> {
-  return get('/api/teams/' + teamId + '/projects')
+  return get('/api/teams/' + teamId + '/projects', undefined, { silent: true })
 }
 
 /** PR13 队长挂载（同学期 7008、重复 7007；挂载时回溯补建未同步节点任务） */
@@ -206,9 +207,9 @@ export function apiDetachProject(teamId: string, projectId: string): Promise<nul
   return del('/api/teams/' + teamId + '/projects/' + projectId)
 }
 
-/** PR15 可挂载项目池（挂载选择器） */
+/** PR15 可挂载项目池（挂载选择器）；同上静默降级 */
 export function apiAttachableProjects(contestId?: string): Promise<ProjectItem[]> {
-  return get('/api/projects/attachable', contestId ? { contestId } : {})
+  return get('/api/projects/attachable', contestId ? { contestId } : {}, { silent: true })
 }
 
 // ── PR16–PR20 比赛时间节点 ──
@@ -261,18 +262,21 @@ export function apiProjectFiles(id: string): Promise<ProjectFile[]> {
   return get('/api/projects/' + id + '/files')
 }
 
-/** PR26 关联已上传文件（先走骨架 F01 拿 fileId；所有人与项目成员可传） */
-export function apiAttachFile(id: string, body: { fileId: string; fileName: string; fileSize?: number; fileCategory: string; remark?: string }): Promise<{ id: string }> {
-  return postIdem('/api/projects/' + id + '/files', body, crypto.randomUUID())
+/** PR26 上传（单段 multipart：file + fileCategory + remark，骨架 F01 校验/ClamAV 在后端一体内完成；
+ *  后端实现为单请求契约，不走"先 F01 拿 fileId 再 JSON 关联"两段式） */
+export function apiUploadProjectFile(id: string, file: File, fileCategory: string, remark?: string): Promise<{ id: string }> {
+  const fields: Record<string, string> = { fileCategory }
+  if (remark) fields.remark = remark
+  return upload('/api/projects/' + id + '/files', file, crypto.randomUUID(), fields)
 }
 
 export function apiDeleteProjectFile(id: string, fileRecordId: string): Promise<null> {
   return del('/api/projects/' + id + '/files/' + fileRecordId)
 }
 
-/** PR28 下载（先过项目可见性校验再转发，写审计；mock 回提示文本） */
-export function apiDownloadProjectFile(fileRecordId: string): Promise<{ note: string }> {
-  return get('/api/projects/files/' + fileRecordId + '/download')
+/** PR28 下载（blob 流式保存；先过项目可见性校验，不暴露对象存储地址） */
+export function apiDownloadProjectFile(fileRecordId: string, fileName: string): Promise<void> {
+  return download('/api/projects/files/' + fileRecordId + '/download', fileName)
 }
 
 // ── PR29–PR31 查看申请与授权 ──

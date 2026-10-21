@@ -7,6 +7,7 @@ import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.enums.OrgErrorCode;
 import com.viomanager.common.exception.BizException;
+import com.viomanager.datascop.OrgScopeSupport;
 import com.viomanager.org.dto.OrgSaveDTO;
 import com.viomanager.org.entity.SysOrg;
 import com.viomanager.org.mapper.SysOrgMapper;
@@ -41,6 +42,10 @@ public class OrgServiceImpl implements OrgService {
 
     @Resource
     private JdbcTemplate jdbcTemplate;
+
+    /** 组织写操作后清子树缓存（插入点①的主动失效口，TTL 兜底之外的及时失效） */
+    @Resource
+    private OrgScopeSupport orgScopeSupport;
 
     /** O01 组织树：可见集内组树，父不可见者即为根（部门管理员的子树根） */
     @Override
@@ -133,6 +138,8 @@ public class OrgServiceImpl implements OrgService {
         org.setStatus(1);
         org.setRemark(dto.getRemark());
         sysOrgMapper.insert(org);
+        //3.新节点会进各祖先组织的子树缓存集：提交后清全族子树缓存（回滚则不清，数据没变）
+        orgScopeSupport.evictOrgCacheAfterCommit();
         return id;
     }
 
@@ -180,6 +187,8 @@ public class OrgServiceImpl implements OrgService {
         org.setSortNo(dto.getSortNo() == null ? 0 : dto.getSortNo());
         org.setRemark(dto.getRemark());
         sysOrgMapper.updateById(org);
+        //3.改上级会平移子树 path，基础字段虽不动结构也统一清——宁可多清不可漏清（提交后执行）
+        orgScopeSupport.evictOrgCacheAfterCommit();
     }
 
     /** O04 删除：3007 子组织拦截 + 人员 org_id 置空（member 同属 A 线，跨表置空走 jdbcTemplate） */
@@ -197,6 +206,8 @@ public class OrgServiceImpl implements OrgService {
         //2.逻辑删组织 + 该组织人员的 org_id 置空
         sysOrgMapper.deleteById(id);
         jdbcTemplate.update("UPDATE member SET org_id = NULL WHERE org_id = ? AND deleted = 0", id);
+        //3.组织没了，各祖先子树缓存集变脏：提交后清全族（插入点①的主动失效）
+        orgScopeSupport.evictOrgCacheAfterCommit();
     }
 
     /** O06 学院静态映射：内置常量直出 */
@@ -248,7 +259,9 @@ public class OrgServiceImpl implements OrgService {
                 .distinct()
                 .toList();
         if (ids.isEmpty()) {
-            return Map.of();
+            // 必须用 HashMap 而不是 Map.of()：不可变空 Map 的 get(null) 抛 NPE，
+            // 而组织没配管理员（manager_id 为 null）是常态——演示数据全是 null，O01 因此 1000
+            return new HashMap<>();
         }
         String placeholders = ids.stream().map(i -> "?").collect(Collectors.joining(","));
         return jdbcTemplate.query(

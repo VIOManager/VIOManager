@@ -79,5 +79,5 @@ onMounted(load)
 </template>
 
 <style scoped>
-.stamp.bad { color: var(--vio-danger); border-color: var(--vio-danger); }
+/* 状态戳走全局 page.css 贴纸块，本页无额外样式 */
 </style>

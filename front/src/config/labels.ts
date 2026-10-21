@@ -160,15 +160,17 @@ export interface MaterialTypeDef {
 
 export const MATERIAL_TYPES: MaterialTypeDef[] = [
   { value: 'REGISTRATION_FORM', label: '报名表', defaultFormats: ['pdf', 'docx'] },
-  { value: 'PROJECT_PROPOSAL', label: '项目书', defaultFormats: ['pdf'] },
-  { value: 'COMMITMENT_LETTER', label: '承诺书', defaultFormats: ['pdf'] },
+  // ⚠️ 五个值 2026-10-19 对齐后端 MaterialTypeEnum 原文：原 PROJECT_PROPOSAL / COMMITMENT_LETTER /
+  // STUDENT_ID_COPY / DEFENSE_SLIDES / AWARD_CERTIFICATE 是 mock 期自造值，后端不认，选了必报 1001
+  { value: 'PROJECT_PLAN', label: '项目书', defaultFormats: ['pdf'] },
+  { value: 'COMMITMENT', label: '承诺书', defaultFormats: ['pdf'] },
   { value: 'ID_COPY', label: '身份证复印件', defaultFormats: ['pdf', 'jpg'] },
-  { value: 'STUDENT_ID_COPY', label: '学生证复印件', defaultFormats: ['pdf', 'jpg'] },
+  { value: 'STUDENT_CARD_COPY', label: '学生证复印件', defaultFormats: ['pdf', 'jpg'] },
   { value: 'TEAM_PHOTO', label: '团队合照', defaultFormats: ['jpg', 'png'] },
-  { value: 'DEFENSE_SLIDES', label: '答辩PPT', defaultFormats: ['pptx', 'pdf'] },
+  { value: 'DEFENSE_PPT', label: '答辩PPT', defaultFormats: ['pptx', 'pdf'] },
   { value: 'RESEARCH_REPORT', label: '研究报告', defaultFormats: ['pdf', 'docx'] },
   { value: 'SOURCE_CODE', label: '源代码', defaultFormats: ['zip', 'rar'] },
-  { value: 'AWARD_CERTIFICATE', label: '获奖证书', defaultFormats: ['pdf', 'jpg'] },
+  { value: 'AWARD_CERT', label: '获奖证书', defaultFormats: ['pdf', 'jpg'] },
   { value: 'EVIDENCE', label: '佐证材料', defaultFormats: ['pdf', 'jpg', 'zip'] },
   { value: 'OTHER', label: '其他', defaultFormats: ['pdf', 'zip'] }
 ]
@@ -229,19 +231,19 @@ export const PROJECT_VISIBILITY_LABEL: Record<string, string> = {
   PUBLIC: '全平台可见'
 }
 
-/** 项目任务优先级 */
+/** 项目任务优先级（PR22 契约仅 LOW/NORMAL/HIGH；URGENT 是 mock 自造值，后端会拒） */
 export const TASK_PRIORITY_LABEL: Record<string, string> = {
   LOW: '低',
   NORMAL: '普通',
-  HIGH: '高',
-  URGENT: '紧急'
+  HIGH: '高'
 }
 
-/** 项目任务状态 */
+/** 项目任务状态（PR21 四态；BLOCKED 缺失会渲染 undefined） */
 export const TASK_STATUS_LABEL: Record<string, string> = {
   TODO: '待办',
   DOING: '进行中',
-  DONE: '已完成'
+  DONE: '已完成',
+  BLOCKED: '受阻'
 }
 
 /** 比赛时间节点类型（项目清单 §3.4） */
@@ -302,4 +304,22 @@ export const SLOT_LABEL: Record<number, string> = {
 export const KB_SOURCE_LABEL: Record<string, string> = {
   LINK: '外部链接',
   FILE: '文件'
+}
+
+/** 组织类型（A 线 O02 orgType，与后端 OrgSaveDTO 枚举一致；ROOT 仅 mock 根节点数据使用） */
+export const ORG_TYPE_LABEL: Record<string, string> = {
+  COLLEGE: '学院',
+  DEPARTMENT: '部门',
+  CLASS: '班级',
+  CLUB: '社团',
+  SUB_ORG: '子组织',
+  OTHER: '其他',
+  ROOT: '根节点'
+}
+
+/** 性别（A 线 M03/M04 gender，与后端 PersonCreateDTO @Pattern 一致：只有这三个值，没有"其他"） */
+export const GENDER_LABEL: Record<string, string> = {
+  MALE: '男',
+  FEMALE: '女',
+  UNKNOWN: '未知'
 }

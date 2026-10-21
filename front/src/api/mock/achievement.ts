@@ -74,7 +74,7 @@ function applyEvidenceLinkage(teamId: string): void {
   }
   if (!hasEvidence) {
     requirements.push({
-      id: nextReqId(), taskId: task.id, materialType: 'EVIDENCE', requiredFlag: 1,
+      id: nextReqId(), taskId: task.id, materialType: 'EVIDENCE', name: '佐证材料', requiredFlag: 1,
       allowedFormats: ['pdf', 'jpg', 'zip'], namingRule: '队名-成果名-佐证', maxSizeMb: 20
     })
   }

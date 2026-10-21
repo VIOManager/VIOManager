@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
  * 审批中心页（/approval，FS5，契约 P01–P09）
- * 三视角 tab：待办（仅管理员，学生调 TODO 后端回 1003）/ 我发起的 / 我是目标人
- * 操作入口全部在详情抽屉（按当前视角显隐按钮，最终权限以后端判定为准——规范 §5.3）
+ * 管理员页签：待办（只看待审——批准/驳回后单子离开本栏）/ 已通过 / 已驳回（已办记录，2026-10-19
+ *   lzh 需求"批准的得有记录"；后端 TODO 视角本就返回全状态单子，这里按状态分栏呈现）
+ * 参与人页签：我发起的 / 我是目标人——对超管隐藏（无发起/被指向场景且种子超管未绑档案，后端回 1003）
+ * 操作入口全部在详情抽屉（按当前视角显隐按钮，已处理单子无操作钮；最终权限以后端判定为准——规范 §5.3）
  * 红点联动：打开详情即按当前视角标记已读（P07 置位幂等），处理操作后刷新 P08 红点
  */
 import { computed, onMounted, ref } from 'vue'
@@ -12,6 +14,7 @@ import type { ApprovalItem, ApprovalRole, ApprovalView } from '@/api/approval'
 import { APPROVAL_STATUS_LABEL, APPROVAL_TYPE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
 import { useApprovalStore } from '@/stores/approval'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import ApprovalDetailDrawer from './ApprovalDetailDrawer.vue'
 
 const user = useUserStore()
@@ -19,8 +22,13 @@ const approval = useApprovalStore()
 
 const isAdmin = user.role !== 'STUDENT'
 
-// ── 三视角与筛选 ──
-const view = ref<ApprovalView>(isAdmin ? 'TODO' : 'MINE')
+/** 超管判定：MINE/TARGET 两个参与人视角对其隐藏（页面头注释里的口径） */
+const isSuperAdmin = user.role === 'SUPER_ADMIN'
+
+// ── 页签与筛选 ──
+/** 页签 key：TODO/MINE/TARGET 直连契约视角；DONE_OK/DONE_NO 是管理员已办记录页签（TODO 视角 + 固定状态） */
+type TabKey = ApprovalView | 'DONE_OK' | 'DONE_NO'
+const view = ref<TabKey>(isAdmin ? 'TODO' : 'MINE')
 const statusFilter = ref('')
 const typeFilter = ref('')
 const keyword = ref('')
@@ -33,41 +41,83 @@ const loading = ref(false)
 const drawerVisible = ref(false)
 const detailId = ref('')
 
-/** tab 配置：待办无红点（管理员待办是工作职责，P08 不含）；MINE/TARGET 挂 P08 红点 */
+/** tab 配置：待办/已办无红点（管理员工作职责不进 P08）；MINE/TARGET 挂 P08 红点 */
 const tabs = computed(() => {
-  const out: Array<{ key: ApprovalView; label: string; badge: number }> = []
-  if (isAdmin) out.push({ key: 'TODO', label: '待办', badge: 0 })
-  out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
-  out.push({ key: 'TARGET', label: '我是目标人', badge: approval.todoCount })
+  const out: Array<{ key: TabKey; label: string; badge: number }> = []
+  if (isAdmin) {
+    out.push({ key: 'TODO', label: '待办', badge: 0 })
+    // 已办记录：批准/驳回过的单子按状态分栏留档（后端 TODO 视角全状态返回，前端按状态分栏）
+    out.push({ key: 'DONE_OK', label: '已通过', badge: 0 })
+    out.push({ key: 'DONE_NO', label: '已驳回', badge: 0 })
+  }
+  // 参与人视角对超管隐藏：部门管理员与学生的成果提审/授权申请/邀请通知照常汇总在这两栏
+  if (!isSuperAdmin) {
+    out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
+    out.push({ key: 'TARGET', label: '我是目标人', badge: approval.todoCount })
+  }
   return out
 })
 
+/** 当前页签的查询参数：待办固定只看待审；已办两栏固定状态；参与人视角状态下拉自选 */
+function queryOf(): { view: ApprovalView; status?: string } {
+  if (view.value === 'TODO') return { view: 'TODO', status: 'PENDING' }
+  if (view.value === 'DONE_OK') return { view: 'TODO', status: 'APPROVED' }
+  if (view.value === 'DONE_NO') return { view: 'TODO', status: 'REJECTED' }
+  return { view: view.value, status: statusFilter.value || undefined }
+}
+
+/** 首次加载 / 切视角 / 筛选 / 处理完成刷新：清空回第 1 批 */
 async function load() {
   loading.value = true
   try {
+    page.value = 1
     const r = await apiApprovalList({
-      view: view.value,
-      status: statusFilter.value || undefined,
+      ...queryOf(),
       bizType: typeFilter.value || undefined,
       keyword: keyword.value || undefined,
-      page: page.value,
+      page: 1,
       size
     })
     list.value = r.list
     total.value = r.total
+  } catch {
+    // 加载失败（网络/业务拒绝如 1003）：清掉旧列表，避免残留上一个视角的数据造成误读；
+    // 错误提示已由 http.ts 统一弹出，这里只兜住不外抛
+    list.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
 }
 
-function switchView(v: ApprovalView) {
+/** 滚动到底追加下一批（ScrollLoader 的 reach 回调） */
+async function loadMore() {
+  if (loading.value || list.value.length >= total.value) return
+  loading.value = true
+  try {
+    page.value++
+    const r = await apiApprovalList({
+      ...queryOf(),
+      bizType: typeFilter.value || undefined,
+      keyword: keyword.value || undefined,
+      page: page.value,
+      size
+    })
+    list.value = list.value.concat(r.list)
+    total.value = r.total
+  } catch {
+    // 追加失败：保住已加载的行，仅结束本次加载；提示由 http.ts 统一弹
+  } finally {
+    loading.value = false
+  }
+}
+
+function switchView(v: TabKey) {
   view.value = v
-  page.value = 1
   void load()
 }
 
 function onSearch() {
-  page.value = 1
   void load()
 }
 
@@ -133,14 +183,15 @@ onMounted(load)
         {{ t.label }}<em v-if="t.badge">{{ t.badge }}</em>
       </button>
       <span style="flex: 1"></span>
-      <button v-if="view !== 'TODO' && (view === 'MINE' ? approval.resultCount : approval.todoCount) > 0" class="btn-line" @click="markAllRead">
+      <button v-if="(view === 'MINE' && approval.resultCount > 0) || (view === 'TARGET' && approval.todoCount > 0)" class="btn-line" @click="markAllRead">
         全部已读
       </button>
     </div>
 
     <div class="fbar">
       <input v-model="keyword" class="input-line" style="width: 180px" placeholder="搜索标题（模糊）" @keyup.enter="onSearch" />
-      <select v-model="statusFilter" class="input-line" @change="onSearch">
+      <!-- 状态下拉只在参与人视角出现：待办/已通过/已驳回页签的状态是固定死的 -->
+      <select v-if="view === 'MINE' || view === 'TARGET'" v-model="statusFilter" class="input-line" @change="onSearch">
         <option value="">全部状态</option>
         <option v-for="(label, v) in APPROVAL_STATUS_LABEL" :key="v" :value="v">{{ label }}</option>
       </select>
@@ -170,31 +221,29 @@ onMounted(load)
         </tbody>
       </table>
       <p v-if="!loading && list.length === 0" class="empty-note">暂无审批单</p>
+      <ScrollLoader :loading="loading" :no-more="list.length >= total" :loaded="list.length" :total="total" @reach="loadMore" />
     </div>
 
-    <div v-if="total > size" class="pages mono">
-      <button class="btn-line" :disabled="page <= 1" @click="page--; load()">上一页</button>
-      <span>第 {{ page }} 页 · 共 {{ total }} 单</span>
-      <button class="btn-line" :disabled="page * size >= total" @click="page++; load()">下一页</button>
-    </div>
-
-    <ApprovalDetailDrawer v-model="drawerVisible" :approval-id="detailId" :view="view" @changed="onChanged" />
+    <!-- 已办页签复用 TODO 视角打开抽屉：单子已出结果时抽屉不出任何操作钮（组件内 pending 守卫） -->
+    <ApprovalDetailDrawer v-model="drawerVisible" :approval-id="detailId" :view="view === 'MINE' || view === 'TARGET' ? view : 'TODO'" @changed="onChanged" />
   </div>
 </template>
 
 <style scoped>
 .vtabs { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .vtab {
-  padding: 7px 18px;
-  border: 1px solid var(--vio-rule);
-  background: var(--vio-sheet);
-  color: var(--vio-ink-2);
+  padding: 5px 16px;
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-panel);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  color: var(--vio2-ink-2);
   font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s var(--vio-ease);
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.vtab em { font-style: normal; margin-left: 6px; font-size: 11px; color: var(--vio-seal); font-weight: 700; }
-.vtab.active { border-color: var(--vio-ink); color: var(--vio-ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--vio-ink); }
-.stamp.dim { color: var(--vio-ink-3); border-color: var(--vio-rule); }
-.pages { display: flex; align-items: center; gap: 14px; margin-top: 14px; font-size: 12px; color: var(--vio-ink-3); }
+.vtab:hover { transform: translate(-1px, -1px); color: var(--vio2-ink); }
+.vtab.active { background: var(--vio2-yellow); color: #101010; }
+.vtab em { font-style: normal; margin-left: 6px; font-size: 11px; color: var(--vio2-pink); font-weight: 700; }
+.vtab.active em { background: #101010; color: var(--vio2-yellow); padding: 0 4px; }
 </style>

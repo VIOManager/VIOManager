@@ -36,7 +36,7 @@ function acceptOf(formats: string[]): string {
 }
 /** 单条上传：文件服务上传完成（拿到 fileId）后再调提交接口 */
 async function onSubmitOne(teamId: string, requirementId: string, resp: UploadResp) {
-  const r = await apiSubmitMaterial(requirementId, { teamId, fileId: resp.fileId, fileName: resp.originalName })
+  const r = await apiSubmitMaterial(requirementId, { teamId, fileId: resp.fileId, fileName: resp.originalName, fileSize: resp.fileSize })
   ElMessage.success('已提交，当前版本 v' + r.version + (r.version > 1 ? '（旧版本已失效）' : ''))
   await load()
 }
@@ -89,11 +89,15 @@ onMounted(load)
 
       <table class="ledger">
         <thead>
-          <tr><th>类型</th><th>必传</th><th>允许格式</th><th>命名规则</th><th>状态</th><th>当前文件</th><th style="width: 150px">上传/覆盖</th></tr>
+          <tr><th>材料</th><th>必传</th><th>允许格式</th><th>命名规则</th><th>状态</th><th>当前文件</th><th style="width: 150px">上传/覆盖</th></tr>
         </thead>
         <tbody>
           <tr v-for="it in tm.items" :key="it.requirement.id">
-            <td style="color: var(--vio-ink); font-weight: 600">{{ MATERIAL_TYPE_LABEL[it.requirement.materialType] ?? it.requirement.materialType }}</td>
+            <td>
+              <!-- 名称为主标识（MR01 必填），类型中文名小字辅助；旧数据无名称时回退类型 -->
+              <div style="color: var(--vio-ink); font-weight: 600">{{ it.requirement.name || (MATERIAL_TYPE_LABEL[it.requirement.materialType] ?? it.requirement.materialType) }}</div>
+              <div class="fs" style="font-size: 11px">{{ MATERIAL_TYPE_LABEL[it.requirement.materialType] ?? it.requirement.materialType }}</div>
+            </td>
             <td><span class="stamp" :class="it.requirement.requiredFlag === 1 ? 'warn' : 'ok'">{{ it.requirement.requiredFlag === 1 ? '必传' : '选传' }}</span></td>
             <td class="mono" style="font-size: 12px">{{ it.requirement.allowedFormats.join(' / ') }}</td>
             <td class="fs">{{ it.requirement.namingRule || '—' }}</td>
@@ -133,13 +137,14 @@ onMounted(load)
 <style scoped>
 .tm-card { margin-bottom: 18px; padding: 16px 18px; }
 .tm-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.tm-head b { font-size: 15px; color: var(--vio-ink); }
-.tm-deadline { font-size: 12px; color: var(--vio-ink-2); }
-.tm-deadline.urgent { color: var(--vio-seal); }
+.tm-head b { font-family: var(--vio2-din); font-size: 16px; font-weight: 900; color: var(--vio2-ink); }
+.tm-deadline { font-size: 12px; color: var(--vio2-ink-2); }
+.tm-deadline.urgent { color: #101010; background: var(--vio2-pink); border: 2px solid var(--vio2-bd); padding: 0 6px 1px; font-weight: 700; }
 .rate-line { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.rate-bar { flex: 1; height: 6px; background: var(--vio-rule-soft); }
-.rate-bar i { display: block; height: 100%; background: var(--vio-blue-ink); transition: width 0.3s var(--vio-ease); }
-.batch-zone { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--vio-rule); }
-.batch-result { margin-top: 10px; padding: 10px 12px; background: var(--vio-wash); font-size: 12.5px; }
+/* 进度条：黄斜纹填充 + 粗描边（与概览学期刻度尺同语言） */
+.rate-bar { flex: 1; height: 14px; background: var(--vio2-panel-2); border: 2px solid var(--vio2-bd); }
+.rate-bar i { display: block; height: 100%; background: repeating-linear-gradient(-45deg, var(--vio2-yellow) 0 8px, var(--vio2-panel-2) 8px 16px); transition: width 0.3s var(--vio-ease); }
+.batch-zone { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding-top: 12px; border-top: 2px solid var(--vio2-bd); }
+.batch-result { margin-top: 10px; padding: 10px 12px; background: var(--vio2-panel-2); border: 2px solid var(--vio2-bd); font-size: 12.5px; }
 .batch-result p { line-height: 1.9; }
 </style>

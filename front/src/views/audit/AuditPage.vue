@@ -8,6 +8,7 @@
 import { onMounted, ref } from 'vue'
 import { apiAuditBizTypes, apiAuditLogDetail, apiAuditLogs } from '@/api/audit'
 import type { AuditBizType, AuditLogDetail, AuditLogItem } from '@/api/audit'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 
 const list = ref<AuditLogItem[]>([])
 const total = ref(0)
@@ -25,16 +26,18 @@ const bizTypes = ref<AuditBizType[]>([])
 const drawerVisible = ref(false)
 const detail = ref<AuditLogDetail | null>(null)
 
+/** 首次加载 / 筛选变化：清空回第 1 批 */
 async function load() {
   loading.value = true
   try {
+    page.value = 1
     const r = await apiAuditLogs({
       keyword: keyword.value || undefined,
       bizType: bizType.value || undefined,
       success: success.value === '' ? undefined : Number(success.value),
       startTime: startTime.value ? startTime.value + ' 00:00:00' : undefined,
       endTime: endTime.value ? endTime.value + ' 23:59:59' : undefined,
-      page: page.value,
+      page: 1,
       size
     })
     list.value = r.list
@@ -44,8 +47,29 @@ async function load() {
   }
 }
 
+/** 滚动到底追加下一批（ScrollLoader 的 reach 回调） */
+async function loadMore() {
+  if (loading.value || list.value.length >= total.value) return
+  loading.value = true
+  try {
+    page.value++
+    const r = await apiAuditLogs({
+      keyword: keyword.value || undefined,
+      bizType: bizType.value || undefined,
+      success: success.value === '' ? undefined : Number(success.value),
+      startTime: startTime.value ? startTime.value + ' 00:00:00' : undefined,
+      endTime: endTime.value ? endTime.value + ' 23:59:59' : undefined,
+      page: page.value,
+      size
+    })
+    list.value = list.value.concat(r.list)
+    total.value = r.total
+  } finally {
+    loading.value = false
+  }
+}
+
 function onSearch() {
-  page.value = 1
   void load()
 }
 
@@ -106,12 +130,7 @@ onMounted(async () => {
         </tbody>
       </table>
       <p v-if="!loading && list.length === 0" class="empty-note">暂无日志</p>
-    </div>
-
-    <div v-if="total > size" class="pages mono">
-      <button class="btn-line" :disabled="page <= 1" @click="page--; load()">上一页</button>
-      <span>第 {{ page }} 页 · 共 {{ total }} 条</span>
-      <button class="btn-line" :disabled="page * size >= total" @click="page++; load()">下一页</button>
+      <ScrollLoader :loading="loading" :no-more="list.length >= total" :loaded="list.length" :total="total" @reach="loadMore" />
     </div>
 
     <el-drawer v-model="drawerVisible" title="日志详情" size="480px">
@@ -137,9 +156,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.stamp.bad { color: var(--vio-danger); border-color: var(--vio-danger); }
 .err-text { color: var(--vio-danger); font-size: 12px; }
-.pages { display: flex; align-items: center; gap: 14px; margin-top: 14px; font-size: 12px; color: var(--vio-ink-3); }
 .sheet div { display: flex; padding: 7px 0; border-bottom: 1px dashed var(--vio-rule-soft); font-size: 13px; }
 .sheet dt { width: 76px; color: var(--vio-ink-3); flex-shrink: 0; }
 .sheet dd { color: var(--vio-ink); word-break: break-all; }

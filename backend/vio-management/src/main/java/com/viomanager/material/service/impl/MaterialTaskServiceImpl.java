@@ -58,7 +58,8 @@ public class MaterialTaskServiceImpl implements MaterialTaskService {
         if (contestId != null) {
             wrapper.eq("contest_id", contestId);
         }
-        wrapper.orderByDesc("created_at");
+        //created_at 同秒并列时按 id 升序兜底，列表顺序完全确定
+        wrapper.orderByDesc("created_at").orderByAsc("id");
         List<MaterialTask> tasks = taskMapper.selectList(wrapper);
         if (tasks.isEmpty()) {
             return Result.ok(new ArrayList<>());

@@ -2,13 +2,18 @@
 /**
  * 项目管理页（/project，管理端，PR01–PR31）
  * 两 tab：项目列表（筛选+新建+详情抽屉）/ 比赛节点（DRAFT→提交审核→通过后自动同步任务）
- * 可见性八条由后端判定（清单 §2）；写操作仅项目所有人（7002，按钮显隐以 viewerIsOwner 驱动）
+ * 可见性八条由后端判定（清单 §2）；管理权显隐以 viewerCanManage 驱动（所有人 or 管理员，2026-10-16 拍板）
+ * 新建支持管理员代建（ownerMemberId 帮成员创建）；节点时间出参转契约格式（MilestonePanel）
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiCreateProject, apiProjects } from '@/api/project'
 import type { ProjectItem } from '@/api/project'
+import { apiMembers } from '@/api/member'
+import type { MemberListItem } from '@/api/member'
+import { useUserStore } from '@/stores/user'
 import { PROJECT_STATUS_LABEL, PROJECT_VISIBILITY_LABEL } from '@/config/labels'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import ProjectDetailDrawer from './ProjectDetailDrawer.vue'
 import MilestonePanel from './MilestonePanel.vue'
 
@@ -16,6 +21,10 @@ type TabKey = 'list' | 'milestone'
 const tab = ref<TabKey>('list')
 
 const list = ref<ProjectItem[]>([])
+/** 本地滚动分页：PR 列表返回全量数组，前端切片显示（每批 20 条） */
+const loadedCount = ref(20)
+const visible = computed(() => list.value.slice(0, loadedCount.value))
+const noMore = computed(() => loadedCount.value >= list.value.length)
 const loading = ref(false)
 const keyword = ref('')
 const statusFilter = ref('')
@@ -27,9 +36,16 @@ async function load() {
   loading.value = true
   try {
     list.value = await apiProjects({ keyword: keyword.value || undefined, status: statusFilter.value || undefined })
+    loadedCount.value = 20
   } finally {
     loading.value = false
   }
+}
+
+/** 滚动到底扩大切片（ScrollLoader 的 reach 回调） */
+function loadMore() {
+  if (loading.value || noMore.value) return
+  loadedCount.value += 20
 }
 
 function openDetail(id: string) {
@@ -37,10 +53,37 @@ function openDetail(id: string) {
   drawerVisible.value = true
 }
 
-// ── 新建项目（所有人=当前用户；幂等键随提交生成）──
+// ── 新建项目（所有人=当前用户；管理员可代建=帮指定成员创建；幂等键随提交生成）──
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.role === 'SUPER_ADMIN' || userStore.role === 'DEPT_ADMIN')
+
 const formVisible = ref(false)
 const form = ref({ name: '', description: '', visibility: 'ORG', startDate: '', endDate: '' })
 const submitting = ref(false)
+
+// 代建（仅管理员）：null=为自己建；选中成员后帮其创建（搜索走 A 线人员档案）
+const owner = ref<MemberListItem | null>(null)
+const ownerKw = ref('')
+const ownerOptions = ref<MemberListItem[]>([])
+
+async function searchOwner() {
+  if (!ownerKw.value.trim()) return
+  const r = await apiMembers({ page: 1, size: 10, keyword: ownerKw.value.trim() })
+  ownerOptions.value = r.list
+}
+
+function pickOwner(m: MemberListItem) {
+  owner.value = m
+  ownerOptions.value = []
+  ownerKw.value = ''
+}
+
+function resetCreateForm() {
+  form.value = { name: '', description: '', visibility: 'ORG', startDate: '', endDate: '' }
+  owner.value = null
+  ownerOptions.value = []
+  ownerKw.value = ''
+}
 
 async function submit() {
   if (submitting.value) return
@@ -55,11 +98,14 @@ async function submit() {
       description: form.value.description,
       visibility: form.value.visibility,
       startDate: form.value.startDate,
-      endDate: form.value.endDate
+      endDate: form.value.endDate,
+      ...(owner.value ? { ownerMemberId: owner.value.id } : {})
     })
-    ElMessage.success('项目已创建（你是所有人，可加成员/挂赛队）')
+    ElMessage.success(owner.value
+      ? '项目已创建（所有人：' + owner.value.name + '）'
+      : '项目已创建（你是所有人，可加成员/挂赛队）')
     formVisible.value = false
-    form.value = { name: '', description: '', visibility: 'ORG', startDate: '', endDate: '' }
+    resetCreateForm()
     await load()
   } finally {
     submitting.value = false
@@ -107,7 +153,7 @@ onMounted(load)
             <tr><th>项目名称</th><th>所有人</th><th>所属组织</th><th>关联比赛</th><th>可见性</th><th>状态</th><th>起止</th><th style="width: 60px">操作</th></tr>
           </thead>
           <tbody>
-            <tr v-for="p in list" :key="p.id" class="linkrow" @click="openDetail(p.id)">
+            <tr v-for="p in visible" :key="p.id" class="linkrow" @click="openDetail(p.id)">
               <td style="color: var(--vio-ink); font-weight: 600">{{ p.name }}</td>
               <td>{{ p.ownerName }}</td>
               <td>{{ p.orgName }}</td>
@@ -120,6 +166,7 @@ onMounted(load)
           </tbody>
         </table>
         <p v-if="!loading && list.length === 0" class="empty-note">暂无可见项目（可见性八条见项目清单 §2）</p>
+        <ScrollLoader :loading="loading" :no-more="noMore" :loaded="visible.length" :total="list.length" @reach="loadMore" />
       </div>
     </template>
     <MilestonePanel v-else />
@@ -130,6 +177,25 @@ onMounted(load)
         <input v-model="form.name" class="input-line" placeholder="如 智能循迹小车" />
         <label>项目简介</label>
         <textarea v-model="form.description" class="input-line" rows="3" placeholder="做什么、用什么技术"></textarea>
+        <template v-if="isAdmin">
+          <label>所有人（管理员代建，选填：不选=为自己创建）</label>
+          <template v-if="owner">
+            <div class="owner-picked">
+              <span>已选：{{ owner.name }}<em class="mono">· {{ owner.college }}</em></span>
+              <button class="btn-act" @click="owner = null">重选</button>
+            </div>
+          </template>
+          <template v-else>
+            <div style="display: flex; gap: 8px">
+              <input v-model="ownerKw" class="input-line" style="flex: 1" placeholder="姓名/学号搜索成员" @keyup.enter="searchOwner" />
+              <button class="btn-line" @click="searchOwner">搜索</button>
+            </div>
+            <div v-for="m in ownerOptions" :key="m.id" class="owner-opt" @click="pickOwner(m)">
+              <span>{{ m.name }}<em class="mono">· {{ m.college }} · {{ m.studentNo }}</em></span>
+              <span class="mono" style="font-size: 12px">选为所有人</span>
+            </div>
+          </template>
+        </template>
         <label>可见性</label>
         <select v-model="form.visibility" class="input-line">
           <option v-for="(label, v) in PROJECT_VISIBILITY_LABEL" :key="v" :value="v">{{ label }}</option>
@@ -153,16 +219,30 @@ onMounted(load)
 <style scoped>
 .vtabs { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .vtab {
-  padding: 7px 18px;
-  border: 1px solid var(--vio-rule);
-  background: var(--vio-sheet);
-  color: var(--vio-ink-2);
+  padding: 5px 16px;
+  border: 2px solid var(--vio2-bd);
+  background: var(--vio2-panel);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  color: var(--vio2-ink-2);
   font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s var(--vio-ease);
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.vtab.active { border-color: var(--vio-ink); color: var(--vio-ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--vio-ink); }
-.stamp.dim { color: var(--vio-ink-3); border-color: var(--vio-rule); }
+.vtab:hover { transform: translate(-1px, -1px); color: var(--vio2-ink); }
+.vtab.active { background: var(--vio2-yellow); color: #101010; }
 .form-col { display: flex; flex-direction: column; gap: 6px; }
-.form-col label { font-size: 12px; color: var(--vio-ink-3); margin-top: 6px; }
+.form-col label { font-size: 12px; color: var(--vio2-ink-2); margin-top: 6px; }
+.owner-picked {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px; border: 2px dashed var(--vio2-bd); background: var(--vio2-panel);
+  font-size: 13px;
+}
+.owner-picked em { font-style: normal; color: var(--vio2-ink-2); margin-left: 6px; font-size: 12px; }
+.owner-opt {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 10px; border: 1px solid var(--vio2-bd); font-size: 13px; cursor: pointer;
+}
+.owner-opt:hover { background: var(--vio2-yellow); }
+.owner-opt em { font-style: normal; color: var(--vio2-ink-2); margin-left: 6px; font-size: 12px; }
 </style>

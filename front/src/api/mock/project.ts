@@ -1,18 +1,19 @@
 /**
  * 项目管理 mock 接口层（PR01–PR15 主体；PR16–PR31 在 ./project-ext.ts）
  * 契约：《项目管理-接口清单》（错误码 7xxx）；可见性判定在 ./project-data 的 visibleTo（§2 八条）
- * 写操作一律仅项目所有人（7002）；PR13 挂载校验队长身份（读 B 线 team 数据，只读）
+ * 写操作=所有人或管理员（2026-10-16 拍板，7002）；PR13 挂载校验队长身份（读 B 线 team 数据，只读）
  * TODO(联调)：后端项目接口就绪后删除本文件
  */
 import { fail, ok, registerMock } from './registry'
 import { findMockUserByToken } from './auth'
 import { meAsMember } from './member'
-import { deptScopeOrgIds } from './scope'
+import { members } from './member-data'
+import { deptScopeOrgIds, orgInScope } from './scope'
 import { tree } from './org-data'
 import { semesters } from './semester'
 import { contests } from './contest-data'
 import { usedIdemKeys, nowText } from './approval-data'
-import { projectAdvisors, projectMembers, projects, teamProjectRefs, viewGrants, visibleTo } from './project-data'
+import { projectMembers, projects, teamProjectRefs, viewGrants, visibleTo } from './project-data'
 import type { MockProject } from './project-data'
 import type { ProjectItem } from '@/api/project'
 
@@ -61,6 +62,12 @@ export function findProject(id: string): MockProject | null {
   return null
 }
 
+/** 管理权（2026-10-16 拍板：所有人 or 超管 or 子树内部门管理员）——与真后端 canManage 同口径 */
+export function canManageMock(p: MockProject, vc: ReturnType<typeof viewCtx>): boolean {
+  return (!!vc.meId && p.ownerId === vc.meId) || vc.isSuper
+    || (vc.isDeptAdmin && !!p.orgId && (vc.deptScope?.indexOf(p.orgId) ?? -1) >= 0)
+}
+
 function toItem(p: MockProject): ProjectItem {
   return {
     id: p.id, name: p.name, ownerName: p.ownerName, orgName: p.orgName, semesterName: p.semesterName,
@@ -94,12 +101,31 @@ registerMock({
   reply: (ctx) => {
     if (!ctx.idemKey) return fail(1001, '缺少幂等键（X-Idempotency-Key）')
     if (usedIdemKeys.has(ctx.idemKey)) return fail(1005, '请勿重复提交')
+    const vc = viewCtx(ctx.token)
     const me = meAsMember(ctx.token)
-    if (!me) return fail(1003, '仅成员可创建项目')
+    // 所有人解析（与真后端同口径）：默认=当前登录人（无档案 7013）；管理员可经 ownerMemberId 代建
+    let ownerId = me ? me.id : ''
+    let ownerName = me ? me.name : ''
+    let ownerOrgId = me ? me.orgId : ''
+    let ownerOrgName = me ? me.orgName : ''
+    const onBehalfOf = ctx.body.ownerMemberId != null ? String(ctx.body.ownerMemberId) : ''
+    if (onBehalfOf && onBehalfOf !== ownerId) {
+      // 代建仅管理员（超管任意 / 部门管理员限子树内成员），普通用户传他人 7002
+      const target = members.find((m) => m.id === onBehalfOf)
+      if (!target) return fail(1004, '成员不存在')
+      const adminOk = vc.isSuper || (vc.isDeptAdmin && orgInScope(target.orgId, vc.deptScope))
+      if (!adminOk) return fail(7002, '仅管理员可代建（帮成员创建项目）')
+      ownerId = target.id
+      ownerName = target.name
+      ownerOrgId = target.orgId
+      ownerOrgName = target.orgName
+    } else if (!me) {
+      return fail(7013, '当前账号未绑定人员档案，无法创建项目')
+    }
     const name = String(ctx.body.name ?? '').trim()
     if (!name) return fail(1001, '项目名称不能为空')
     const sem = semesters.find((s) => s.status === 'ACTIVE') ?? semesters[1]
-    const orgId = String(ctx.body.orgId ?? me.orgId)
+    const orgId = String(ctx.body.orgId ?? ownerOrgId)
     // 7004 同学期同组织内项目名唯一
     for (const p of projects) {
       if (p.semesterId === sem.id && p.orgId === orgId && p.name === name) return fail(7004, '同学期同组织内项目名已存在')
@@ -108,14 +134,14 @@ registerMock({
     const contest = contests.find((c) => c.id === String(ctx.body.contestId ?? ''))
     const p: MockProject = {
       id: 'p' + projectSeq++, name, description: String(ctx.body.description ?? ''),
-      remark: String(ctx.body.remark ?? ''), ownerId: me.id, ownerName: me.name,
-      orgId, orgName: me.orgName, semesterId: sem.id, semesterName: sem.name,
+      remark: String(ctx.body.remark ?? ''), ownerId, ownerName,
+      orgId, orgName: ownerOrgName, semesterId: sem.id, semesterName: sem.name,
       contestId: contest ? contest.id : '', contestName: contest ? contest.name : '', trackId: String(ctx.body.trackId ?? ''),
       status: 'ACTIVE', visibility: (String(ctx.body.visibility ?? 'ORG') as MockProject['visibility']),
       startDate: String(ctx.body.startDate ?? ''), endDate: String(ctx.body.endDate ?? '')
     }
     projects.push(p)
-    projectMembers.push({ projectId: p.id, memberId: me.id, name: me.name, role: 'OWNER', joinedAt: nowText() })
+    projectMembers.push({ projectId: p.id, memberId: ownerId, name: ownerName, role: 'OWNER', joinedAt: nowText() })
     return ok({ id: p.id })
   }
 })
@@ -159,10 +185,9 @@ registerMock({
     }
     return ok({
       ...toItem(p), description: p.description, remark: p.remark,
-      ownerId: p.ownerId, orgId: p.orgId, semesterId: p.semesterId, contestId: p.contestId, trackId: p.trackId,
+      // 出参对齐真后端 PR03：卡片字段 + description/remark + viewerIsOwner/viewerCanManage
       viewerIsOwner: !!vc.meId && p.ownerId === vc.meId,
-      // 指导教师列表（清单无独立读接口，详情扩展字段）
-      advisors: projectAdvisors.filter((a) => a.projectId === p.id)
+      viewerCanManage: canManageMock(p, vc)
     })
   }
 })
@@ -174,7 +199,7 @@ registerMock({
     const p = findProject(ctx.params.id)
     if (!p) return fail(7001, '项目不存在')
     const vc = viewCtx(ctx.token)
-    if (!vc.meId || p.ownerId !== vc.meId) return fail(7002, '仅项目所有人可操作')
+    if (!canManageMock(p, vc)) return fail(7002, '仅项目所有人或管理员可操作')
     if (ctx.body.name) p.name = String(ctx.body.name).trim()
     if (ctx.body.description !== undefined) p.description = String(ctx.body.description)
     if (ctx.body.remark !== undefined) p.remark = String(ctx.body.remark)
@@ -197,7 +222,7 @@ registerMock({
     const p = findProject(ctx.params.id)
     if (!p) return fail(7001, '项目不存在')
     const vc = viewCtx(ctx.token)
-    if (!vc.meId || p.ownerId !== vc.meId) return fail(7002, '仅项目所有人可操作')
+    if (!canManageMock(p, vc)) return fail(7002, '仅项目所有人或管理员可操作')
     for (const r of teamProjectRefs) {
       if (r.projectId === p.id && r.status === 'ACTIVE') return fail(7010, '项目有挂载中的赛队，请先解绑')
     }

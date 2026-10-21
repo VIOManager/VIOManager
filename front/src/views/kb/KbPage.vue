@@ -4,32 +4,57 @@
  * lzh 2026-10-14 拍板先行简化：条目 = 外部链接或上传文件二选一，分类与正文暂不做
  * PRD §3.14：浏览/收藏/评论全角色；发布/编辑/置顶/删除仅管理员
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiCreateKbItem, apiKbItems } from '@/api/kb'
 import type { KbItem, KbSourceType } from '@/api/kb'
+import { BizError } from '@/api/http'
 import { KB_SOURCE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
 import UploadField from '@/components/UploadField.vue'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import KbDetailDrawer from './KbDetailDrawer.vue'
 
 const user = useUserStore()
 const isAdmin = user.role !== 'STUDENT'
 
-const list = ref<KbItem[]>([])
+const all = ref<KbItem[]>([])
+/** 本地滚动分页：后端 KB01 返回全量数组，前端切片显示（每批 20 条） */
+const loadedCount = ref(20)
+const visible = computed(() => all.value.slice(0, loadedCount.value))
+const noMore = computed(() => loadedCount.value >= all.value.length)
 const keyword = ref('')
 const loading = ref(false)
 
 const drawerVisible = ref(false)
 const detailId = ref('')
+/** 知识库独立服务 vio-kb(8091) 未启动时置真：显示横幅提示而非"网络异常"刷屏 */
+const serviceDown = ref(false)
 
 async function load() {
   loading.value = true
+  serviceDown.value = false
   try {
-    list.value = await apiKbItems({ keyword: keyword.value || undefined })
+    all.value = await apiKbItems({ keyword: keyword.value || undefined })
+    loadedCount.value = 20
+  } catch (e) {
+    // apiKbItems 已 silent，拦截器不弹提示；这里分两类兜底
+    if (e instanceof BizError) {
+      // 业务错误（如 9002 资源不存在）：保持原有弹错行为
+      ElMessage.error(e.message || '操作失败')
+    } else {
+      // 网络层失败（服务没起 = 请求无响应）：页面横幅说明情况
+      serviceDown.value = true
+    }
   } finally {
     loading.value = false
   }
+}
+
+/** 滚动到底扩大切片（ScrollLoader 的 reach 回调） */
+function loadMore() {
+  if (loading.value || noMore.value) return
+  loadedCount.value += 20
 }
 
 function openDetail(id: string) {
@@ -110,8 +135,15 @@ onMounted(load)
       <button v-if="isAdmin" class="btn-ink" @click="openCreate">发布内容</button>
     </div>
 
+    <!-- 服务未启动横幅：粉色警示条，说明情况 + 重试入口 -->
+    <div v-if="serviceDown" class="kb-down">
+      <b>知识库服务未启动</b>
+      <p>知识库由独立服务 vio-kb（8091 端口）提供，当前该进程没有运行——数据没有丢，只是暂时取不到。在 backend 仓库启动 vio-kb 后，点"重新加载"即可恢复。</p>
+      <button class="btn-line" @click="load">重新加载</button>
+    </div>
+
     <div class="kb-grid">
-      <div v-for="it in list" :key="it.id" class="kb-card" @click="openDetail(it.id)">
+      <div v-for="it in visible" :key="it.id" class="kb-card" @click="openDetail(it.id)">
         <div class="kb-top">
           <span class="kb-cat">{{ KB_SOURCE_LABEL[it.sourceType] }}</span>
           <span v-if="it.pinned" class="kb-pin mono">置顶</span>
@@ -125,7 +157,8 @@ onMounted(load)
         </div>
       </div>
     </div>
-    <p v-if="!loading && list.length === 0" class="empty-note">暂无内容</p>
+    <p v-if="!loading && all.length === 0 && !serviceDown" class="empty-note">暂无内容</p>
+    <ScrollLoader :loading="loading" :no-more="noMore" :loaded="visible.length" :total="all.length" @reach="loadMore" />
 
     <el-dialog v-model="formVisible" title="发布知识库内容" width="520px">
       <div class="form-col">
@@ -166,22 +199,28 @@ onMounted(load)
 </template>
 
 <style scoped>
-.kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-.kb-card { background: var(--vio-sheet); border: 1px solid var(--vio-rule); padding: 16px 18px; cursor: pointer; transition: border-color 0.2s var(--vio-ease); }
-.kb-card:hover { border-color: var(--vio-blue-ink); }
+.kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+/* 服务未启动横幅：粉底黑字警示条，双主题恒色 */
+.kb-down { border: 3px solid var(--vio2-bd); background: var(--vio2-pink); color: #101010; box-shadow: 6px 6px 0 var(--vio2-shadow); padding: 16px 18px; margin-bottom: 16px; }
+.kb-down b { font-family: var(--vio2-din); font-size: 16px; font-weight: 900; display: block; margin-bottom: 6px; }
+.kb-down p { font-size: 13px; line-height: 1.8; margin-bottom: 10px; }
+.kb-card { background: var(--vio2-panel); border: 2px solid var(--vio2-bd); box-shadow: 4px 4px 0 var(--vio2-shadow); padding: 15px 17px; cursor: pointer; transition: transform 0.15s var(--vio-ease), box-shadow 0.15s var(--vio-ease); }
+.kb-card:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--vio2-shadow); }
 .kb-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.kb-cat { font-size: 11px; color: var(--vio-blue-ink); border: 1px solid var(--vio-blue-ink); padding: 1px 8px; }
-.kb-pin { font-size: 10px; color: var(--vio-seal); border: 1px solid var(--vio-seal); padding: 1px 6px; }
-.kb-card h4 { font-size: 15px; color: var(--vio-ink); margin-bottom: 6px; font-weight: 700; }
-.kb-card p { font-size: 12.5px; color: var(--vio-ink-2); line-height: 1.7; margin-bottom: 10px; }
-.kb-file { font-size: 11.5px; color: var(--vio-ink-3); margin: -4px 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kb-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--vio-ink-3); }
+.kb-cat { font-family: var(--vio-mono); font-size: 10px; font-weight: 700; color: #101010; background: var(--vio2-blue); border: 2px solid var(--vio2-bd); padding: 0 7px 1px; }
+.kb-pin { font-size: 10px; font-weight: 700; color: #101010; background: var(--vio2-pink); border: 2px solid var(--vio2-bd); padding: 0 6px 1px; }
+.kb-card h4 { font-family: var(--vio2-din); font-size: 15px; color: var(--vio2-ink); margin-bottom: 6px; font-weight: 900; }
+.kb-card p { font-size: 12.5px; color: var(--vio2-ink-2); line-height: 1.7; margin-bottom: 10px; }
+.kb-file { font-size: 11.5px; color: var(--vio2-ink-3); margin: -4px 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-meta { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--vio2-ink-3); border-top: 2px solid var(--vio2-row-line); padding-top: 8px; }
 .form-col { display: flex; flex-direction: column; gap: 6px; }
-.form-col label { font-size: 12px; color: var(--vio-ink-3); margin-top: 6px; }
+.form-col label { font-size: 12px; color: var(--vio2-ink-2); margin-top: 6px; }
 .type-row { display: flex; gap: 8px; }
 .type-btn {
-  padding: 7px 20px; border: 1px solid var(--vio-rule); background: var(--vio-sheet);
-  color: var(--vio-ink-2); font-size: 13px; cursor: pointer; transition: all 0.2s var(--vio-ease);
+  padding: 6px 18px; border: 2px solid var(--vio2-bd); background: var(--vio2-panel);
+  box-shadow: 3px 3px 0 var(--vio2-shadow);
+  color: var(--vio2-ink-2); font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: transform 0.15s var(--vio-ease), background 0.15s var(--vio-ease), color 0.15s var(--vio-ease);
 }
-.type-btn.active { border-color: var(--vio-ink); color: var(--vio-ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--vio-ink); }
+.type-btn.active { background: var(--vio2-yellow); color: #101010; }
 </style>

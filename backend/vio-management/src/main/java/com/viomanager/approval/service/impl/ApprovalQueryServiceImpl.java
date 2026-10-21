@@ -10,6 +10,8 @@ import com.viomanager.approval.entity.ApprovalRecord;
 import com.viomanager.approval.mapper.ApprovalMapper;
 import com.viomanager.approval.mapper.ApprovalRecordMapper;
 import com.viomanager.approval.service.IApprovalQueryService;
+import com.viomanager.approval.support.ApprovalUnreadCache;
+import com.viomanager.approval.support.UnreadCounter;
 import com.viomanager.approval.vo.ApprovalDetailVO;
 import com.viomanager.approval.vo.ApprovalRecordVO;
 import com.viomanager.approval.vo.ApprovalVO;
@@ -21,11 +23,11 @@ import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.PageResult;
 import com.viomanager.common.result.Result;
+import com.viomanager.datascop.OrgScopeSupport;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +48,15 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
 
     @Resource
     private JdbcTemplate jdbcTemplate;
+
+    @Resource
+    private OrgScopeSupport orgScopeSupport;
+
+    @Resource
+    private UnreadCounter unreadCounter;
+
+    @Resource
+    private ApprovalUnreadCache approvalUnreadCache;
 
     @Override
     public Result<PageResult<ApprovalVO>> list(ApprovalQueryDTO dto) {
@@ -80,7 +91,9 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
             wrapper.like("biz_title", dto.getKeyword());
         }
         wrapper.orderByDesc("created_at");
-        //3.分页查询转 VO
+        //3.分页查询转 VO：列表只要 VO 的窄列——biz_payload 快照列宽（详情页才用），
+        //分页白拉它最亏（2026-10-20 组长规矩：SQL 禁 SELECT *，隐式全列同理）
+        wrapper.select(Approval.class, info -> !"biz_payload".equals(info.getColumn()));
         Page<Approval> page = approvalMapper.selectPage(
                 new Page<>(dto.getPage(), dto.getSize()), wrapper);
         List<ApprovalVO> voList = new ArrayList<>();
@@ -148,23 +161,18 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
     @Override
     public Result<UnreadCountVO> unreadCount() {
         CurrentUser user = UserHolder.getUser();
-        UnreadCountVO vo = new UnreadCountVO();
         //1.当前用户没绑人员档案（纯管理账号）→ 两类红点都是 0
         Long memberId = currentMemberId(user);
         if (memberId == null) {
+            UnreadCountVO vo = new UnreadCountVO();
             vo.setTodoCount(0);
             vo.setResultCount(0);
             return Result.ok(vo);
         }
-        //2.待处理数：发给我的邀请 / 解散通知（PENDING 且未读）
-        Long todoCount = approvalMapper.selectCount(new QueryWrapper<Approval>()
-                .eq("target_member_id", memberId).eq("status", "PENDING").eq("target_read", 0));
-        //3.结果数：我发起的申请已出结果但我没看
-        Long resultCount = approvalMapper.selectCount(new QueryWrapper<Approval>()
-                .eq("applicant_id", memberId).ne("status", "PENDING").eq("applicant_read", 0));
-        vo.setTodoCount(todoCount == null ? 0 : todoCount.intValue());
-        vo.setResultCount(resultCount == null ? 0 : resultCount.intValue());
-        return Result.ok(vo);
+        //2.计数口径收口到 UnreadCounter：读路径走 cache-aside（插入点②），miss 现算回填——
+        //  与消费者重算回写走同一段计数逻辑，数字不会漂移；开关关时就是现状直查库
+        return Result.ok(approvalUnreadCache.get(memberId,
+                () -> unreadCounter.countFor(memberId)));
     }
 
     /** 详情可见性：超管 / 发起人 / 目标人 / 审批组织子树内管理员，其余 6002 */
@@ -206,44 +214,14 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
         return ids.get(0);
     }
 
-    /** 管理员组织子树内的组织 ID 列表（sys_org.path 前缀匹配） */
+    /** 管理员组织子树内的组织 ID 列表——判定收口到 OrgScopeSupport（插入点①，Redis cache-aside + 降级直查库） */
     private List<Long> querySubtreeOrgIds(Long orgId) {
-        if (orgId == null) {
-            throw new BizException(CommonErrorCode.FORBIDDEN, "部门管理员未配置所属组织");
-        }
-        try {
-            String path = jdbcTemplate.queryForObject(
-                    "SELECT path FROM sys_org WHERE id = ? AND deleted = 0", String.class, orgId);
-            if (path == null) {
-                throw new BizException(CommonErrorCode.FORBIDDEN, "组织不存在或已删除");
-            }
-            return jdbcTemplate.queryForList(
-                    "SELECT id FROM sys_org WHERE path LIKE CONCAT(?, '%') AND deleted = 0",
-                    Long.class, path);
-        } catch (BizException e) {
-            throw e;
-        } catch (DataAccessException e) {
-            log.warn("子树组织查询失败，按无权限处理：{}", e.getMessage());
-            throw new BizException(CommonErrorCode.FORBIDDEN);
-        }
+        return orgScopeSupport.subtreeIds(orgId);
     }
 
-    /** 判断组织是否在管理员子树内（path 前缀匹配） */
+    /** 判断组织是否在管理员子树内——判定收口到 OrgScopeSupport（插入点①） */
     private boolean isOrgInSubtree(Long adminOrgId, Long orgId) {
-        if (adminOrgId == null || orgId == null) {
-            return false;
-        }
-        try {
-            String adminPath = jdbcTemplate.queryForObject(
-                    "SELECT path FROM sys_org WHERE id = ? AND deleted = 0", String.class, adminOrgId);
-            Integer count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM sys_org WHERE id = ? AND deleted = 0 AND path LIKE CONCAT(?, '%')",
-                    Integer.class, orgId, adminPath);
-            return adminPath != null && count != null && count > 0;
-        } catch (DataAccessException e) {
-            log.warn("子树校验查询失败，按不在子树处理：{}", e.getMessage());
-            return false;
-        }
+        return orgScopeSupport.inSubtree(adminOrgId, orgId);
     }
 
     /** 实体转 VO（详情 VO 复用同一套列表字段） */

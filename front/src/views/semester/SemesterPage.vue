@@ -7,7 +7,7 @@
  */
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apiCancelSwitchTask, apiDeleteSemester, apiExecuteSwitchTask, apiSemesters, apiSwitchTasks } from '@/api/semester'
+import { apiCancelSwitchTask, apiDeleteSemester, apiExecuteSwitchTask, apiSemesters, apiSwitchTasksSafe } from '@/api/semester'
 import type { Semester, SwitchTask } from '@/api/semester'
 import { SEMESTER_STATUS_LABEL, SWITCH_TASK_STATUS_LABEL } from '@/config/labels'
 import SemesterFormDialog from './SemesterFormDialog.vue'
@@ -25,7 +25,7 @@ async function load() {
   loading.value = true
   try {
     semesters.value = await apiSemesters()
-    tasks.value = await apiSwitchTasks()
+    tasks.value = await apiSwitchTasksSafe()
   } finally {
     loading.value = false
   }
@@ -117,7 +117,7 @@ onMounted(load)
           <tr v-for="s in semesters" :key="s.id">
             <td style="color: var(--vio-ink); font-weight: 600">{{ s.name }}</td>
             <td class="mono nw">{{ s.startDate }} ~ {{ s.endDate }}</td>
-            <td class="num mono">{{ s.weekCount }}</td>
+            <td class="num mono">{{ s.totalWeeks }}</td>
             <td><span class="stamp" :class="s.status === 'ACTIVE' ? 'ok' : s.status === 'PLANNED' ? 'blue' : 'dim'">{{ SEMESTER_STATUS_LABEL[s.status] }}</span></td>
             <td class="nw">
               <button class="btn-act" @click="openEdit(s)">编辑</button>

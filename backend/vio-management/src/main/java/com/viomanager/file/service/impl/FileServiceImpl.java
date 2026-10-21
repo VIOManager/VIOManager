@@ -6,6 +6,7 @@ import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.Result;
 import com.viomanager.common.util.Sha256Util;
+import com.viomanager.datascop.OrgScopeSupport;
 import com.viomanager.file.config.FileProperties;
 import com.viomanager.file.entity.FileObject;
 import com.viomanager.file.mapper.FileObjectMapper;
@@ -26,8 +27,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -54,7 +53,7 @@ public class FileServiceImpl implements IFileService {
     private ClamAvScanner clamAvScanner;
 
     @Resource
-    private JdbcTemplate jdbcTemplate;
+    private OrgScopeSupport orgScopeSupport;
 
     @Resource
     private MinioStreamSupport streamSupport;
@@ -203,19 +202,10 @@ public class FileServiceImpl implements IFileService {
             throw new BizException(CommonErrorCode.FORBIDDEN, "无权下载该文件");
         }
         //4.部门管理员：文件的组织在自己子树内；查询异常一律按拒绝处理（宁可误拒不可误放）
-        try {
-            String adminPath = jdbcTemplate.queryForObject(
-                    "SELECT path FROM sys_org WHERE id = ? AND deleted = 0", String.class, user.getOrgId());
-            Integer count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM sys_org WHERE id = ? AND deleted = 0 AND path LIKE CONCAT(?, '%')",
-                    Integer.class, record.getOrgId(), adminPath);
-            if (adminPath != null && count != null && count > 0) {
-                return;
-            }
-        } catch (DataAccessException e) {
-            log.warn("下载权限子树校验查询失败，按拒绝处理：{}", e.getMessage());
+        //  判定收口到 OrgScopeSupport（插入点①，Redis cache-aside + 降级直查库）
+        if (!orgScopeSupport.inSubtree(user.getOrgId(), record.getOrgId())) {
+            throw new BizException(CommonErrorCode.FORBIDDEN, "无权下载该文件");
         }
-        throw new BizException(CommonErrorCode.FORBIDDEN, "无权下载该文件");
     }
 
     /** 更新扫描结果（只更新非空字段） */

@@ -1,6 +1,6 @@
 -- ============================================================================
 -- VIOManager 数据库建表脚本（完整合集）
--- 49 张表，可一次性执行。改表结构需组长批准后直接修改本文件 docs/db/initsql.sql，
+-- 50 张表，可一次性执行。改表结构需组长批准后直接修改本文件 docs/db/initsql.sql，
 -- 全项目仅此一份表结构定义，避免漂移。
 -- 技术交流域三张表已于 2026-10-15 迁至论坛独立库 vioforum
 -- （建表脚本：backend/vio-forum/src/main/resources/db/migration/V1__forum_init.sql）。
@@ -1178,5 +1178,27 @@ CREATE TABLE IF NOT EXISTS idempotent_record (
     UNIQUE KEY uk_idem_key (idem_key),
     KEY idx_idem_expire (expire_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '幂等键';
+
+-- ----------------------------------------------------------------------------
+-- 本地消息表（2026-10-17 组长拍板新增，审批中心 Redis/MQ 升级插入点③，Flyway V2 同步追认）
+-- 审批状态变更事件与 MQ 投递解耦：与状态变更同一事务落表，relay 线程异步投递；
+-- 失败退避 1/2/4/8/16 分钟，超 5 次进 DEAD 留痕。无审计四列（系统事件账本无用户归属）。
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS notify_outbox (
+    id            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    topic         VARCHAR(64)  NOT NULL COMMENT '目标 topic 如 approval-status',
+    biz_type      VARCHAR(64)  NOT NULL COMMENT '业务类型 如 APPROVAL_APPROVE',
+    biz_id        BIGINT       NOT NULL COMMENT '业务主键 即审批单 id',
+    payload_json  VARCHAR(1000) NOT NULL COMMENT '事件内容 含受影响 memberIds',
+    send_status   VARCHAR(16)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING 待发 / SENT 已发 / DEAD 死信',
+    retry_count   INT          NOT NULL DEFAULT 0 COMMENT '重试次数',
+    next_retry_at DATETIME     NULL COMMENT '下次重试时间 退避递增',
+    sent_at       DATETIME     NULL COMMENT '发出时间',
+    error_message VARCHAR(500) NULL COMMENT '最近失败原因',
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_outbox_pending (send_status, next_retry_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '本地消息表 状态变更与 MQ 投递解耦 同事务写入';
 
 SET FOREIGN_KEY_CHECKS = 1;

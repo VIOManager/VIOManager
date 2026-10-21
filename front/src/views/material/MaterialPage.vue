@@ -5,13 +5,14 @@
  * Tab2 队伍概览：提交矩阵与打包下载（TeamOverviewPanel）
  * 拒删分支：要求有提交记录 5005 / 任务下有提交记录 5006（提示由 http 拦截器统一弹出）
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiDeleteRequirement, apiDeleteTask, apiMaterialTasks, apiRequirements } from '@/api/material'
 import type { MaterialRequirement, MaterialTask } from '@/api/material'
 import { apiContests } from '@/api/contest'
 import type { ContestListItem } from '@/api/contest'
 import { MATERIAL_TYPE_LABEL } from '@/config/labels'
+import ScrollLoader from '@/components/ScrollLoader.vue'
 import TaskFormDialog from './TaskFormDialog.vue'
 import RequirementFormDialog from './RequirementFormDialog.vue'
 import TeamOverviewPanel from './TeamOverviewPanel.vue'
@@ -19,6 +20,10 @@ import TeamOverviewPanel from './TeamOverviewPanel.vue'
 const tab = ref('tasks')
 const contests = ref<ContestListItem[]>([])
 const tasks = ref<MaterialTask[]>([])
+/** 本地滚动分页：任务台账返回全量数组，前端切片显示（每批 20 条）；要求配置与矩阵为配置视图不分页 */
+const loadedCount = ref(20)
+const visible = computed(() => tasks.value.slice(0, loadedCount.value))
+const noMore = computed(() => loadedCount.value >= tasks.value.length)
 const loading = ref(false)
 const contestFilter = ref('')
 
@@ -35,9 +40,16 @@ async function loadTasks() {
   loading.value = true
   try {
     tasks.value = await apiMaterialTasks(contestFilter.value || undefined)
+    loadedCount.value = 20
   } finally {
     loading.value = false
   }
+}
+
+/** 滚动到底扩大切片（ScrollLoader 的 reach 回调） */
+function loadMore() {
+  if (loading.value || noMore.value) return
+  loadedCount.value += 20
 }
 
 async function loadReqs() {
@@ -139,21 +151,24 @@ onMounted(async () => {
               <tr><th>任务名</th><th>比赛</th><th class="num">要求数</th><th class="num">交齐队伍</th><th>截止时间</th><th style="width: 190px">操作</th></tr>
             </thead>
             <tbody>
-              <tr v-for="t in tasks" :key="t.id" :class="{ cur: currentTask && currentTask.id === t.id }">
+              <tr v-for="t in visible" :key="t.id" :class="{ cur: currentTask && currentTask.id === t.id }">
                 <td style="color: var(--vio-ink); font-weight: 600">{{ t.name }}</td>
                 <td class="fs" style="font-size: 12px">{{ t.contestName }}</td>
                 <td class="num mono">{{ t.requirementCount }}</td>
                 <td class="num mono">{{ t.teamComplete }} / {{ t.teamTotal }}</td>
                 <td class="mono" style="font-size: 12px">{{ t.deadline }}</td>
                 <td>
+                  <!-- 行内操作统一 btn-act 小钮：此前混用 34px 大钮（编辑/删除），190px 操作列装不下
+                       三个按钮换行错位 + 高矮不齐（2026-10-19 lzh"比例崩了"反馈实测定位） -->
                   <button class="btn-act" @click="openReqs(t)">要求</button>
-                  <button class="btn-line" style="margin-left: 6px" @click="openTaskEdit(t)">编辑</button>
-                  <button class="btn-line" style="margin-left: 6px" @click="onDeleteTask(t)">删除</button>
+                  <button class="btn-act" style="margin-left: 6px" @click="openTaskEdit(t)">编辑</button>
+                  <button class="btn-act danger" style="margin-left: 6px" @click="onDeleteTask(t)">删除</button>
                 </td>
               </tr>
             </tbody>
           </table>
           <p v-if="tasks.length === 0" class="empty-note">暂无材料任务</p>
+          <ScrollLoader :loading="loading" :no-more="noMore" :loaded="visible.length" :total="tasks.length" @reach="loadMore" />
         </div>
 
         <!-- 要求配置区：点"要求"展开 -->
@@ -165,19 +180,20 @@ onMounted(async () => {
           <div class="panel">
             <table class="ledger">
               <thead>
-                <tr><th>类型</th><th>必传</th><th>允许格式</th><th>命名规则</th><th class="num">大小上限</th><th style="width: 130px">操作</th></tr>
+                <tr><th>名称</th><th>类型</th><th>必传</th><th>允许格式</th><th>命名规则</th><th class="num">大小上限</th><th style="width: 130px">操作</th></tr>
               </thead>
               <tbody>
                 <tr v-for="r in currentReqs" :key="r.id">
-                  <td style="color: var(--vio-ink); font-weight: 600">{{ MATERIAL_TYPE_LABEL[r.materialType] ?? r.materialType }}</td>
+                  <td style="color: var(--vio-ink); font-weight: 600">{{ r.name || '—' }}</td>
+                  <td class="fs">{{ MATERIAL_TYPE_LABEL[r.materialType] ?? r.materialType }}</td>
                   <td><span class="stamp" :class="r.requiredFlag === 1 ? 'warn' : 'ok'">{{ r.requiredFlag === 1 ? '必传' : '选传' }}</span></td>
                   <td class="mono" style="font-size: 12px">{{ r.allowedFormats.join(' / ') }}</td>
                   <td class="fs">{{ r.namingRule || '—' }}</td>
                   <td class="num mono">{{ r.maxSizeMb }} MB</td>
                   <td>
-                    <button class="btn-line" @click="openReqEdit(r)">编辑</button>
-                    <button class="btn-line" style="margin-left: 6px" @click="onDeleteReq(r)">删除</button>
-                  </td>
+                  <button class="btn-act" @click="openReqEdit(r)">编辑</button>
+                  <button class="btn-act danger" style="margin-left: 6px" @click="onDeleteReq(r)">删除</button>
+                </td>
                 </tr>
               </tbody>
             </table>
@@ -197,5 +213,5 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-tr.cur { background: var(--vio-wash); }
+tr.cur td { background: var(--vio2-panel-2); }
 </style>

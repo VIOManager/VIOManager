@@ -13,6 +13,7 @@ import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.exception.BizException;
 import com.viomanager.material.support.MaterialTeamQuerySupport;
 import com.viomanager.material.support.MaterialTeamQuerySupport.TeamRow;
+import com.viomanager.material.support.TeamOrgScopeSupport;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -42,6 +43,9 @@ public class AchievementApprovalSupport {
     private AchievementSubmitHandler achievementSubmitHandler;
 
     @Resource
+    private TeamOrgScopeSupport orgScope;
+
+    @Resource
     private ObjectMapper objectMapper;
 
     /**
@@ -62,9 +66,21 @@ public class AchievementApprovalSupport {
             createSubmitApproval(achievement, team, dto, user, memberId);
             return;
         }
-        //管理员：直接录入生效（owner_member_id 列非空，账号须已绑定人员档案）
+        //管理员：直接录入生效。先过组织子树校验（部门管理员越权录其他部门队伍 1003；
+        //超管不受影响；学生分支已在上面返回，不经过这里——学生由队长校验负责）
+        orgScope.assertTeamInScope(dto.getTeamId());
+        //owner_member_id 列非空 ——
+        //纯管理账号（sys_user.member_id 为 NULL，如 demo 的 admin）不能作为成果归属人，
+        //回退为该队队长：管理员代录的成果仍归属队伍，A07 本人导出 / A08 聚合均按 owner 收敛，
+        //记在管理员名下会让该成果永远进不了学生本人的导出（实测过的问题）。
         if (memberId == null) {
-            throw new BizException(CommonErrorCode.PARAM_INVALID, "当前账号未绑定人员档案，无法作为成果归属人");
+            Long leaderMemberId = team.getLeaderMemberId();
+            if (leaderMemberId == null) {
+                throw new BizException(CommonErrorCode.PARAM_INVALID,
+                        "当前账号未绑定人员档案且该队无队长，无法确定成果归属人；请改用已绑定档案的账号录入");
+            }
+            achievement.setOwnerMemberId(leaderMemberId);
+            achievement.setOwnerName(teamQuery.loadLeaderName(dto.getTeamId(), leaderMemberId));
         }
         achievement.setStatus("APPROVED");
         achievement.setSubmitChannel("ADMIN");
@@ -102,11 +118,12 @@ public class AchievementApprovalSupport {
     }
 
     /**
-     * §5 联动调用点位：有审批通过成果但未传佐证的队伍，必交项额外加 1 条"成果佐证材料"
-     * （material_requirement.system_generated=1，管理端不可增删）。
-     * 联动逻辑在 AchievementSubmitHandler.linkEvidenceRequirement，与审批批准回调共用同一段。
+     * §5 联动调用点位（与审批批准回调共用 AchievementSubmitHandler.handleSection5Linkage）：
+     * 有审批通过成果但未传佐证的队伍，必交项额外加 1 条"成果佐证材料"
+     * （material_requirement.system_generated=1，管理端不可增删）；
+     * 管理员直录已带佐证的成果不追加必交项，仅按比赛整场重算。
      */
     private void triggerSection5Linkage(Achievement achievement) {
-        achievementSubmitHandler.linkEvidenceRequirement(achievement.getTeamId());
+        achievementSubmitHandler.handleSection5Linkage(achievement);
     }
 }
