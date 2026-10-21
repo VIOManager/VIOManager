@@ -1,5 +1,6 @@
 package com.viomanager.team.support;
 
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.viomanager.approval.dto.ApprovalCreateDTO;
 import com.viomanager.approval.service.ApprovalClient;
 import com.viomanager.common.auth.CurrentUser;
@@ -8,6 +9,10 @@ import com.viomanager.common.exception.BizException;
 import com.viomanager.common.util.ParamsJsonUtil;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.team.entity.Team;
+import com.viomanager.team.entity.TeamMember;
+import com.viomanager.team.mapper.TeamMemberMapper;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -25,12 +30,14 @@ public class TeamCommandSupport {
     private final JdbcTemplate jdbcTemplate;
     private final ApprovalClient approvalClient;
     private final TeamQuerySupport querySupport;
+    private final TeamMemberMapper teamMemberMapper;
 
     public TeamCommandSupport(JdbcTemplate jdbcTemplate, ApprovalClient approvalClient,
-            TeamQuerySupport querySupport) {
+            TeamQuerySupport querySupport, TeamMemberMapper teamMemberMapper) {
         this.jdbcTemplate = jdbcTemplate;
         this.approvalClient = approvalClient;
         this.querySupport = querySupport;
+        this.teamMemberMapper = teamMemberMapper;
     }
 
     /** 提交审批单（封装 DTO 构造） */
@@ -81,6 +88,49 @@ public class TeamCommandSupport {
         return c != null && c > 0;
     }
 
+    /** 确认路径用（超卖修复 §12.5 伴生竞态）：同比赛他队已确认——排除当前队，本队 CONFIRMED 是目标状态不算违规 */
+    public boolean isConfirmedInContestExcluding(Long memberId, Long contestId, Long excludeTeamId) {
+        Integer c = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM team_member tm JOIN team t ON tm.team_id = t.id "
+                        + "AND t.deleted = 0 AND t.status = 'ACTIVE' "
+                        + "WHERE tm.member_id = ? AND tm.deleted = 0 AND tm.status = 'CONFIRMED' "
+                        + "AND t.contest_id = ? AND tm.team_id <> ?",
+                Integer.class, memberId, contestId, excludeTeamId);
+        return c != null && c > 0;
+    }
+
+    /** 确认/拒绝翻转 UNCONFIRMED（超卖修复 §12.5）：状态条件更新，0 行即状态已被并发变更 */
+    public void flipUnconfirmed(Long teamId, Long memberId, String targetStatus) {
+        UpdateWrapper<TeamMember> uw = new UpdateWrapper<>();
+        uw.eq("team_id", teamId).eq("member_id", memberId).eq("status", "UNCONFIRMED").eq("deleted", 0)
+                .set("status", targetStatus)
+                .set("joined_at", "CONFIRMED".equals(targetStatus) ? LocalDateTime.now() : null);
+        if (teamMemberMapper.update(null, uw) == 0) {
+            throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "当前状态不可变更");
+        }
+    }
+
+    /** member 行 FOR UPDATE：跨队并发确认的数据库层防线，行锁随事务持有到提交 */
+    public void lockMemberRow(Long memberId) {
+        try {
+            jdbcTemplate.queryForObject("SELECT id FROM member WHERE id = ? AND deleted = 0 FOR UPDATE",
+                    Long.class, memberId);
+        } catch (EmptyResultDataAccessException e) {
+            // 档案已删则无从行锁，交给状态条件更新自然失败
+        }
+    }
+
+    /** 构建加人/移除/加指导教师共用的 payload（teamId/memberId/memberName/contestId/semesterId） */
+    public Map<String, Object> payloadOf(Team team, Long teamId, Long memberId) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("teamId", teamId);
+        payload.put("memberId", memberId);
+        payload.put("memberName", memberName(memberId));
+        payload.put("contestId", team.getContestId());
+        payload.put("semesterId", team.getSemesterId());
+        return payload;
+    }
+
     public boolean isLeaderInContest(Long leaderMemberId, Long contestId) {
         Integer c = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM team WHERE leader_member_id = ? AND contest_id = ? "
@@ -103,6 +153,29 @@ public class TeamCommandSupport {
                         + "AND status IN ('UNCONFIRMED','CONFIRMED')",
                 Integer.class, teamId);
         return c == null ? 0 : c;
+    }
+
+    /**
+     * 超卖主闸的当前读（超卖修复 §12.5）：FOR UPDATE 计数读到最新已提交状态，
+     * 并对并发未提交的插入阻塞等待——不受本事务先前一致性读建立的 REPEATABLE READ 旧快照影响
+     * （审批 handle() 先 SELECT approval 已把快照建旧，普通 COUNT 会看不见并行事务刚插的人）。
+     */
+    public int countActiveMembersForUpdate(Long teamId) {
+        Integer c = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM team_member WHERE team_id = ? AND deleted = 0 "
+                        + "AND status IN ('UNCONFIRMED','CONFIRMED') FOR UPDATE",
+                Integer.class, teamId);
+        return c == null ? 0 : c;
+    }
+
+    /** 审批发起人归位：管理员代发记队长，学生本人发记本人 */
+    public Long approvalApplicantId(CurrentUser user, Team team) {
+        if ("SUPER_ADMIN".equals(user.getRole()) || "DEPT_ADMIN".equals(user.getRole())) {
+            return team.getLeaderMemberId();
+        }
+        Long mid = querySupport.currentMemberId(user);
+        if (mid == null) throw new BizException(CommonErrorCode.FORBIDDEN, "当前账号未绑定人员档案");
+        return mid;
     }
 
     public int countActiveAdvisors(Long teamId) {

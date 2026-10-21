@@ -22,6 +22,7 @@ import com.viomanager.team.service.ITeamCommandService;
 import com.viomanager.team.support.ContestContext;
 import com.viomanager.team.support.ContestQueryService;
 import com.viomanager.team.support.TeamCommandSupport;
+import com.viomanager.team.support.TeamLockSupport;
 import com.viomanager.team.support.TeamQuerySupport;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
@@ -30,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,6 +55,8 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
     private TeamCommandSupport cmdSupport;
     @Resource
     private ContestQueryService contestQueryService;
+    @Resource
+    private TeamLockSupport lockSupport;
 
     @Override
     @Transactional
@@ -130,7 +134,7 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
         if (cmdSupport.countPendingApproval("TEAM_ADD_MEMBER", teamId, targetId) > 0) {
             throw new BizException(TeamErrorCode.SAME_TARGET_PENDING);
         }
-        Long applicantId = approvalApplicantId(user, team);
+        Long applicantId = cmdSupport.approvalApplicantId(user, team);
         Map<String, Object> payload = payloadOf(team, teamId, targetId);
         cmdSupport.submitApproval("TEAM_ADD_MEMBER", teamId, "邀请 " + cmdSupport.memberName(targetId) + " 加入",
                 payload, applicantId, cmdSupport.memberName(applicantId), targetId, cmdSupport.memberName(targetId),
@@ -140,21 +144,38 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
     @Override
     @Transactional
     public void confirmMember(Long teamId, Long memberId, TeamMemberConfirmDTO dto) {
-        loadActiveTeam(teamId);
         String action = dto.getAction();
         if (!"CONFIRM".equals(action) && !"REJECT".equals(action)) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "action 须为 CONFIRM 或 REJECT");
         }
+        if (!"CONFIRM".equals(action)) {
+            loadActiveTeam(teamId);
+            ensureSelfConfirm(memberId);
+            cmdSupport.flipUnconfirmed(teamId, memberId, "REJECTED");
+            return;
+        }
+        // 跨队双确认防线（超卖修复 §12.5）：锁与 member 行 FOR UPDATE 都拿到后才做第一个一致性读——
+        // REPEATABLE READ 快照取自第一次读，读早了看不见并行事务刚提交的确认
+        RLock lock = lockSupport.lockForConfirm(memberId);
+        try {
+            cmdSupport.lockMemberRow(memberId);
+            Team team = loadActiveTeam(teamId);
+            ensureSelfConfirm(memberId);
+            ContestContext ctx = contestQueryService.loadContext(team.getContestId(), team.getTrackId());
+            if (!ctx.ruleBool("allowRepeatJoin", false)
+                    && cmdSupport.isConfirmedInContestExcluding(memberId, team.getContestId(), teamId)) {
+                throw new BizException(TeamErrorCode.REPEAT_JOIN_LIMITED);
+            }
+            cmdSupport.flipUnconfirmed(teamId, memberId, "CONFIRMED");
+        } finally {
+            lockSupport.release(lock);
+        }
+    }
+
+    private void ensureSelfConfirm(Long memberId) {
         Long currId = support.currentMemberId(UserHolder.getUser());
         if (currId == null || !currId.equals(memberId)) {
             throw new BizException(CommonErrorCode.FORBIDDEN, "仅本人可确认/拒绝");
-        }
-        UpdateWrapper<TeamMember> uw = new UpdateWrapper<>();
-        uw.eq("team_id", teamId).eq("member_id", memberId).eq("status", "UNCONFIRMED").eq("deleted", 0)
-                .set("status", action.equals("CONFIRM") ? "CONFIRMED" : "REJECTED")
-                .set("joined_at", action.equals("CONFIRM") ? LocalDateTime.now() : null);
-        if (teamMemberMapper.update(null, uw) == 0) {
-            throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "当前状态不可变更");
         }
     }
 
@@ -167,7 +188,7 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
         if (memberId.equals(team.getLeaderMemberId())) {
             throw new BizException(TeamErrorCode.LEADER_NOT_REMOVABLE);
         }
-        Long applicantId = approvalApplicantId(user, team);
+        Long applicantId = cmdSupport.approvalApplicantId(user, team);
         Map<String, Object> payload = payloadOf(team, teamId, memberId);
         cmdSupport.submitApproval("TEAM_REMOVE_MEMBER", teamId, "移除 " + cmdSupport.memberName(memberId),
                 payload, applicantId, cmdSupport.memberName(applicantId), memberId, cmdSupport.memberName(memberId),
@@ -211,7 +232,7 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
         if (cmdSupport.countPendingApproval("TEAM_ADD_ADVISOR", teamId, targetId) > 0) {
             throw new BizException(TeamErrorCode.SAME_TARGET_PENDING);
         }
-        Long applicantId = approvalApplicantId(user, team);
+        Long applicantId = cmdSupport.approvalApplicantId(user, team);
         Map<String, Object> payload = payloadOf(team, teamId, targetId);
         cmdSupport.submitApproval("TEAM_ADD_ADVISOR", teamId, "邀请 " + cmdSupport.memberName(targetId) + " 担任指导教师",
                 payload, applicantId, cmdSupport.memberName(applicantId), targetId, cmdSupport.memberName(targetId),
@@ -272,23 +293,8 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
         return team;
     }
 
-    private Long approvalApplicantId(CurrentUser user, Team team) {
-        if ("SUPER_ADMIN".equals(user.getRole()) || "DEPT_ADMIN".equals(user.getRole())) {
-            return team.getLeaderMemberId();
-        }
-        Long mid = support.currentMemberId(user);
-        if (mid == null) throw new BizException(CommonErrorCode.FORBIDDEN, "当前账号未绑定人员档案");
-        return mid;
-    }
-
     /** 构建加人/移除/加指导教师共用的 payload（teamId/memberId/memberName/contestId/semesterId） */
     private Map<String, Object> payloadOf(Team team, Long teamId, Long memberId) {
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("teamId", teamId);
-        payload.put("memberId", memberId);
-        payload.put("memberName", cmdSupport.memberName(memberId));
-        payload.put("contestId", team.getContestId());
-        payload.put("semesterId", team.getSemesterId());
-        return payload;
+        return cmdSupport.payloadOf(team, teamId, memberId);
     }
 }

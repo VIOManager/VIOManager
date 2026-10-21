@@ -41,7 +41,10 @@ public enum TeamErrorCode implements ErrorCode {
     STATUS_TRANSITION_INVALID(4011, "状态流转不可跳转"),
 
     /** 模板已被比赛引用，禁止删除 */
-    TEMPLATE_REFERENCED(4012, "模板已被比赛引用，禁止删除");
+    TEMPLATE_REFERENCED(4012, "模板已被比赛引用，禁止删除"),
+
+    /** 并发锁不可用或竞争超时（组队超卖修复 §12.5）：锁场景宁可拒绝不可放行，与缓存降级方向相反 */
+    TEAM_LOCK_BUSY(4013, "操作冲突或系统繁忙，请稍后重试");
 
     private final int code;
     private final String message;
