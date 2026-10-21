@@ -24,7 +24,9 @@ public interface SysDictItemMapper extends BaseMapper<SysDictItem> {
      * （A 线的审核页面与本接口共用一份数据口径）。
      */
     @DataScope(scope = DataScope.Scope.ALL)
-    @Select("SELECT * FROM sys_dict_item "
+    @Select("SELECT id, dict_code, item_value, item_label, source, audit_status, sort_no, status, deleted, "
+            + "created_at, created_by, updated_at, updated_by "
+            + "FROM sys_dict_item "
             + "WHERE dict_code = #{dictCode} AND status = 1 AND deleted = 0 "
             + "ORDER BY sort_no, id")
     List<SysDictItem> selectEnabledByCode(@Param("dictCode") String dictCode);
