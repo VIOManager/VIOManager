@@ -105,8 +105,14 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-viomanager}
       MYSQL_USERNAME: root
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev-root-123}
+      # 容器内连 Redis 用服务名（与 kb 服务一致）；漏配时默认 localhost 连不上，缓存会静默熔断降级直查库
+      REDIS_HOST: redis
+      VIO_CACHE_ORG: "false"
+      VIO_CACHE_UNREAD: "false"
       # MinIO 凭据与上方 minio 服务共用同一套环境变量，改一处两端同步；桶由应用启动后自建
-      MINIO_ENDPOINT: http://minio:9000
+      # 端点默认指宿主原生 MinIO（本机口径，历史文件都在里面）；
+      # 全容器套件（起 minio 容器）时显式设 MINIO_ENDPOINT=http://minio:9000
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://host.docker.internal:9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-vio-minio}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev-minio-123}
       CLAMAV_HOST: clamav
@@ -114,14 +120,15 @@ services:
       # 必须与下方 kb 服务同值（kb 不设此变量会走默认值，主服务签发的 token 到 kb 全 401）
       JWT_SECRET: ${JWT_SECRET:-viomanager-local-dev-secret-key-32bytes-minimum}
       TZ: Asia/Shanghai
+
     ports:
       # 宿主端口可用 APP_PORT 覆盖：IDEA 实例占着 8088 时 APP_PORT=18088 起容器版并行
       - "${APP_PORT:-8088}:8088"
     depends_on:
       mysql:
         condition: service_healthy   # Flyway 建表赶在库就绪前会启动失败，等健康检查过了再起
-      minio:
-        condition: service_started
+      # minio 依赖刻意去掉：本机 MinIO 是宿主原生进程（app 用 MINIO_ENDPOINT 指过去），
+      # 起 minio 容器的全容器模式下端点自己指服务名，也不需要启动顺序保证
       clamav:
         condition: service_started
 
