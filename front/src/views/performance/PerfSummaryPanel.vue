@@ -41,15 +41,15 @@ function loadMore() {
   loadedCount.value += 20
 }
 
-async function onExport() {
-  const r = await apiPerfExport({ semesterId: '', subOrgId: subOrgId.value || undefined, groupBy: 'MEMBER' })
-  ElMessage.success(r.note)
+async function onExport(groupBy: 'MEMBER' | 'ORG') {
+  await apiPerfExport({ subOrgId: subOrgId.value || undefined, groupBy })
+  ElMessage.success('已导出')
 }
 
-/** 组织树拍平成下拉选项（本部根节点不进绩效口径） */
+/** 组织树拍平成下拉选项：绩效按子组织隔离，只收 SUB_ORG 层（根/学院层查不出数据且语义错） */
 function flatten(nodes: OrgNode[], out: Array<{ id: string; name: string }>) {
   for (const n of nodes) {
-    if (n.orgType !== 'ROOT') out.push({ id: n.id, name: n.name })
+    if (n.orgType === 'SUB_ORG') out.push({ id: n.id, name: n.name })
     flatten(n.children, out)
   }
 }
@@ -73,7 +73,8 @@ onMounted(async () => {
       <input v-model="keyword" class="input-line" style="width: 140px" placeholder="成员姓名" @keyup.enter="load" />
       <button class="btn-line" @click="load">查询</button>
       <span style="flex: 1"></span>
-      <button class="btn-line" @click="onExport">导出汇总（按成员）</button>
+      <button class="btn-line" @click="onExport('MEMBER')">导出（按人）</button>
+      <button class="btn-line" @click="onExport('ORG')">导出（按子组织）</button>
     </div>
 
     <div class="panel">

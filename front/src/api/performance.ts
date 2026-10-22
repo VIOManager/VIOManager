@@ -6,17 +6,18 @@
  *   绩效审核不走审批中心（PRD §3.13 管理员直审）；驳回不删记录，改后原记录重进待审核
  *   同人同周同子组织仅一份周报（8041）；打分维度须与该子组织启用规则完全一致（8043）
  */
-import { get, post, postIdem, put } from './http'
+import { get, post, postIdem, put, download } from './http'
 
 export type WeeklyStatus = 'SUBMITTED' | 'SCORED' | 'REJECTED'
 
-/** 周报列表项（PF01/PF06 共用；管理端多 memberName/subOrgName；subOrgId 冗余供前端拉该子组织打分规则） */
+/** 周报列表项（PF01/PF06 共用；管理端多 memberName/subOrgName；subOrgId+semesterId 冗余供前端拉该子组织该学期生效规则） */
 export interface WeeklyItem {
   id: string
   memberId: string
   memberName: string
   subOrgId: string
   subOrgName: string
+  semesterId: string
   weekNo: number
   status: WeeklyStatus
   totalScore: number | null
@@ -129,9 +130,13 @@ export function apiPerfSummaries(q?: { semesterId?: string; subOrgId?: string; m
   return get('/api/performance/summaries', (q ?? {}) as Record<string, unknown>)
 }
 
-/** PF10 导出（mock 返回提示文本） */
-export function apiPerfExport(q: { semesterId: string; subOrgId?: string; groupBy: 'MEMBER' | 'ORG' }): Promise<{ note: string }> {
-  return get('/api/performance/export', q as unknown as Record<string, unknown>)
+/** PF10 导出（xlsx 文件流，浏览器直接保存；semesterId 免参回退当前激活学期，与 PF09 同口径） */
+export function apiPerfExport(q: { semesterId?: string; subOrgId?: string; groupBy: 'MEMBER' | 'ORG' }): Promise<void> {
+  const params = new URLSearchParams({ groupBy: q.groupBy })
+  if (q.semesterId) params.set('semesterId', q.semesterId)
+  if (q.subOrgId) params.set('subOrgId', q.subOrgId)
+  const fallback = q.groupBy === 'ORG' ? '绩效汇总-按子组织.xlsx' : '绩效汇总-按人.xlsx'
+  return download('/api/performance/export?' + params.toString(), fallback)
 }
 
 // ── 规则配置 ──

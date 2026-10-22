@@ -104,3 +104,9 @@ export async function apiSemestersSafe(): Promise<Semester[]> {
     return FALLBACK_SEMESTERS
   }
 }
+
+/** 当前激活学期（ACTIVE 优先，无则取第一条；接口失败走 FALLBACK）——排班/课表面板共用 */
+export async function activeSemester(): Promise<Semester | null> {
+  const list = await apiSemestersSafe()
+  return list.find((s) => s.status === 'ACTIVE') ?? list[0] ?? null
+}

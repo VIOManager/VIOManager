@@ -8,7 +8,11 @@ import { ref } from 'vue'
 import { apiFreeSlotMatrix, apiFreeSlotMembers } from '@/api/schedule'
 import type { FreeMember, FreeSlotCell } from '@/api/schedule'
 import { SLOT_LABEL, WEEKDAY_LABEL } from '@/config/labels'
+import { activeSemester, apiSemestersSafe } from '@/api/semester'
+import type { Semester } from '@/api/semester'
 
+const semesterId = ref('') // 当前激活学期（apiSemestersSafe 取 ACTIVE，接口失败走 FALLBACK）
+const semesters = ref<Semester[]>([])
 const weekNo = ref(6)
 const cells = ref<FreeSlotCell[]>([])
 const loading = ref(false)
@@ -25,11 +29,12 @@ function cellAt(weekday: number, slotIndex: number): FreeSlotCell {
 }
 
 async function load() {
+  if (!semesterId.value) return
   loading.value = true
   picked.value = null
   members.value = []
   try {
-    cells.value = await apiFreeSlotMatrix({ semesterId: 's2', weekNo: weekNo.value })
+    cells.value = await apiFreeSlotMatrix({ semesterId: semesterId.value, weekNo: weekNo.value })
   } finally {
     loading.value = false
   }
@@ -39,7 +44,7 @@ async function pick(weekday: number, slotIndex: number) {
   picked.value = { weekday, slotIndex }
   listLoading.value = true
   try {
-    members.value = await apiFreeSlotMembers({ semesterId: 's2', weekNo: weekNo.value, weekday, slotIndex })
+    members.value = await apiFreeSlotMembers({ semesterId: semesterId.value, weekNo: weekNo.value, weekday, slotIndex })
   } finally {
     listLoading.value = false
   }
@@ -51,12 +56,20 @@ function gradeText(dist: Record<string, number>): string {
   return parts.join(' · ')
 }
 
-load()
+;(async () => {
+  semesters.value = await apiSemestersSafe()
+  const active = await activeSemester()
+  if (active) semesterId.value = String(active.id)
+  await load()
+})()
 </script>
 
 <template>
   <div>
     <div class="fbar">
+      <select v-model="semesterId" class="input-line" style="width: 210px" title="按学期查询（教务导入常落历史学期）" @change="load">
+        <option v-for="s in semesters" :key="s.id" :value="String(s.id)">{{ s.name }}</option>
+      </select>
       <input v-model.number="weekNo" type="number" min="1" max="18" class="input-line" style="width: 90px" @change="load" />
       <span class="mono" style="font-size: 12px; color: var(--vio-ink-3)">第 {{ weekNo }} 教学周 · {{ weekNo % 2 === 1 ? '单周' : '双周' }}（单双周课已计入占用）· 点击格子看名单</span>
     </div>
