@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  * 空课计算引擎（SC06 矩阵 / SC07 名单 / SC02 课表冲突共用同源逻辑，AI 助手复用同规则）。
  * 判定口径（接口清单 §3）：confirmed=1 的 class_mapping 才参与（PRD 铁规则）；
  * 某班级在 (weekNo, weekday, slotIndex) 无课记录即空课；ODD 仅奇数周占用、EVEN 仅偶数周、
- * ALL 每周；同格多门课取并集。成员归属 = normalized(member.class_name) ∈ 已确认 class_key。
+ * ALL 每周；同格多门课取并集。成员归属 = ClassNameMatcher 宽容匹配（教务↔档案两套班级名写法）。
  */
 @Component
 public class FreeSlotCalcSupport {
@@ -48,6 +48,17 @@ public class FreeSlotCalcSupport {
                 .eq(ClassMapping::getConfirmed, 1));
     }
 
+    /** 成员班级名 → 本学期课表班级键（ClassNameMatcher 宽容匹配，映射桥接教务/档案两套写法）；无唯一匹配返回 null。 */
+    public String resolveClassKey(Long semesterId, String memberClassName) {
+        if (memberClassName == null || memberClassName.isBlank()) {
+            return null;
+        }
+        List<ClassMapping> mappings = classMappingMapper.selectList(new LambdaQueryWrapper<ClassMapping>()
+                .eq(ClassMapping::getSemesterId, semesterId));
+        return ClassNameMatcher.uniqueMatch(memberClassName,
+                mappings.stream().map(ClassMapping::getClassKey).toList());
+    }
+
     /** 该学期已确认班级的全部在册成员（年级已推导）。 */
     public List<FreeMemberRow> freeMemberCandidates(Long semesterId) {
         List<ClassMapping> confirmed = confirmedMappings(semesterId);
@@ -57,10 +68,11 @@ public class FreeSlotCalcSupport {
         }
         List<FreeMemberRow> result = new ArrayList<>();
         for (ScheduleMemberSupport.MemberBasic member : memberSupport.allActiveWithClass()) {
-            ClassMapping mapping = byKey.get(NameNormalizer.classKey(member.className()));
-            if (mapping == null) {
+            String classKey = ClassNameMatcher.uniqueMatch(member.className(), byKey.keySet());
+            if (classKey == null) {
                 continue;
             }
+            ClassMapping mapping = byKey.get(classKey);
             String[] grade = deriveGrade(member.studentNo(), mapping);
             result.add(new FreeMemberRow(member.id(), member.name(), member.className(),
                     mapping.getClassKey(), grade[0], grade[1]));

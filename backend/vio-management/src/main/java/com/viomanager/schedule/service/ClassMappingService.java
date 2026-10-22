@@ -10,8 +10,12 @@ import java.util.List;
  */
 public interface ClassMappingService {
 
-    /** TT06 映射列表：按学期、确认状态筛选。 */
-    List<ClassMappingVO> list(Long semesterId, Boolean confirmed);
+    /**
+     * TT06 映射列表：按学期、确认状态、是否有在册成员筛选。
+     * 档案班级名/年级为**读取时实时匹配**（ClassNameMatcher），后续录入的成员即时生效，
+     * 导入时落库的 memberClassName 只是快照、不参与展示。
+     */
+    List<ClassMappingVO> list(Long semesterId, Boolean confirmed, Boolean hasMember);
 
     /** TT07 批量确认映射：确认后该班级参与空课统计；任一 id 无效 8004。 */
     void confirm(List<Long> ids);

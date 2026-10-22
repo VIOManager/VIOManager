@@ -2,6 +2,7 @@ package com.viomanager.schedule.support;
 
 import com.viomanager.common.enums.ScheduleErrorCode;
 import com.viomanager.common.exception.BizException;
+import jakarta.annotation.Resource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -22,10 +23,18 @@ import org.springframework.stereotype.Component;
  * 模板 16 列定义见《排班绩效模块实现方案》§3.2（契约未定义处由方案定）：
  * 前 10 列 = course_timetable 契约字段 + 学期名称（表头必须有，值可空的列：任课教师/上课地点/节次名称），
  * 后 6 列为辅助信息列（学院/专业/年级/学号起/备注/重复标记，解析忽略不报错）。
- * 解析按**表头名**映射列（不按位置），学校导出列序变化不影响。
+ * 解析按**表头名**映射列（不按位置），学校导出列序变化不影响；
+ * 教务「排课结果一览表」格式（上课周次/班级/上课节次特征表头）由 SchoolExportSupport 适配展开。
  */
 @Component
 public class TimetableExcelSupport {
+
+    @Resource
+    private SchoolExportSupport schoolExportSupport;
+
+    @Resource
+    private CsvWorkbookSupport csvWorkbookSupport;
+
 
     /** 模板 16 列表头（顺序即模板列序）。 */
     private static final String[] HEADERS = {
@@ -80,9 +89,30 @@ public class TimetableExcelSupport {
         }
     }
 
-    /** TT02/TT05：解析课表文件（xls/xlsx 均支持），行级错误不中断整体解析。 */
+    /** TT02/TT05：解析课表文件（xlsx / xls / CSV 教务导出均支持），行级错误不中断整体解析。 */
     public ParsedTimetable parse(InputStream in) {
-        try (Workbook wb = WorkbookFactory.create(in)) {
+        try {
+            return parse(in.readAllBytes());
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(ScheduleErrorCode.PARSE_FAILED, "课表文件读取失败：" + e.getMessage());
+        }
+    }
+
+    /** 嗅探分发：PK 头 = xlsx、D0CF 头 = xls，其余按教务 CSV 导出转 POI 工作簿（CsvWorkbookSupport）。 */
+    private Workbook openWorkbook(byte[] bytes) throws java.io.IOException {
+        if (bytes.length >= 2 && bytes[0] == 'P' && bytes[1] == 'K') {
+            return new XSSFWorkbook(new ByteArrayInputStream(bytes));
+        }
+        if (bytes.length >= 2 && (bytes[0] & 0xFF) == 0xD0 && (bytes[1] & 0xFF) == 0xCF) {
+            return WorkbookFactory.create(new ByteArrayInputStream(bytes));
+        }
+        return csvWorkbookSupport.toWorkbook(bytes);
+    }
+
+    public ParsedTimetable parse(byte[] bytes) {
+        try (Workbook wb = openWorkbook(bytes)) {
             Sheet sheet = wb.getSheetAt(0);
             if (sheet == null || sheet.getRow(0) == null) {
                 throw new BizException(ScheduleErrorCode.PARSE_FAILED, "文件无表头行");
@@ -95,6 +125,10 @@ public class TimetableExcelSupport {
                 if (!name.isEmpty()) {
                     colByName.put(name, c);
                 }
+            }
+            //1.5 教务「排课结果一览表」特征表头齐备 → 交适配器（表头别名 + 行展开）
+            if (colByName.keySet().containsAll(SchoolExportSupport.SCHOOL_MARKERS)) {
+                return schoolExportSupport.parseSchool(sheet, fmt);
             }
             for (String required : REQUIRED_HEADERS) {
                 if (!colByName.containsKey(required)) {
@@ -203,10 +237,5 @@ public class TimetableExcelSupport {
             }
         }
         return true;
-    }
-
-    /** 供服务层重读存储文件时包一层（防大文件全量驻留：课表量小，字节数组足够）。 */
-    public ParsedTimetable parse(byte[] bytes) {
-        return parse(new ByteArrayInputStream(bytes));
     }
 }

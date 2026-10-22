@@ -80,7 +80,8 @@ vio:
     bucket: vio-files
     max-size-mb: 200
     # 视频：mp4 通用 / mov 手机拍摄 / avi 相机 / mkv 压制 / webm 网页端
-    allowed-extensions: jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx,ppt,pptx,zip,mp4,mov,avi,mkv,webm
+    # csv：教务课表导出为 CSV（2026-10-22 课表导入适配）
+    allowed-extensions: jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx,ppt,pptx,zip,mp4,mov,avi,mkv,webm,csv
     clamav:
       host: ${CLAMAV_HOST:localhost}
       port: ${CLAMAV_PORT:3310}

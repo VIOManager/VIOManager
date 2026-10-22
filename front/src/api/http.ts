@@ -147,14 +147,15 @@ export async function download(url: string, fallbackName: string): Promise<void>
 }
 
 /** 文件上传专用：multipart 表单 + X-Idempotency-Key 幂等键（规范 §6，键由调用方生成）
- *  fields 为随表单一起提交的附加字段（如文件服务必填的 bizType 业务来源） */
-export async function upload<T>(url: string, file: File, idempotencyKey: string, fields?: Record<string, string>): Promise<T> {
+ *  fields 为随表单一起提交的附加字段（如文件服务必填的 bizType 业务来源）
+ *  timeoutMs 可选：同步解析大文件（如全校课表导入）时放宽，缺省走实例默认 15s */
+export async function upload<T>(url: string, file: File, idempotencyKey: string, fields?: Record<string, string>, timeoutMs?: number): Promise<T> {
   const fd = new FormData()
   fd.append('file', file)
   if (fields) {
     for (const k of Object.keys(fields)) fd.append(k, fields[k])
   }
-  return (await http.post(url, fd, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
+  return (await http.post(url, fd, { headers: { 'X-Idempotency-Key': idempotencyKey }, timeout: timeoutMs })) as unknown as T
 }
 
 // ⚠️ 开发自验件：浏览器控制台 __http.get('/api/_probe/1002') 可验证三种拦截分支；

@@ -15,18 +15,23 @@ import { IMPORT_BATCH_STATUS_LABEL } from '@/config/labels'
 const batches = ref<ImportBatch[]>([])
 const mappings = ref<ClassMapping[]>([])
 const semesters = ref<Semester[]>([])
+const currentSemesterId = ref('') // 当前激活学期：映射列表按学期查询（免参后端报 1004 学期不存在）
+const onlyWithMember = ref(true) // 只看有在册成员的班级（全校课表班级多，登记在册的才是要管的）
 const checkedIds = ref<string[]>([])
 const uploading = ref(false)
 
 async function load() {
-  const [b, m] = await Promise.all([apiTimetableImports(), apiClassMappings()])
+  const [b, m] = await Promise.all([
+    apiTimetableImports(),
+    apiClassMappings({ semesterId: currentSemesterId.value || undefined, hasMember: onlyWithMember.value || undefined })
+  ])
   batches.value = b
   mappings.value = m
 }
 
 async function onDownloadTemplate() {
-  const r = await apiTimetableTemplate()
-  ElMessage.success(r.note)
+  await apiTimetableTemplate()
+  ElMessage.success('模板已下载（16 列 + 5 条示例行）')
 }
 
 /** 上传导入（幂等键随选择生成；同步解析，返回成败数） */
@@ -80,9 +85,17 @@ async function confirmPicked() {
   await load()
 }
 
-onMounted(async () => {
+/** 映射区切换学期（默认激活学期；教务导入常落在历史学期，需可切换查看/确认） */
+async function onMappingFilterChange() {
+  checkedIds.value = []
   await load()
+}
+
+onMounted(async () => {
   semesters.value = await apiSemestersSafe()
+  const active = semesters.value.find((s) => s.status === 'ACTIVE') ?? semesters.value[0]
+  if (active) currentSemesterId.value = String(active.id)
+  await load()
 })
 </script>
 
@@ -92,7 +105,7 @@ onMounted(async () => {
       <button class="btn-line" @click="onDownloadTemplate">下载导入模板</button>
       <label class="btn-ink" :class="{ disabled: uploading }">
         {{ uploading ? '解析中…' : '上传课表 Excel' }}
-        <input type="file" accept=".xlsx,.xls" style="display: none" :disabled="uploading" @change="onPickFile" />
+        <input type="file" accept=".xlsx,.xls,.csv" style="display: none" :disabled="uploading" @change="onPickFile" />
       </label>
       <span class="fs" style="font-size: 12px; color: var(--vio-ink-3)">同步解析：上传即出结果；学期名认不出的批次留在待归一化，人工指定后续跑</span>
     </div>
@@ -131,8 +144,14 @@ onMounted(async () => {
       <h6 class="panel-title">
         班级映射（确认后才参与空课统计）
         <button class="btn-line" style="float: right" :disabled="checkedIds.length === 0" @click="confirmPicked">确认所选（{{ checkedIds.length }}）</button>
+        <label style="float: right; margin-right: 12px; font-size: 12px; font-weight: 400; cursor: pointer">
+          <input type="checkbox" v-model="onlyWithMember" @change="onMappingFilterChange" /> 只看有在册成员的班级
+        </label>
+        <select class="input-line" style="float: right; width: 210px; margin-right: 8px" title="按学期查看班级映射" v-model="currentSemesterId" @change="onMappingFilterChange">
+          <option v-for="s in semesters" :key="s.id" :value="String(s.id)">{{ s.name }}</option>
+        </select>
       </h6>
-      <table class="ledger">
+      <table class="ledger" v-if="mappings.length > 0">
         <thead>
           <tr><th style="width: 40px"></th><th>课表班级名</th><th>档案班级名</th><th>年级</th><th>年级来源</th><th>状态</th></tr>
         </thead>
@@ -140,13 +159,16 @@ onMounted(async () => {
           <tr v-for="m in mappings" :key="m.id">
             <td><input v-if="!m.confirmed" type="checkbox" :checked="checkedIds.includes(m.id)" @change="toggle(m.id)" /></td>
             <td>{{ m.classKey }}</td>
-            <td>{{ m.className }}</td>
-            <td class="mono">{{ m.grade }} 级</td>
+            <td>{{ m.className || '—（无对应在册成员）' }}</td>
+            <td class="mono">{{ m.grade ? m.grade + ' 级' : '—' }}</td>
             <td>{{ m.gradeSource }}</td>
             <td><span class="stamp" :class="m.confirmed ? 'ok' : 'warn'">{{ m.confirmed ? '已确认' : '待确认' }}</span></td>
           </tr>
         </tbody>
       </table>
+      <p v-else class="empty-note" style="padding: 18px 4px">
+        {{ onlyWithMember ? '当前学期还没有在册成员匹配到课表班级——新增成员（或调整其班级）后会自动出现在这里，确认后即可参与空课统计' : '该学期暂无班级映射，先上传课表' }}
+      </p>
     </div>
 
     <el-dialog v-model="detailVisible" title="批次明细（错误行）" width="480px">

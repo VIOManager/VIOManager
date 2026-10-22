@@ -84,13 +84,14 @@ public class TimetableController {
         return Result.ok();
     }
 
-    /** TT06 映射列表（按学期 / 确认状态筛选） */
+    /** TT06 映射列表（按学期 / 确认状态 / 是否有在册成员筛选；档案班级名实时匹配） */
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
     @GetMapping("/class-mappings")
     public Result<List<ClassMappingVO>> classMappings(
             @RequestParam(value = "semesterId", required = false) Long semesterId,
-            @RequestParam(value = "confirmed", required = false) Boolean confirmed) {
-        return Result.ok(classMappingService.list(semesterId, confirmed));
+            @RequestParam(value = "confirmed", required = false) Boolean confirmed,
+            @RequestParam(value = "hasMember", required = false) Boolean hasMember) {
+        return Result.ok(classMappingService.list(semesterId, confirmed, hasMember));
     }
 
     /** TT07 批量确认映射（确认后参与空课统计，PRD 铁规则） */

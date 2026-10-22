@@ -11,13 +11,20 @@ import com.viomanager.schedule.entity.CourseTimetable;
 import com.viomanager.schedule.mapper.ClassMappingMapper;
 import com.viomanager.schedule.mapper.CourseTimetableMapper;
 import com.viomanager.schedule.service.ClassMappingService;
+import com.viomanager.schedule.support.ClassNameMatcher;
+import com.viomanager.schedule.support.FreeSlotCalcSupport;
+import com.viomanager.schedule.support.ScheduleMemberSupport;
 import com.viomanager.schedule.support.SemesterSupport;
 import com.viomanager.schedule.vo.ClassMappingVO;
 import com.viomanager.schedule.vo.CourseRecordVO;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,8 +45,11 @@ public class ClassMappingServiceImpl implements ClassMappingService {
     @Resource
     private SemesterSupport semesterSupport;
 
+    @Resource
+    private ScheduleMemberSupport memberSupport;
+
     @Override
-    public List<ClassMappingVO> list(Long semesterId, Boolean confirmed) {
+    public List<ClassMappingVO> list(Long semesterId, Boolean confirmed, Boolean hasMember) {
         semesterSupport.requireSemester(semesterId);
         //先物化标志位：wrapper 的三参 eq 会无条件求值第三参，Boolean 拆箱在 confirmed=null 时 NPE
         Integer confirmedFlag = confirmed == null ? null : (confirmed ? 1 : 0);
@@ -47,15 +57,31 @@ public class ClassMappingServiceImpl implements ClassMappingService {
                 .eq(ClassMapping::getSemesterId, semesterId)
                 .eq(confirmedFlag != null, ClassMapping::getConfirmed, confirmedFlag)
                 .orderByAsc(ClassMapping::getClassKey));
+        //读取时实时匹配在册成员（后续录入的成员即时生效；导入时的 memberClassName 只是快照不参与展示）
+        List<ScheduleMemberSupport.MemberBasic> members = memberSupport.allActiveWithClass();
+        Set<String> memberClassNames = new LinkedHashSet<>();
+        Map<String, ScheduleMemberSupport.MemberBasic> memberByClass = new LinkedHashMap<>();
+        for (ScheduleMemberSupport.MemberBasic member : members) {
+            memberClassNames.add(member.className());
+            memberByClass.putIfAbsent(member.className(), member);
+        }
         List<ClassMappingVO> result = new ArrayList<>();
         for (ClassMapping row : rows) {
+            String liveClassName = ClassNameMatcher.uniqueMatch(row.getClassKey(), memberClassNames);
+            if (Boolean.TRUE.equals(hasMember) && liveClassName == null) {
+                continue;
+            }
+            ScheduleMemberSupport.MemberBasic liveMember = liveClassName == null ? null : memberByClass.get(liveClassName);
+            String[] grade = liveMember == null
+                    ? new String[]{row.getGrade(), row.getGradeSource()}
+                    : FreeSlotCalcSupport.deriveGrade(liveMember.studentNo(), row);
             ClassMappingVO vo = new ClassMappingVO();
             vo.setId(row.getId());
             vo.setSemesterId(row.getSemesterId());
             vo.setClassKey(row.getClassNameRaw());
-            vo.setClassName(row.getMemberClassName());
-            vo.setGrade(row.getGrade());
-            vo.setGradeSource(row.getGradeSource());
+            vo.setClassName(liveClassName);
+            vo.setGrade(grade[0]);
+            vo.setGradeSource(grade[1]);
             vo.setConfirmed(row.getConfirmed() != null && row.getConfirmed() == 1);
             result.add(vo);
         }

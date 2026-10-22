@@ -14,7 +14,6 @@ import com.viomanager.schedule.mapper.ScheduleMapper;
 import com.viomanager.schedule.service.ScheduleRuleService;
 import com.viomanager.schedule.service.ScheduleService;
 import com.viomanager.schedule.support.FreeSlotCalcSupport;
-import com.viomanager.schedule.support.NameNormalizer;
 import com.viomanager.schedule.support.ScheduleKeyReleaseSupport;
 import com.viomanager.schedule.support.ScheduleMemberSupport;
 import com.viomanager.schedule.support.SemesterSupport;
@@ -126,9 +125,9 @@ public class ScheduleServiceImpl implements ScheduleService {
                 throw new BizException(ScheduleErrorCode.DUPLICATE_SCHEDULE_IN_WEEK,
                         "人员「" + member.name() + "」该周在该子组织已有排班");
             }
-            //5.课表冲突（8008：force=true 保存并打标记）
-            String classKey = NameNormalizer.classKey(member.className());
-            String conflictNote = member.className() == null ? null
+            //5.课表冲突（8008：force=true 保存并打标记）；班级键经映射宽容解析（教务↔档案两套写法）
+            String classKey = calcSupport.resolveClassKey(dto.getSemesterId(), member.className());
+            String conflictNote = member.className() == null || classKey == null ? null
                     : calcSupport.conflictNote(dto.getSemesterId(), dto.getWeekNo(), classKey,
                             assignment.getWeekday(), assignment.getSlotIndex());
             if (conflictNote != null && !Boolean.TRUE.equals(dto.getForce())) {
@@ -236,8 +235,8 @@ public class ScheduleServiceImpl implements ScheduleService {
             throw new BizException(ScheduleErrorCode.DUPLICATE_SCHEDULE_IN_WEEK, "该人员本周在该子组织已有排班");
         }
         ScheduleMemberSupport.MemberBasic member = memberSupport.requireMember(schedule.getMemberId());
-        String classKey = NameNormalizer.classKey(member.className());
-        String conflictNote = member.className() == null ? null
+        String classKey = calcSupport.resolveClassKey(schedule.getSemesterId(), member.className());
+        String conflictNote = member.className() == null || classKey == null ? null
                 : calcSupport.conflictNote(schedule.getSemesterId(), schedule.getWeekNo(), classKey, weekday, slotIndex);
         if (conflictNote != null) {
             throw new BizException(ScheduleErrorCode.COURSE_CONFLICT, conflictNote);
