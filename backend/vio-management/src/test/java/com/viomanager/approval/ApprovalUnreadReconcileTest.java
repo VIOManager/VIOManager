@@ -90,7 +90,7 @@ class ApprovalUnreadReconcileTest {
         return approvalClient.createApproval(dto);
     }
 
-    private UnreadCountVO vo(long todo, long result) {
+    private UnreadCountVO vo(int todo, int result) {
         UnreadCountVO vo = new UnreadCountVO();
         vo.setTodoCount(todo);
         vo.setResultCount(result);
