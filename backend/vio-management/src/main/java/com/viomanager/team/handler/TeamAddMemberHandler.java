@@ -2,6 +2,7 @@ package com.viomanager.team.handler;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.viomanager.approval.handler.ApprovalHandler;
 import com.viomanager.common.enums.TeamErrorCode;
 import com.viomanager.common.exception.BizException;
@@ -79,15 +80,16 @@ public class TeamAddMemberHandler implements ApprovalHandler {
             if (c != null && c > 0) {
                 throw new BizException(TeamErrorCode.TARGET_IN_TEAM_OR_PENDING);
             }
-            // 入队（UNCONFIRMED，待本人确认）
+            // 入队（UNCONFIRMED，待本人确认）。重入队走 upsert：终态旧行复位，避免撞 uk_team_member
             TeamMember m = new TeamMember();
+            m.setId(IdWorker.getId()); // upsertRejoin 自定义 SQL 不走 ASSIGN_ID，必须显式给
             m.setTeamId(teamId);
             m.setMemberId(memberId);
             m.setMemberName(memberName);
             m.setMemberOrgId(queryOrgId(memberId));
             m.setIsLeader(0);
             m.setStatus("UNCONFIRMED");
-            teamMemberMapper.insert(m);
+            teamMemberMapper.upsertRejoin(m);
         } finally {
             lockSupport.release(lock);
         }

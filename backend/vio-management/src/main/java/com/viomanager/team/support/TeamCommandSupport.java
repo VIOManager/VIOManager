@@ -61,10 +61,21 @@ public class TeamCommandSupport {
         return approvalClient.createApproval(dto);
     }
 
+    /**
+     * 组队申请串行化：锁比赛行。封住"并发同名申请都读到 0 待审批然后全部放行"的 TOCTOU 窗口
+     * （2026-10-16 并发套件 K4 抓出：8 路同名组队全部成单）。调用方必须已在事务内。
+     */
+    public void lockContest(Long contestId) {
+        jdbcTemplate.queryForObject(
+                "SELECT id FROM contest WHERE id = ? AND deleted = 0 FOR UPDATE", Long.class, contestId);
+    }
+
     /** 队名同比赛唯一校验：含待审批 TEAM_CREATE（excludeTeamId 非空时跳过审批检查，用于编辑） */
     public void ensureNameUnique(Long contestId, String name, Long excludeTeamId) {
+        //两条 COUNT 必须当前读（FOR UPDATE）：RR 事务快照在 loadContext 就建立了，
+        //拿锁等待后普通 SELECT 仍读旧快照，看不见前一个并发事务已提交的同名待审批单（K4 二轮复测确认）
         String sql = "SELECT COUNT(*) FROM team WHERE contest_id = ? AND name = ? AND deleted = 0"
-                + (excludeTeamId != null ? " AND id <> ?" : "");
+                + (excludeTeamId != null ? " AND id <> ?" : "") + " FOR UPDATE";
         Integer tc = excludeTeamId != null
                 ? jdbcTemplate.queryForObject(sql, Integer.class, contestId, name, excludeTeamId)
                 : jdbcTemplate.queryForObject(sql, Integer.class, contestId, name);
@@ -73,7 +84,7 @@ public class TeamCommandSupport {
         Integer pc = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM approval WHERE biz_type = 'TEAM_CREATE' AND contest_id = ? "
                         + "AND status = 'PENDING' AND deleted = 0 "
-                        + "AND JSON_UNQUOTE(JSON_EXTRACT(biz_payload, '$.name')) = ?",
+                        + "AND JSON_UNQUOTE(JSON_EXTRACT(biz_payload, '$.name')) = ? FOR UPDATE",
                 Integer.class, contestId, name);
         if (pc != null && pc > 0) throw new BizException(TeamErrorCode.TEAM_NAME_EXISTS);
     }

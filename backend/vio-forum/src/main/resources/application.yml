@@ -1,0 +1,51 @@
+# 论坛服务配置：与管理系统同套骨架组件，差异三点见 vio-forum/pom.xml 头注释。
+# 一切可用环境变量覆盖；本地默认值对齐 backend/docker-compose.yml（同实例不同库）。
+# ⚠️ 启动环境：若与管理系统同一 shell 先后启动，务必显式 MYSQL_DATABASE=vioforum，
+#    防止继承管理侧导出的 MYSQL_PORT/MYSQL_DATABASE 连错库（方案 §五环境推演）。
+server:
+  port: 8089   # 论坛服务独立端口；生产由 Nginx 按路径转发（/api/forum/** 与 /api/tech-posts*）
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/css,application/javascript
+    min-response-size: 1KB
+
+spring:
+  application:
+    name: vio-forum
+  datasource:
+    # 论坛独立库：本地默认 vioforum（同 MySQL 实例、独立 schema，与 viomanager 不共享）
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${MYSQL_DATABASE:vioforum}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:dev-root-123}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # ⚠️ V1 是论坛库全量基线与表结构唯一契约（管理库对应 docs/db/initsql.sql）；
+    #    禁改（Flyway 校验哈希，注释也算内容）；改表只新增 V2+
+
+app:
+  version: @project.version@
+
+# 论坛调管理侧换名接口的地址（forum_user 快照刷新用，方案 §二.3）
+vio:
+  jwt:
+    # 与主站同密钥——账密唯一交集；生产必须用环境变量覆盖开发默认值
+    secret: ${JWT_SECRET:viomanager-local-dev-secret-key-32bytes-minimum}
+    expire-hours: 2
+  auth:
+    # 免认证路径：论坛无登录接口（登录在主站），只有健康检查
+    skip-paths: /api/health
+  mybatis:
+    data-scope:
+      enabled: false   # 方案 §二.1：论坛无组织数据范围，且学生默认拒绝规则会拦死全部查询
+  idempotent:
+    expire-hours: 24
+  audit:
+    enabled: true
+    async: true
+    # 跨库接入主站审计表（2026-10-18 拍板，推翻 2026-10-16 M3"论坛不进审计链路"）：
+    # 同实例限定表名直写管理库，主站侧默认值 audit_log 不变；拆库分实例时此配置失效须切第二数据源
+    table-name: viomanager.audit_log
+  forum:
+    # 管理侧 my-profile 地址：forum_user 快照首建/orgId 变化时转发用户 JWT 调用
+    profile-url: ${MANAGEMENT_BASE_URL:http://localhost:8088}/api/auth/my-profile

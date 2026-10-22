@@ -87,8 +87,8 @@ public class ApprovalUnreadCache {
                 return null;
             }
             UnreadCountVO vo = new UnreadCountVO();
-            vo.setTodoCount(Long.parseLong(todo.toString()));
-            vo.setResultCount(Long.parseLong(result.toString()));
+            vo.setTodoCount(Integer.parseInt(todo.toString()));
+            vo.setResultCount(Integer.parseInt(result.toString()));
             return vo;
         } catch (DataAccessException | NumberFormatException e) {
             trip(e);

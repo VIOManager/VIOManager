@@ -7,7 +7,7 @@
  *     → 8005 同周同人同子组织已有（拍板：一周一个班）→ 8008 课表冲突（带 force 强制保存并打冲突标记）
  *   SC02/TT02 带幂等头；学生只有 SC05 我的排班
  */
-import { del, get, post, postIdem, put, upload } from './http'
+import { del, download, get, post, postIdem, put, upload } from './http'
 
 // ── 课表导入 ──
 
@@ -111,14 +111,14 @@ export interface ScheduleRule {
 
 // ── TT01–TT08 课表导入 ──
 
-/** TT01 模板下载（mock 返回提示文本） */
-export function apiTimetableTemplate(): Promise<{ note: string }> {
-  return get('/api/timetables/import-template')
+/** TT01 模板下载（后端返回 xlsx 二进制流，走 blob 下载；mock 时代曾按 {note} 文本解析，联调修正） */
+export function apiTimetableTemplate(): Promise<void> {
+  return download('/api/timetables/import-template', '课表导入模板.xlsx')
 }
 
-/** TT02 上传导入（multipart + 幂等头；同步解析返回批次与成败数） */
+/** TT02 上传导入（multipart + 幂等头；同步解析返回批次与成败数。教务全校课表展开近 10 万条，超时放宽 120s） */
 export function apiTimetableImport(file: File, idempotencyKey: string): Promise<{ batchId: string; totalCount: number; successCount: number; failCount: number }> {
-  return upload('/api/timetables/imports', file, idempotencyKey)
+  return upload('/api/timetables/imports', file, idempotencyKey, undefined, 120_000)
 }
 
 export function apiTimetableImports(semesterId?: string): Promise<ImportBatch[]> {
@@ -134,7 +134,8 @@ export function apiAssignImportSemester(id: string, semesterId: string): Promise
   return put('/api/timetables/imports/' + id + '/semester', { semesterId })
 }
 
-export function apiClassMappings(q?: { semesterId?: string; confirmed?: boolean }): Promise<ClassMapping[]> {
+/** TT06 映射列表（hasMember=true 只看有在册成员的班级；档案班级名由后端实时匹配，新成员即时生效） */
+export function apiClassMappings(q?: { semesterId?: string; confirmed?: boolean; hasMember?: boolean }): Promise<ClassMapping[]> {
   return get('/api/timetables/class-mappings', (q ?? {}) as Record<string, unknown>)
 }
 
