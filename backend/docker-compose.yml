@@ -1,4 +1,4 @@
-# 本地开发环境：四件套（MySQL + MinIO + ClamAV + Redis）默认启动；后端两个服务挂 app profile 按需带起。
+# 本地开发环境：四件套（MySQL + MinIO + ClamAV + Redis）默认启动；后端三个服务挂 app profile 按需带起。
 # 生产 6 容器口径（含前端 nginx、AI 服务）属部署层，不在此文件（骨架方案 K5 结论）。
 # 用法：cd backend && docker compose up -d（日常四件套，应用跑 IDEA）；
 #      一键全套演示/冒烟：docker compose --profile app up -d --build
@@ -123,6 +123,28 @@ services:
         condition: service_healthy   # kb 自己的 Flyway 建 kb 库三表两基座，同样要等库就绪
       redis:
         condition: service_started
+
+  # 论坛服务（8089）：与 app/kb 同一镜像、构建一次，command 换跑 forum.jar。
+  # 独立库 vioforum（新卷由 mysql-init 自动建，老卷手工补建一次）；无 redis/minio 依赖；
+  # token 由主服务签发（同 JWT_SECRET 只验签）；MYSQL_DATABASE 必须显式传 vioforum 防走管理库默认值。
+  forum:
+    image: vio-backend-app:dev
+    container_name: vio-forum-app
+    profiles: ["app"]
+    command: ["forum.jar"]
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: vioforum
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev-root-123}
+      JWT_SECRET: ${JWT_SECRET:-viomanager-local-dev-secret-key-32bytes-minimum}
+      TZ: Asia/Shanghai
+    ports:
+      - "8089:8089"
+    depends_on:
+      mysql:
+        condition: service_healthy   # forum 的 Flyway 建 vioforum 库表，同样要等库就绪
 
 volumes:
   vio-mysql-data:
