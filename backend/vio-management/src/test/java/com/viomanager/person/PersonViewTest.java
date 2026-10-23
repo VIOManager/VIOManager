@@ -115,6 +115,39 @@ class PersonViewTest extends PersonTestBase {
     }
 
     @Test
+    void studentCanSearchOptionsWithLeanFields() throws Exception {
+        //M14 受限候选搜索：学生可用（队长流程加载候选的受限口），字段只有目录级七项，
+        //敏感列（手机号/身份证/邮箱）从查询 select 根上就不带出
+        mockMvc.perform(get("/api/members/options?keyword=目标")
+                        .header("Authorization", "Bearer " + strangerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.list[0].name").value("目标人"))
+                .andExpect(jsonPath("$.data.list[0].studentNo").value("s94011"))
+                .andExpect(jsonPath("$.data.list[0].memberType").value("STUDENT"))
+                .andExpect(jsonPath("$.data.list[0].phone").doesNotExist())
+                .andExpect(jsonPath("$.data.list[0].idCard").doesNotExist())
+                .andExpect(jsonPath("$.data.list[0].email").doesNotExist());
+    }
+
+    @Test
+    void optionsFilterByMemberType() throws Exception {
+        //指导教师候选口径：memberType=TEACHER 只出教师；学生关键词配教师类型应为空
+        jdbcTemplate.update(
+                "INSERT INTO member (id, name, job_no, org_id, member_type, status, has_account) "
+                        + "VALUES (94199, '选项教师', 't9901', " + ORG_SUB + ", 'TEACHER', 1, 0)");
+        mockMvc.perform(get("/api/members/options?keyword=选项教师&memberType=TEACHER")
+                        .header("Authorization", "Bearer " + captainToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.list[0].name").value("选项教师"))
+                .andExpect(jsonPath("$.data.list[0].jobNo").value("t9901"));
+        mockMvc.perform(get("/api/members/options?keyword=目标人&memberType=TEACHER")
+                        .header("Authorization", "Bearer " + captainToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
     void idCardRejectedForStrangerWith3010() throws Exception {
         mockMvc.perform(get("/api/members/" + PERSON_TARGET + "/id-card")
                         .header("Authorization", "Bearer " + strangerToken))

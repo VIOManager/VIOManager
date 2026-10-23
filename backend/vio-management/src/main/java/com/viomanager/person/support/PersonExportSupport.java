@@ -1,5 +1,6 @@
 package com.viomanager.person.support;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.exception.BizException;
@@ -11,7 +12,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
@@ -31,6 +35,9 @@ public class PersonExportSupport {
     @Resource
     private PersonQuerySupport querySupport;
 
+    @Resource
+    private PersonSensitiveSupport sensitiveSupport;
+
     /** M06：14 列模板（表头 + 示例行）写入响应 */
     public void writeTemplate(HttpServletResponse response) {
         PersonExcelWriter.prepareXlsxResponse(response, "人员导入模板.xlsx");
@@ -47,7 +54,7 @@ public class PersonExportSupport {
         QueryWrapper<Person> wrapper = querySupport.buildWrapper(dto);
         List<Person> records = personMapper.selectList(wrapper.last("LIMIT " + MAX_EXPORT_ROWS));
         //2.组装与模板同列的 14 列行
-        List<List<String>> rows = querySupport.buildExportRows(records);
+        List<List<String>> rows = buildExportRows(records);
         //3.响应头 + 写出
         String fileName = "人员档案导出_" + LocalDateTime.now()
                 .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")) + ".xlsx";
@@ -57,5 +64,34 @@ public class PersonExportSupport {
         } catch (IOException e) {
             throw new BizException(CommonErrorCode.INTERNAL_ERROR, "导出文件写出失败");
         }
+    }
+
+    /**
+     * 导出行组装：与模板同列的 14 列（导出→改→再导入可回环）。
+     * 身份证解密明文——export 仅超管可调（controller 注解收口），敏感面与契约外补充接口一并待登记。
+     * 证件照/电子签名两列输出占位空串：照片走 M08 文件服务回填，Excel 放不了图片。
+     * 2026-10-23 自 PersonQuerySupport 迁入（行数铁律 + 导出行组装本就归导出支撑）。
+     */
+    private List<List<String>> buildExportRows(List<Person> records) {
+        Map<Long, String> orgNames = querySupport.loadOrgNames(
+                records.stream().map(Person::getOrgId).filter(Objects::nonNull).distinct().toList());
+        List<List<String>> rows = new ArrayList<>(records.size());
+        for (Person person : records) {
+            rows.add(List.of(
+                    StrUtil.nullToEmpty(person.getName()),
+                    StrUtil.firstNonBlank(person.getStudentNo(), person.getJobNo(), ""),
+                    StrUtil.nullToEmpty(person.getPhone()),
+                    StrUtil.nullToEmpty(person.getCollege()),
+                    StrUtil.nullToEmpty(person.getMajor()),
+                    StrUtil.nullToEmpty(person.getClassName()),
+                    StrUtil.nullToEmpty(person.getGender()),
+                    StrUtil.nullToEmpty(person.getNation()),
+                    StrUtil.nullToEmpty(sensitiveSupport.decryptIdCard(person.getIdCard())),
+                    StrUtil.nullToEmpty(person.getEmail()),
+                    "", "",
+                    orgNames.getOrDefault(person.getOrgId(), ""),
+                    StrUtil.nullToEmpty(person.getMemberType())));
+        }
+        return rows;
     }
 }

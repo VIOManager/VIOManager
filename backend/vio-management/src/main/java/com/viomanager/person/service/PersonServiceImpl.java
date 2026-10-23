@@ -10,6 +10,7 @@ import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.PageResult;
 import com.viomanager.common.result.Result;
 import com.viomanager.file.service.IFileService;
+import com.viomanager.person.dto.MemberOptionVO;
 import com.viomanager.person.dto.PersonAccountDTO;
 import com.viomanager.person.dto.PersonCreateDTO;
 import com.viomanager.person.dto.PersonFileBindDTO;
@@ -46,8 +47,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class PersonServiceImpl implements PersonService {
 
-    private static final int MAX_PAGE_SIZE = 100;
-
     @Resource
     private PersonMapper personMapper;
 
@@ -77,27 +76,15 @@ public class PersonServiceImpl implements PersonService {
 
     @Override
     public Result<PageResult<PersonVO>> page(PersonQueryDTO dto) {
-        //1.分页参数兜底（规范 §2.3：默认 1/20，size 上限 100）
-        int page = dto.getPage() == null || dto.getPage() < 1 ? 1 : dto.getPage();
-        int size = dto.getSize() == null || dto.getSize() < 1 ? 20 : Math.min(dto.getSize(), MAX_PAGE_SIZE);
-        //2.筛选拼装 + 部门管理员子树过滤（Mapper 改 SELF 后由服务层负责）
-        QueryWrapper<Person> wrapper = querySupport.buildWrapper(dto);
-        querySupport.applyDeptAdminSubtree(wrapper);
-        //3.分页查询
-        Page<Person> result = personMapper.selectPage(new Page<>(page, size), wrapper);
-        List<Person> records = result.getRecords();
-        //4.批量取技能与组织名（防 N+1）后按列表口径裁剪（身份证/证件照/签名/邮箱恒不进列表）
-        Map<Long, List<String>> skillsMap = querySupport.loadSkills(
-                records.stream().map(Person::getId).toList());
-        Map<Long, String> orgNames = querySupport.loadOrgNames(
-                records.stream().map(Person::getOrgId).filter(Objects::nonNull).distinct().toList());
-        List<PersonVO> list = new ArrayList<>(records.size());
-        for (Person person : records) {
-            PersonVO vo = querySupport.toVO(person, skillsMap.get(person.getId()), View.FULL, true);
-            vo.setOrgName(orgNames.get(person.getOrgId()));
-            list.add(vo);
-        }
-        return Result.ok(PageResult.of(list, result.getTotal(), page, size));
+        //查询逻辑（筛选/子树/裁剪）在 PersonQuerySupport.page
+        return Result.ok(querySupport.page(dto));
+    }
+
+    @Override
+    public Result<PageResult<MemberOptionVO>> options(String keyword, String memberType,
+                                                       Integer page, Integer size) {
+        //M14 受限候选搜索：查询逻辑（列裁剪/过滤/分页兜底）在 PersonQuerySupport.options
+        return Result.ok(querySupport.options(keyword, memberType, page, size));
     }
 
     @Override

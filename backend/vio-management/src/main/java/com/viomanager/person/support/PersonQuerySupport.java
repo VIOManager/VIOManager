@@ -2,13 +2,17 @@ package com.viomanager.person.support;
 
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
+import com.viomanager.common.result.PageResult;
 import com.viomanager.dict.service.IDictService;
 import com.viomanager.dict.vo.DictItemVO;
+import com.viomanager.person.dto.MemberOptionVO;
 import com.viomanager.person.dto.PersonQueryDTO;
 import com.viomanager.person.dto.PersonVO;
 import com.viomanager.person.entity.Person;
+import com.viomanager.person.mapper.PersonMapper;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,10 +28,16 @@ import org.springframework.stereotype.Component;
 
 /**
  * 人员档案查询支撑：筛选拼装、部门管理员子树过滤（Mapper 改 SELF 后拦截器不再注入）、
- * 批量取技能/组织名、以及 M02 四档视角的出参裁剪（toVO）。
+ * 批量取技能/组织名、M01 分页列表、M14 受限候选搜索，以及 M02 四档视角的出参裁剪（toVO）。
  */
 @Component
 public class PersonQuerySupport {
+
+    /** M01 分页 size 上限（规范 §2.3） */
+    private static final int MAX_PAGE_SIZE = 100;
+
+    /** M14 受限候选搜索 size 上限：比 M01 更紧，防逐页批量枚举全量通讯录 */
+    private static final int MAX_OPTIONS_SIZE = 50;
 
     @Resource
     private PersonSensitiveSupport sensitiveSupport;
@@ -40,6 +50,74 @@ public class PersonQuerySupport {
 
     @Resource
     private PersonViewerSupport viewerSupport;
+
+    @Resource
+    private PersonMapper personMapper;
+
+    /**
+     * M01 分页列表（自 PersonServiceImpl 迁入，查询侧归查询支撑）：
+     * 分页兜底 + 筛选拼装 + 部门管理员子树过滤 + 批量技能/组织名 + 列表口径裁剪。
+     */
+    public PageResult<PersonVO> page(PersonQueryDTO dto) {
+        //1.分页参数兜底（规范 §2.3：默认 1/20，size 上限 100）
+        int page = dto.getPage() == null || dto.getPage() < 1 ? 1 : dto.getPage();
+        int size = dto.getSize() == null || dto.getSize() < 1 ? 20 : Math.min(dto.getSize(), MAX_PAGE_SIZE);
+        //2.筛选拼装 + 部门管理员子树过滤（Mapper 改 SELF 后由本支撑负责）
+        QueryWrapper<Person> wrapper = buildWrapper(dto);
+        applyDeptAdminSubtree(wrapper);
+        //3.分页查询
+        Page<Person> result = personMapper.selectPage(new Page<>(page, size), wrapper);
+        List<Person> records = result.getRecords();
+        //4.批量取技能与组织名（防 N+1）后按列表口径裁剪（身份证/证件照/签名/邮箱恒不进列表）
+        Map<Long, List<String>> skillsMap = loadSkills(
+                records.stream().map(Person::getId).toList());
+        Map<Long, String> orgNames = loadOrgNames(
+                records.stream().map(Person::getOrgId).filter(Objects::nonNull).distinct().toList());
+        List<PersonVO> list = new ArrayList<>(records.size());
+        for (Person person : records) {
+            PersonVO vo = toVO(person, skillsMap.get(person.getId()), PersonViewerSupport.View.FULL, true);
+            vo.setOrgName(orgNames.get(person.getOrgId()));
+            list.add(vo);
+        }
+        return PageResult.of(list, result.getTotal(), page, size);
+    }
+
+    /**
+     * M14 受限候选搜索（队长流程：预填成员 / 指导教师候选）：
+     * 所有登录角色可用；只 select 目录级七字段所需列（组长 SQL 规矩——查一堆只用几个字段是大忌，
+     * 敏感列从查询根上就不带出，比出参置空更稳）；只出启用状态成员；keyword 走姓名/学号/学工号模糊。
+     */
+    public PageResult<MemberOptionVO> options(String keyword, String memberType, Integer page, Integer size) {
+        int p = page == null || page < 1 ? 1 : page;
+        int s = size == null || size < 1 ? 20 : Math.min(size, MAX_OPTIONS_SIZE);
+        QueryWrapper<Person> wrapper = new QueryWrapper<>();
+        wrapper.select("id", "name", "member_type", "student_no", "job_no", "org_id");
+        if (StrUtil.isNotBlank(keyword)) {
+            String kw = keyword.trim();
+            wrapper.and(w -> w.like("name", kw).or().like("student_no", kw).or().like("job_no", kw));
+        }
+        if (StrUtil.isNotBlank(memberType)) {
+            wrapper.eq("member_type", memberType);
+        }
+        wrapper.eq("status", 1);
+        wrapper.orderByAsc("name");
+        Page<Person> result = personMapper.selectPage(new Page<>(p, s), wrapper);
+        Map<Long, String> orgNames = loadOrgNames(
+                result.getRecords().stream().map(Person::getOrgId).filter(Objects::nonNull).distinct().toList());
+        List<MemberOptionVO> list = new ArrayList<>(result.getRecords().size());
+        for (Person person : result.getRecords()) {
+            MemberOptionVO vo = new MemberOptionVO();
+            vo.setId(person.getId());
+            vo.setName(person.getName());
+            vo.setMemberType(person.getMemberType());
+            vo.setStudentNo(person.getStudentNo());
+            vo.setJobNo(person.getJobNo());
+            vo.setOrgId(person.getOrgId());
+            vo.setOrgName(orgNames.get(person.getOrgId()));
+            list.add(vo);
+        }
+        return PageResult.of(list, result.getTotal(), p, s);
+    }
 
     /**
      * M01 筛选拼装：keyword 单搜（姓名/学号/手机号，契约 M01 与前端 mock 口径）、
@@ -134,34 +212,6 @@ public class PersonQuerySupport {
         List<String> names = jdbcTemplate.queryForList(
                 "SELECT login_name FROM sys_user WHERE member_id = ? AND deleted = 0", String.class, memberId);
         return names.isEmpty() ? null : names.get(0);
-    }
-
-    /**
-     * 导出行组装：与模板同列的 14 列（导出→改→再导入可回环）。
-     * 身份证解密明文——export 仅超管可调（controller 注解收口），敏感面与契约外补充接口一并待登记。
-     * 证件照/电子签名两列输出占位空串：照片走 M08 文件服务回填，Excel 放不了图片。
-     */
-    public List<List<String>> buildExportRows(List<Person> records) {
-        Map<Long, String> orgNames = loadOrgNames(
-                records.stream().map(Person::getOrgId).filter(Objects::nonNull).distinct().toList());
-        List<List<String>> rows = new ArrayList<>(records.size());
-        for (Person person : records) {
-            rows.add(List.of(
-                    StrUtil.nullToEmpty(person.getName()),
-                    StrUtil.firstNonBlank(person.getStudentNo(), person.getJobNo(), ""),
-                    StrUtil.nullToEmpty(person.getPhone()),
-                    StrUtil.nullToEmpty(person.getCollege()),
-                    StrUtil.nullToEmpty(person.getMajor()),
-                    StrUtil.nullToEmpty(person.getClassName()),
-                    StrUtil.nullToEmpty(person.getGender()),
-                    StrUtil.nullToEmpty(person.getNation()),
-                    StrUtil.nullToEmpty(sensitiveSupport.decryptIdCard(person.getIdCard())),
-                    StrUtil.nullToEmpty(person.getEmail()),
-                    "", "",
-                    orgNames.getOrDefault(person.getOrgId(), ""),
-                    StrUtil.nullToEmpty(person.getMemberType())));
-        }
-        return rows;
     }
 
     /**

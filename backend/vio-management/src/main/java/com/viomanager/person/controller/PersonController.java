@@ -5,6 +5,7 @@ import com.viomanager.common.auth.RequireRole;
 import com.viomanager.common.idempotent.Idempotent;
 import com.viomanager.common.result.PageResult;
 import com.viomanager.common.result.Result;
+import com.viomanager.person.dto.MemberOptionVO;
 import com.viomanager.person.dto.PersonAccountDTO;
 import com.viomanager.person.dto.PersonCreateDTO;
 import com.viomanager.person.dto.PersonFileBindDTO;
@@ -49,6 +50,18 @@ public class PersonController {
     @GetMapping
     public Result<PageResult<PersonVO>> page(@Valid PersonQueryDTO dto) {
         return personService.page(dto);
+    }
+
+    /** M14 受限候选搜索（队长流程用）：任意登录用户可调（同 M02 口径不在此处限角色），
+     *  出参仅目录级七字段无任何敏感列；B 线队长端加载预填成员/指导教师候选专用
+     *  （原先直调 M01 必 403，2026-10-23 增此受限口）。字面路径优先于 /{id} 模板匹配。 */
+    @GetMapping("/options")
+    public Result<PageResult<MemberOptionVO>> options(
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "memberType", required = false) String memberType,
+            @RequestParam(value = "page", required = false, defaultValue = "1") Integer page,
+            @RequestParam(value = "size", required = false, defaultValue = "20") Integer size) {
+        return personService.options(keyword, memberType, page, size);
     }
 
     /** M02 详情：任意登录用户可调，出参按四档视角裁剪（服务层），不在此处限角色 */
