@@ -12,7 +12,7 @@ import lombok.Data;
 @Data
 public class PersonQueryDTO {
 
-    /** 关键字（模糊搜索：姓名 / 学号 / 学院 / 专业） */
+    /** 关键字（模糊搜索：姓名 / 学号 / 手机号，对齐契约 M01 与前端 mock） */
     private String keyword;
 
     /** 所属组织 ID（精确筛选；部门管理员会被服务端再叠加子树过滤） */

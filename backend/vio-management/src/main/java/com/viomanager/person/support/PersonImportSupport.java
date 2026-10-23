@@ -1,8 +1,11 @@
 package com.viomanager.person.support;
 
 import cn.hutool.core.util.StrUtil;
+import com.viomanager.common.auth.CurrentUser;
+import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.CommonErrorCode;
 import com.viomanager.common.exception.BizException;
+import com.viomanager.datascop.OrgScopeSupport;
 import com.viomanager.person.dto.PersonCreateDTO;
 import com.viomanager.person.dto.PersonImportVO;
 import jakarta.annotation.Resource;
@@ -12,6 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,10 +41,20 @@ public class PersonImportSupport {
     private PersonCommandSupport personCommandSupport;
 
     @Resource
+    private OrgScopeSupport orgScopeSupport;
+
+    @Resource
     private JdbcTemplate jdbcTemplate;
 
     public PersonImportVO importExcel(MultipartFile file) {
-        //1.解析 xlsx（文件空/格式错/解析失败在 read 内抛 1001）
+        //1.越权封堵（与写接口 assertAdminCanManage 同口径）：导入是写操作，
+        //  部门管理员只能往自己组织子树导人（逐行校验在 validateRow 内），其他角色防御性拒绝
+        CurrentUser user = UserHolder.getUser();
+        if (user == null || !"SUPER_ADMIN".equals(user.getRole()) && !"DEPT_ADMIN".equals(user.getRole())) {
+            throw new BizException(CommonErrorCode.FORBIDDEN);
+        }
+        CurrentUser deptAdmin = "DEPT_ADMIN".equals(user.getRole()) ? user : null;
+        //2.解析 xlsx（文件空/格式错/解析失败在 read 内抛 1001）
         List<List<String>> rows = PersonExcelSupport.read(file);
         if (rows.size() < 2) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "Excel 没有数据行");
@@ -49,7 +63,7 @@ public class PersonImportSupport {
             throw new BizException(CommonErrorCode.PARAM_INVALID,
                     "单次最多导入 " + MAX_IMPORT_ROWS + " 行，请分批上传");
         }
-        //2.表头按文字定位列（改列序不用改代码；缺必备列直接判模板错）
+        //3.表头按文字定位列（改列序不用改代码；缺必备列直接判模板错）
         Map<String, Integer> colMap = headerIndex(rows.get(0));
         for (String required : new String[]{"姓名", "学号/学工号", "所属组织", "类型"}) {
             if (!colMap.containsKey(required)) {
@@ -57,7 +71,7 @@ public class PersonImportSupport {
                         "模板表头缺少「" + required + "」列，请下载最新模板填写");
             }
         }
-        //3.逐行处理：合法入库 / 已存在跳过 / 非法记错误
+        //4.逐行处理：合法入库 / 已存在跳过 / 非法记错误
         int success = 0;
         List<PersonImportVO.RowError> errors = new ArrayList<>();
         Set<String> seenStudentNos = new HashSet<>();
@@ -65,26 +79,34 @@ public class PersonImportSupport {
             int excelRowNo = i + 1;
             List<String> row = rows.get(i);
             String cell = text(row, colMap, "姓名");
-            //3.1姓名必填
+            //4.1姓名必填
             if (StrUtil.isBlank(cell)) {
                 errors.add(new PersonImportVO.RowError(excelRowNo, "姓名不能为空"));
                 continue;
             }
-            //3.2学号：已存在（库里或本文件里）跳过——契约原文，不计成功也不计失败
+            //4.2学号：已存在（库里或本文件里）跳过——契约原文，不计成功也不计失败
             String studentNo = StrUtil.trimToNull(text(row, colMap, "学号/学工号"));
             if (studentNo != null && (seenStudentNos.contains(studentNo) || studentNoExists(studentNo))) {
                 continue;
             }
-            //3.3其余列校验，出问题记行号与原因
-            String reason = validateRow(row, colMap);
+            //4.2.1 提前追踪：不管后续 validateRow 成功还是失败，该学号都进 seenStudentNos——
+            //  否则同文件后面再出现同学号时，因为前一行没入库/没追踪，会漏过 skip 继续走 insert
+            if (studentNo != null) {
+                seenStudentNos.add(studentNo);
+            }
+            //4.3其余列校验，出问题记行号与原因
+            String reason = validateRow(row, colMap, deptAdmin);
             if (reason != null) {
                 errors.add(new PersonImportVO.RowError(excelRowNo, reason));
                 continue;
             }
-            //3.4组装入库（身份证加密在 insertPerson 内）
-            personCommandSupport.insertPerson(toDto(row, colMap));
-            if (studentNo != null) {
-                seenStudentNos.add(studentNo);
+            //4.4组装入库（身份证加密在 insertPerson 内）；并发等场景仍可能撞唯一键/超长，
+            //  兜底转逐行错误（外层 importExcel 已无 @Transactional，单行异常不会拖垮整批）
+            try {
+                personCommandSupport.insertPerson(toDto(row, colMap));
+            } catch (DataIntegrityViolationException e) {
+                errors.add(new PersonImportVO.RowError(excelRowNo, "数据冲突：学号/学工号已存在或字段超长"));
+                continue;
             }
             success++;
         }
@@ -92,27 +114,62 @@ public class PersonImportSupport {
     }
 
     /** 行内非姓名列的校验：返回 null 表示通过，否则是错误原因 */
-    private String validateRow(List<String> row, Map<String, Integer> colMap) {
-        //1.手机号：可空，填了须合法
+    private String validateRow(List<String> row, Map<String, Integer> colMap, CurrentUser deptAdmin) {
+        //1.姓名/学号/学院/专业/班级/民族/邮箱长度对齐建表列宽——超长在 MySQL 严格模式下
+        //  会 Data too long 连坐整批回滚，必须提前逐行拦
+        if (text(row, colMap, "姓名").trim().length() > 50) {
+            return "姓名最长 50 字";
+        }
+        String studentNo = StrUtil.trimToNull(text(row, colMap, "学号/学工号"));
+        if (studentNo != null && studentNo.length() > 32) {
+            return "学号/学工号最长 32 字";
+        }
+        String college = text(row, colMap, "学院");
+        if (college.length() > 100) {
+            return "学院最长 100 字";
+        }
+        String major = text(row, colMap, "专业");
+        if (major.length() > 100) {
+            return "专业最长 100 字";
+        }
+        String className = text(row, colMap, "班级");
+        if (className.length() > 100) {
+            return "班级最长 100 字";
+        }
+        String nation = text(row, colMap, "民族");
+        if (nation.length() > 32) {
+            return "民族最长 32 字";
+        }
+        //2.手机号：可空，填了须合法
         String phone = text(row, colMap, "手机号");
         if (StrUtil.isNotBlank(phone) && !phone.trim().matches("^1[3-9]\\d{9}$")) {
             return "手机号格式不正确";
         }
-        //2.身份证：可空，填了须 18 位
+        //3.身份证：可空，填了须 18 位
         String idCard = text(row, colMap, "身份证号");
         if (StrUtil.isNotBlank(idCard) && !idCard.trim().matches("\\d{17}[0-9Xx]")) {
             return "身份证号格式不正确";
         }
-        //3.性别：可空（当 UNKNOWN），兼容中英文取值
+        //4.性别：可空（当 UNKNOWN），兼容中英文取值
         if (genderError(text(row, colMap, "性别"))) {
             return "性别取值不合法（男/女/MALE/FEMALE/留空）";
         }
-        //4.组织：按名称精确匹配，不存在或不唯一该行报错（契约原文）
+        //5.邮箱：可空，填了须格式合法且不超列宽
+        String email = StrUtil.trimToNull(text(row, colMap, "邮箱"));
+        if (email != null && (email.length() > 100 || !email.matches("^[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+$"))) {
+            return "邮箱格式不正确";
+        }
+        //6.组织：按名称精确匹配且唯一，不存在或不唯一该行报错（契约原文）；
+        //  部门管理员再校验目标组织在自己子树内（与 M03 建档的越权封堵对齐）
         String orgName = StrUtil.trimToNull(text(row, colMap, "所属组织"));
-        if (orgName == null || orgIdByName(orgName) == null) {
+        Long orgId = orgIdByName(orgName);
+        if (orgId == null) {
             return "所属组织不存在或名称不唯一";
         }
-        //5.类型：可空（默认 STUDENT），填了须合法
+        if (deptAdmin != null && !orgScopeSupport.inSubtree(deptAdmin.getOrgId(), orgId)) {
+            return "无权向该组织导入人员";
+        }
+        //7.类型：可空（默认 STUDENT），填了须合法
         String memberType = StrUtil.trimToNull(text(row, colMap, "类型"));
         if (memberType != null && !MEMBER_TYPES.contains(memberType)) {
             return "类型取值不合法（STUDENT/TEACHER/OTHER）";

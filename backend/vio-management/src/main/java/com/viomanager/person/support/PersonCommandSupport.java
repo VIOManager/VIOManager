@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -172,6 +173,10 @@ public class PersonCommandSupport {
      * 技能标签整组替换（M03/M04/M12 共用）：值校验（必须是 SKILL 字典可用项）→物理删旧→带 label 插入。
      */
     public void saveSkills(Long memberId, List<String> skills) {
+        //0.去重保序：重复值会在 uk_member_skill(member_id, skill_value, deleted) 上撞 1062 变 500
+        if (skills != null) {
+            skills = skills.stream().distinct().toList();
+        }
         //1.校验值全部来自字典（PRESET 或已审核通过的用户补充）
         Map<String, String> labelMap = availableSkillLabels();
         if (skills != null) {
@@ -216,8 +221,14 @@ public class PersonCommandSupport {
 
     /** M05 删除级联：逻辑删档案→物理删技能→清队伍关系→禁用其登录账号（孤儿账号口子，需 lzh 拍板保留与否） */
     public void deletePersonCascade(Person person) {
-        //1.逻辑删档案（@TableLogic → deleted=1）
-        personMapper.deleteById(person.getId());
+        //1.逻辑删档案（@TableLogic → deleted=1）；uk_member_student_no/job_no 含 deleted 列，
+        //  同学号"删过一次又重建再删"时会出现第二个 (X,1) 撞唯一键——转成可理解的业务错误而非 500
+        try {
+            personMapper.deleteById(person.getId());
+        } catch (DuplicateKeyException e) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID,
+                    "该学号/学工号已被历史删除档案占用，无法删除，请联系超级管理员清理数据");
+        }
         //2.物理删技能标签（从属数据，同"整组替换"的物理删理由）
         memberSkillMapper.deleteByMemberId(person.getId());
         //3.清队伍成员关系（能走到这里说明不是活跃队长）

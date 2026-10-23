@@ -84,22 +84,6 @@ public class PersonSensitiveSupport {
     }
 
     /**
-     * 手机号脱敏：中间 4 位打星（规范口径"中间 4 位 * 号隐藏"）。
-     * 11 位标准手机号 → 138****5678；非 11 位（脏数据/座机）保留前 2 位其余打星。
-     */
-    public String maskPhone(String phone) {
-        String trimmed = StrUtil.trimToNull(phone);
-        if (trimmed == null) {
-            return null;
-        }
-        if (trimmed.length() == 11) {
-            return trimmed.substring(0, 3) + "****" + trimmed.substring(7);
-        }
-        return trimmed.substring(0, Math.min(2, trimmed.length()))
-                + "*".repeat(Math.max(0, trimmed.length() - 2));
-    }
-
-    /**
      * 身份证号后 4 位（含末位 X），存 id_card_last4 供列表脱敏展示，避免为展示而解密。
      */
     public String last4OfIdCard(String plain) {

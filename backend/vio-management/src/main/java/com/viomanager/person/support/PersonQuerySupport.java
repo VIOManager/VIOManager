@@ -42,8 +42,8 @@ public class PersonQuerySupport {
     private PersonViewerSupport viewerSupport;
 
     /**
-     * M01 筛选拼装：keyword 单搜（姓名/学号/学院/专业）、orgId/memberType/hasAccount 精确、
-     * skill 按 member_skill 存在性子查询（列名 skill_value，见建表脚本）。
+     * M01 筛选拼装：keyword 单搜（姓名/学号/手机号，契约 M01 与前端 mock 口径）、
+     * orgId/memberType/hasAccount 精确、skill 按 member_skill 存在性子查询（列名 skill_value，见建表脚本）。
      */
     public QueryWrapper<Person> buildWrapper(PersonQueryDTO dto) {
         QueryWrapper<Person> wrapper = new QueryWrapper<>();
@@ -51,8 +51,7 @@ public class PersonQuerySupport {
             String keyword = dto.getKeyword().trim();
             wrapper.and(w -> w.like("name", keyword)
                     .or().like("student_no", keyword)
-                    .or().like("college", keyword)
-                    .or().like("major", keyword));
+                    .or().like("phone", keyword));
         }
         if (dto.getOrgId() != null) {
             wrapper.eq("org_id", dto.getOrgId());
@@ -208,6 +207,7 @@ public class PersonQuerySupport {
             vo.setEmail(null);
             vo.setPhotoFileId(null);
             vo.setSignatureFileId(null);
+            vo.setRemark(null);
         }
         return vo;
     }

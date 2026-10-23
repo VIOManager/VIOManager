@@ -75,16 +75,12 @@ class PersonViewTest extends PersonTestBase {
     }
 
     @Test
-    void deptAdminOfOtherOrgGetsLimited() throws Exception {
-        //机械学院管理员看计算机学院的人：受限档，不报错（契约：其他仅姓名/学院/班级/技能）
+    void deptAdminOfOtherOrgGetsRejected() throws Exception {
+        //机械学院管理员看计算机学院的人：403+1003 拒绝（2026-10-23 M02 收紧：门禁先行，不再返回脱敏视图）
         mockMvc.perform(get("/api/members/" + PERSON_TARGET)
                         .header("Authorization", "Bearer " + deptMeToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.limited").value(true))
-                .andExpect(jsonPath("$.data.name").value("目标人"))
-                .andExpect(jsonPath("$.data.phone").value(nullValue()))
-                .andExpect(jsonPath("$.data.studentNo").value(nullValue()))
-                .andExpect(jsonPath("$.data.idCard").value(nullValue()));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(1003));
     }
 
     @Test
@@ -110,13 +106,12 @@ class PersonViewTest extends PersonTestBase {
     }
 
     @Test
-    void strangerStudentGetsLimited() throws Exception {
+    void strangerStudentGetsRejected() throws Exception {
+        //陌生学生查无关人：403+1003 拒绝（2026-10-23 M02 收紧：学生仅可查本人，队长视角走 isCaptainOf 放行）
         mockMvc.perform(get("/api/members/" + PERSON_TARGET)
                         .header("Authorization", "Bearer " + strangerToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.limited").value(true))
-                .andExpect(jsonPath("$.data.name").value("目标人"))
-                .andExpect(jsonPath("$.data.phone").value(nullValue()));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(1003));
     }
 
     @Test

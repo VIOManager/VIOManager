@@ -44,7 +44,7 @@
 | 编号 | 接口 | 说明 |
 |------|------|------|
 | M01 | GET /api/members | 列表。筛选：keyword（姓名/学号/手机号模糊）、orgId、memberType、skill、hasAccount。列表项：id name studentNo college major className phone memberType orgName hasAccount idCardLast4 skills。**列表不返回身份证、证件照、邮箱**，进详情 |
-| M02 | GET /api/members/{id} | 详情。字段按 §2.3 裁剪：超管/本部门管理员全量；本队队长见大部分（身份证走 M10）；本人全量；其他仅姓名/学院/班级/技能 |
+| M02 | GET /api/members/{id} | 详情。字段按 §2.3 裁剪：超管/本部门管理员（限本组织子树）全量；本队队长见大部分（身份证走 M10）；本人全量；其他 1003 拒绝（2026-10-23 拍板收紧：学生仅可查本人，原"其他仅姓名/学院/班级/技能"的脱敏视图取消） |
 | M03 | POST /api/members | 手工新建（管理员）。studentNo 可空、不可重复（3001） |
 | M04 | PUT /api/members/{id} | 编辑。studentNo 不接受变更（3002） |
 | M05 | DELETE /api/members/{id} | 队长拒绝（3003）；当前登录账号拒绝（3004）；普通队员删除时清除队伍成员关系；材料/成果等业务记录保留 |

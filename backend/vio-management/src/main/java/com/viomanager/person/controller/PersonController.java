@@ -132,6 +132,7 @@ public class PersonController {
     }
 
     /** M10 完整身份证号：超管/本部门管理员/本队队长/本人（3010），每次查看写审计 */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN", "STUDENT"})
     @AuditLog(bizType = "MEMBER_ID_CARD", label = "查看身份证",
             summary = "'查看身份证：人员' + #id")
     @GetMapping("/{id}/id-card")
@@ -140,6 +141,7 @@ public class PersonController {
     }
 
     /** M11a 证件照下载：权限同 M10，写审计；文件本体走文件服务的病毒闸门与下载计数 */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN", "STUDENT"})
     @AuditLog(bizType = "MEMBER_PHOTO_VIEW", label = "下载证件照",
             summary = "'下载证件照：人员' + #id")
     @GetMapping("/{id}/photo")
@@ -148,6 +150,7 @@ public class PersonController {
     }
 
     /** M11b 电子签名下载：权限同 M10，写审计 */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN", "STUDENT"})
     @AuditLog(bizType = "MEMBER_SIGNATURE_VIEW", label = "下载电子签名",
             summary = "'下载电子签名：人员' + #id")
     @GetMapping("/{id}/signature")
