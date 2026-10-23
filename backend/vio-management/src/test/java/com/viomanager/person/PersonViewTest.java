@@ -125,6 +125,7 @@ class PersonViewTest extends PersonTestBase {
                 .andExpect(jsonPath("$.data.list[0].name").value("目标人"))
                 .andExpect(jsonPath("$.data.list[0].studentNo").value("s94011"))
                 .andExpect(jsonPath("$.data.list[0].memberType").value("STUDENT"))
+                .andExpect(jsonPath("$.data.list[0].college").value("计算机学院"))
                 .andExpect(jsonPath("$.data.list[0].phone").doesNotExist())
                 .andExpect(jsonPath("$.data.list[0].idCard").doesNotExist())
                 .andExpect(jsonPath("$.data.list[0].email").doesNotExist());
