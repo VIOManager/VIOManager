@@ -14,10 +14,8 @@ import axios from 'axios'
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 import type { Result } from './types'
-import { mockAdapter } from './mock'
 
 const TOKEN_KEY = 'vio_token'
-const useMock = import.meta.env.VITE_USE_MOCK === 'true'
 
 /** 业务错误：code + message 随 reject 传出，页面可按 code 做差异化提示 */
 export class BizError extends Error {
@@ -32,9 +30,7 @@ const http = axios.create({
   // 留空 = 相对路径：开发走 vite 代理（vite.config /api → 论坛服务 8089）、生产同域 Nginx 分流，
   // 两态都无需完整地址；指向独立部署的论坛服务时才在 env 里填 VITE_API_BASE_URL
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '',
-  timeout: 15000,
-  // mock 模式接管适配器；真实模式走默认 XHR（联调时 .env 里关 VITE_USE_MOCK 即可）
-  adapter: useMock ? mockAdapter : undefined
+  timeout: 15000
 })
 
 http.interceptors.request.use((config: InternalAxiosRequestConfig) => {

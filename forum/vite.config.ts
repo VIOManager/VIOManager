@@ -22,12 +22,6 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8089',
         changeOrigin: true
-      },
-      // 调试登录专用：管理侧登录接口在 8088，浏览器直连跨源会被 CORS 拦（生产同域 Nginx，无此代理）
-      '/mgmt-api': {
-        target: 'http://localhost:8088',
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/mgmt-api/, '/api')
       }
     }
   }
