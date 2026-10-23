@@ -95,6 +95,30 @@ export interface ImportResult {
 export function apiMembers(q: MemberQuery): Promise<PageResult<MemberListItem>> {
   return get('/api/members', q as unknown as Record<string, unknown>)
 }
+
+/** 受限候选（M14，2026-10-23 增）：任意登录角色可用，队长流程加载候选专用
+ *  （M01 是管理员专属，学生队长直调必 403）；只有目录级字段，无任何敏感信息 */
+export interface MemberOption {
+  id: string
+  name: string
+  memberType: MemberType
+  studentNo: string
+  jobNo: string
+  orgId: string
+  orgName: string
+  college: string
+}
+
+export interface MemberOptionQuery {
+  keyword?: string
+  memberType?: MemberType
+  page?: number
+  size?: number
+}
+
+export function apiMemberOptions(q: MemberOptionQuery): Promise<PageResult<MemberOption>> {
+  return get('/api/members/options', q as unknown as Record<string, unknown>)
+}
 export function apiMemberDetail(id: string): Promise<MemberDetail> {
   return get('/api/members/' + id)
 }

@@ -10,7 +10,7 @@ import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiAddAdvisor, apiConfirmTeamMember, apiDissolveTeam, apiExitTeam, apiRemoveAdvisor, apiRemoveTeamMember, apiTeamDetail, apiUpdateTeam } from '@/api/team'
 import type { TeamDetail, TeamMemberItem } from '@/api/team'
-import { apiMembers } from '@/api/member'
+import { apiMemberOptions } from '@/api/member'
 import { useUserStore } from '@/stores/user'
 import { TEAM_MEMBER_STATUS_LABEL, TEAM_ROLE_LABEL } from '@/config/labels'
 import MaskField from '@/components/MaskField.vue'
@@ -130,14 +130,13 @@ async function saveInfo() {
 }
 
 async function openAdvisorPicker() {
-  // 指导教师候选：教师类型成员
+  // 指导教师候选：M14 受限搜索口（任意登录角色可用；M01 是管理员专属，学生队长调必 403）
   try {
-    const resp = await apiMembers({ page: 1, size: 50, memberType: 'TEACHER' })
+    const resp = await apiMemberOptions({ memberType: 'TEACHER', page: 1, size: 50 })
     advisorCandidates.value = resp.list.map((m) => ({ id: m.id, name: m.name, college: m.college }))
   } catch {
-    // 联调降级：A 线人员接口后端未实现，候选置空提示
+    // 失败弹窗交给 http 拦截器（真实错误码），候选置空不再给"后端未就绪"的误导文案
     advisorCandidates.value = []
-    ElMessage.info('教师候选列表依赖 A 线人员接口，后端就绪后可用')
   }
   advisorPicker.value = true
 }
