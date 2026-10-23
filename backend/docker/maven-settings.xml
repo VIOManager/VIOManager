@@ -8,11 +8,13 @@
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
   <mirrors>
+    <!-- 2026-10-18：阿里云源下载大 jar（grpc-netty-shaded 9.3MB）多次传一半被掐断
+         （Premature end of Content-Length），换腾讯源；宿主 settings 同步改 -->
     <mirror>
-      <id>aliyunmaven</id>
+      <id>tencentmaven</id>
       <mirrorOf>central</mirrorOf>
-      <name>aliyun maven</name>
-      <url>https://maven.aliyun.com/repository/public</url>
+      <name>tencent maven</name>
+      <url>https://mirrors.cloud.tencent.com/nexus/repository/maven-public/</url>
     </mirror>
   </mirrors>
 </settings>
