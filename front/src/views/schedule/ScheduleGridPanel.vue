@@ -12,8 +12,9 @@ import { apiOrgTreeSafe } from '@/api/org'
 import type { OrgNode } from '@/api/org'
 import { SLOT_LABEL, WEEKDAY_LABEL } from '@/config/labels'
 import { BizError } from '@/api/http'
+import { activeSemester } from '@/api/semester'
 
-const semesterId = ref('s2') // 当前学期（mock 演示固定 s2；联调后从学期接口取 ACTIVE）
+const semesterId = ref('') // 当前激活学期（apiSemestersSafe 取 ACTIVE，接口失败走 FALLBACK）
 const weekNo = ref(6)
 const subOrgId = ref('')
 const orgs = ref<Array<{ id: string; name: string }>>([])
@@ -36,7 +37,7 @@ function ruleEnabled(weekday: number, slotIndex: number): boolean {
 }
 
 async function load() {
-  if (!subOrgId.value) return
+  if (!subOrgId.value || !semesterId.value) return
   loading.value = true
   try {
     const [c, r] = await Promise.all([
@@ -125,22 +126,25 @@ async function onExport() {
   ElMessage.success(r.note)
 }
 
+/** 组织树拍平成下拉选项：排班按子组织隔离，只收 SUB_ORG 层（根/学院层选了后端必拒） */
 function flatten(nodes: OrgNode[], out: Array<{ id: string; name: string }>) {
   for (const n of nodes) {
-    if (n.orgType !== 'ROOT') out.push({ id: n.id, name: n.name })
+    if (n.orgType === 'SUB_ORG') out.push({ id: n.id, name: n.name })
     flatten(n.children, out)
   }
 }
 
 onMounted(async () => {
+  const active = await activeSemester()
+  if (active) semesterId.value = String(active.id)
   const tree = await apiOrgTreeSafe()
   const out: Array<{ id: string; name: string }> = []
   flatten(tree, out)
   orgs.value = out
   if (out.length > 0) {
     subOrgId.value = out[0].id
-    await load()
   }
+  await load()
 })
 </script>
 

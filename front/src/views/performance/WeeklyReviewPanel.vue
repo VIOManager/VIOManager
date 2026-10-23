@@ -39,8 +39,8 @@ const submitting = ref(false)
 
 async function openScore(id: string) {
   const d = await apiWeeklyDetail(id)
-  // 打分维度随该子组织启用规则走（8046 未配置时后端拦截，前端同步提示）
-  const all = await apiPerfRules({ subOrgId: d.subOrgId })
+  // 打分维度随该子组织该学期的生效规则走（学期特定优先回退默认，与 PF07 校验同口径；8046 未配置时后端拦截）
+  const all = await apiPerfRules({ subOrgId: d.subOrgId, semesterId: d.semesterId })
   rules.value = all.filter((r) => r.enabled)
   scoreForm.value = rules.value.map((r) => ({ dimensionKey: r.dimensionKey, score: null, commentText: '' }))
   scoreComment.value = ''

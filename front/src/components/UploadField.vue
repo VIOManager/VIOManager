@@ -70,6 +70,7 @@ async function doUpload() {
   try {
     const resp = await apiUploadFile(currentFile, idemKey, props.bizType)
     result.value = resp
+    // fileSize 已由 file.ts 的 apiUploadFile 统一补带（单一来源，勿在组件层再补）
     emit('uploaded', resp)
   } catch {
     // 1010 等提示已由 http 拦截器弹出；标记失败态，允许重选

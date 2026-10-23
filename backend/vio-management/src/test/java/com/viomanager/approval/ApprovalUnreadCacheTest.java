@@ -66,7 +66,7 @@ class ApprovalUnreadCacheTest {
         assertEquals("2", hashGet(ApprovalUnreadCache.KEY_PREFIX + MEMBER, "result"));
     }
 
-    private UnreadCountVO vo(long todo, long result) {
+    private UnreadCountVO vo(int todo, int result) {
         UnreadCountVO vo = new UnreadCountVO();
         vo.setTodoCount(todo);
         vo.setResultCount(result);

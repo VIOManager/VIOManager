@@ -66,7 +66,7 @@ class ApprovalUnreadCacheDegradeTest {
         assertEquals(2, loaderCalls.get());
     }
 
-    private UnreadCountVO vo(long todo, long result) {
+    private UnreadCountVO vo(int todo, int result) {
         UnreadCountVO vo = new UnreadCountVO();
         vo.setTodoCount(todo);
         vo.setResultCount(result);

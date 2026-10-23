@@ -9,7 +9,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { avatarOf } from '@/config/avatars'
 import { boardName } from '@/config/boards'
 import { useUserStore } from '@/stores/user'
 import ReplyList from '@/components/ReplyList.vue'
@@ -22,6 +21,7 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+/** 头像统一走 store（本人已换自定义头像时主楼/楼层也是新的） */
 const user = useUserStore()
 const topicId = String(route.params.id)
 
@@ -190,7 +190,7 @@ function attachTip() {
         <div v-if="detail" class="box post">
           <div class="in">
             <div class="p-top">
-              <img class="pava" :src="avatarOf(detail.author, 73)" :alt="detail.author">
+              <img class="pava" :src="user.avatarByName(detail.author, 73)" :alt="detail.author">
               <div class="ph-main">
                 <h1><span v-if="detail.pinned" class="pin">置顶</span>{{ detail.title }}</h1>
                 <div class="p-meta"><b>{{ detail.author }}</b> · <span class="node">{{ boardName(detail.board) }}</span> · {{ detail.publishAt }} · 阅读 {{ detail.viewCount }}</div>
@@ -243,7 +243,7 @@ function attachTip() {
           <div class="box-h"><b>关于作者</b><span>AUTHOR</span></div>
           <div class="bd">
             <div class="author">
-              <img class="ava" :src="avatarOf(detail.author, 48)" :alt="detail.author">
+              <img class="ava" :src="user.avatarByName(detail.author, 48)" :alt="detail.author">
               <div><b>{{ detail.author }}</b><div class="gray2">{{ detail.authorGroup }}</div></div>
             </div>
             <div class="astat">

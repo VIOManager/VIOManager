@@ -5,6 +5,8 @@
 import { mockAdapter } from './registry'
 import './forum'
 import './forum-admin'
+import './tech'
+import './me'
 
 // 引用即注册：import 语句的副作用就是各业务处理器排队登记
 export { mockAdapter }

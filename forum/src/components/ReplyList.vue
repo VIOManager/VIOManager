@@ -6,7 +6,7 @@
  * HIDDEN 楼层文本由服务端拼好（学生占位/管理员原文），前端只加管理员侧的"已隐藏"标识。
  */
 import { ref } from 'vue'
-import { avatarOf } from '@/config/avatars'
+import { useUserStore } from '@/stores/user'
 import { apiLikeReply, type ReplyItem } from '@/api/forum'
 
 const props = defineProps<{
@@ -19,6 +19,9 @@ const emit = defineEmits<{
   (e: 'quote', floor: ReplyItem): void
   (e: 'admin', floor: ReplyItem): void
 }>()
+
+/** 头像统一走 store（本人已换自定义头像时楼层里也是新的） */
+const user = useUserStore()
 
 /** 楼层点赞操作锁：天然幂等操作，锁只为防连点白发一堆请求（同主楼口径） */
 const likeLocks = ref<Record<string, boolean>>({})
@@ -48,7 +51,7 @@ function showEdited(r: ReplyItem): boolean {
     class="floor"
     :class="{ 'is-hidden': isAdmin && f.status === 'HIDDEN' }"
   >
-    <img class="ava" :src="avatarOf(f.author, 48)" :alt="f.author">
+    <img class="ava" :src="user.avatarByName(f.author, 48)" :alt="f.author">
     <div class="f-main">
       <div class="f-meta"><b>{{ f.author }}</b>{{ f.authorGroup }} · {{ f.publishAt }}<span class="fno">#{{ f.floorNo }}</span></div>
       <div v-if="f.quote" class="quote">@{{ f.quote.author }} #{{ f.quote.floorNo }}：{{ f.quote.text }}</div>
@@ -61,7 +64,7 @@ function showEdited(r: ReplyItem): boolean {
       </div>
       <!-- 二级评论：缩进、不展示楼层号（P2 口径：二级占号但不进楼层序列展示） -->
       <div v-for="c in f.children" :key="c.id" class="child">
-        <img class="cava" :src="avatarOf(c.author, 32)" :alt="c.author">
+        <img class="cava" :src="user.avatarByName(c.author, 32)" :alt="c.author">
         <div class="c-main">
           <div class="f-meta"><b>{{ c.author }}</b>{{ c.authorGroup }} · {{ c.publishAt }}</div>
           <div v-if="c.quote" class="quote">@{{ c.quote.author }} #{{ c.quote.floorNo }}：{{ c.quote.text }}</div>

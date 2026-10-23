@@ -69,9 +69,10 @@ async function save() {
   }
 }
 
+/** 组织树拍平成下拉选项：绩效按子组织隔离，只收 SUB_ORG 层（根/学院层选了后端必拒） */
 function flatten(nodes: OrgNode[], out: Array<{ id: string; name: string }>) {
   for (const n of nodes) {
-    if (n.orgType !== 'ROOT') out.push({ id: n.id, name: n.name })
+    if (n.orgType === 'SUB_ORG') out.push({ id: n.id, name: n.name })
     flatten(n.children, out)
   }
 }

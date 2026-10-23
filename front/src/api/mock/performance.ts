@@ -32,7 +32,7 @@ function activeSemester() {
 function toItem(w: MockWeekly): WeeklyItem {
   return {
     id: w.id, memberId: w.memberId, memberName: w.memberName, subOrgId: w.subOrgId, subOrgName: w.subOrgName,
-    weekNo: w.weekNo, status: w.status, totalScore: w.totalScore, submittedAt: w.submittedAt
+    semesterId: activeSemester().id, weekNo: w.weekNo, status: w.status, totalScore: w.totalScore, submittedAt: w.submittedAt
   }
 }
 
