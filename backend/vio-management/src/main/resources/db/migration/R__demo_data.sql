@@ -14,8 +14,8 @@
 --   stu_zhao  / Stu@123456    学生 赵晓亮（嵌入式创客空间）
 --
 -- 固定 ID 段位（测试与后续脚本勿占）：组织 1-5、成员 101-105、账号 201-205、
--- 字典 901-904、学期 301、模板 401、比赛 402、赛队 501-502、队员 601-603、成果 701、
--- 审批单 801-807、审批流水 811-820
+-- 字典 901-904、学期 301、模板 401、比赛 402、赛队 501-502、队员 601-603、
+-- 成果 701-702、项目 1001、查看授权 1002、审批单 801-807、审批流水 811-820
 -- =====================================================================
 
 -- ---------------- 组织树：1 中心 → 2/3 学院 → 4/5 分子组织 ----------------
@@ -106,17 +106,43 @@ ON DUPLICATE KEY UPDATE
     member_id = VALUES(member_id), member_name = VALUES(member_name),
     is_leader = VALUES(is_leader), status = VALUES(status);
 
--- ---------------- 一条已生效的获奖记录（PRD §5 演示要求） ----------------
-INSERT INTO achievement (id, semester_id, org_id, owner_member_id, achievement_type, name, status, submit_channel)
-VALUES (701, 301, 2, 103, 'AWARD', '蓝桥杯省赛软件类一等奖', 'APPROVED', 'USER')
+-- ---------------- 获奖记录：701 已生效；702 待审批（803 的载体，挂芯火电子队） ----------------
+INSERT INTO achievement (id, semester_id, org_id, owner_member_id, owner_name, team_id, contest_id,
+                         achievement_type, name, status, submit_channel)
+VALUES
+    (701, 301, 2, 103, '王小明', NULL, NULL, 'AWARD', '蓝桥杯省赛软件类一等奖', 'APPROVED', 'USER'),
+    (702, 301, 3, 105, '孙小雨', 502, 402, 'AWARD', '全国大学生电子设计竞赛省二等奖', 'PENDING', 'USER')
 ON DUPLICATE KEY UPDATE
     semester_id = VALUES(semester_id), org_id = VALUES(org_id), owner_member_id = VALUES(owner_member_id),
+    owner_name = VALUES(owner_name), team_id = VALUES(team_id), contest_id = VALUES(contest_id),
     achievement_type = VALUES(achievement_type), name = VALUES(name), status = VALUES(status),
     submit_channel = VALUES(submit_channel);
 
+-- ---------------- 项目与查看授权：807 的载体（跨部门限时查看演示） ----------------
+-- 1001 挂计算机学院（ORG 可见 = 用户组织在项目组织子树内），电信的孙小雨看不到 → 需走授权；
+-- 审批责任组织 = 项目所属组织（清单 PR29），故 807 由计算机学院 dept_chen 审批
+INSERT INTO project (id, name, description, owner_member_id, owner_name, semester_id, org_id, status, visibility)
+VALUES (1001, '智能小车竞速项目', '基于 STM32 的智能小车竞速，含循迹与避障模块', 103, '王小明', 301, 2, 'ACTIVE', 'ORG')
+ON DUPLICATE KEY UPDATE
+    name = VALUES(name), description = VALUES(description), owner_member_id = VALUES(owner_member_id),
+    owner_name = VALUES(owner_name), semester_id = VALUES(semester_id), org_id = VALUES(org_id),
+    status = VALUES(status), visibility = VALUES(visibility);
+
+INSERT INTO project_view_grant (id, project_id, applicant_id, applicant_name, applicant_org_id,
+                                approval_id, grant_type, expire_at, status)
+VALUES (1002, 1001, 105, '孙小雨', 3, 807, 'LIMITED', DATE_ADD(NOW(), INTERVAL 7 DAY), 'PENDING')
+ON DUPLICATE KEY UPDATE
+    project_id = VALUES(project_id), applicant_id = VALUES(applicant_id), applicant_name = VALUES(applicant_name),
+    applicant_org_id = VALUES(applicant_org_id), approval_id = VALUES(approval_id), grant_type = VALUES(grant_type),
+    expire_at = VALUES(expire_at), status = VALUES(status);
+
 -- ---------------- 审批中心演示单：覆盖三视角与主要状态 ----------------
 -- 故事线：801/804 呼应赛队 501 代码先锋队的由来；802 的目标人 105 有待处理邀请红点；
---        804/805 留 applicant_read=0 给发起人 103 造"结果未读"红点；803/807 是电信学院待办。
+--        804/805 留 applicant_read=0 给发起人 103 造"结果未读"红点；803 是电信学院待办（芯火电子队成果 702）；
+--        807 是计算机学院待办（孙小雨跨部门限时查看项目 1001，授权行 1002 随批准生效）。
+-- ⚠️ payload 是回调 Handler 的机器契约（字段名对齐 TeamCommandServiceImpl / TeamCommandSupport /
+--    AchievementApprovalSupport / ViewGrantServiceImpl 的真实构造），缺一个字段批准就炸
+--    （801 曾缺 contestId 报 4001"比赛当前状态不允许"），改动前先对照各 Handler 的读法。
 -- PENDING 单的 expire_at 用 NOW()+7 天动态值，演示库长期不过期。
 INSERT INTO approval (id, biz_type, biz_id, biz_title, biz_payload, status,
                       applicant_id, applicant_name, target_member_id, target_member_name,
@@ -124,22 +150,22 @@ INSERT INTO approval (id, biz_type, biz_id, biz_title, biz_payload, status,
                       apply_reason, handle_comment, handled_at, expire_at,
                       applicant_read, target_read, approver_read, created_at)
 VALUES
-    (801, 'TEAM_CREATE', NULL, '创建赛队申请 · 星辰算法队（第十六届蓝桥杯）',
-     '{"teamName":"星辰算法队","contestName":"第十六届蓝桥杯程序设计大赛","projectName":"智能排课小助手","leaderName":"王小明"}',
+    (801, 'TEAM_CREATE', NULL, '星辰算法队·第十六届蓝桥杯程序设计大赛',
+     '{"contestId":402,"contestName":"第十六届蓝桥杯程序设计大赛","trackId":null,"trackName":null,"name":"星辰算法队","projectName":"智能排课小助手","leaderMemberId":103,"leaderName":"王小明","prefillMemberIds":[],"semesterId":301,"orgId":2}',
      'PENDING', 103, '王小明', NULL, NULL, 2, NULL, NULL, NULL, 402, 301, 2,
      '和两名队友组队参加蓝桥杯，队名定为星辰算法队，请老师审批', NULL, NULL,
      DATE_ADD(NOW(), INTERVAL 7 DAY), 0, 0, 0, '2026-10-12 09:15:00'),
 
-    (802, 'TEAM_ADD_MEMBER', NULL, '邀请孙小雨加入 代码先锋队',
-     '{"teamName":"代码先锋队","targetName":"孙小雨","memberCount":2,"maxMembers":5}',
+    (802, 'TEAM_ADD_MEMBER', NULL, '邀请 孙小雨 加入',
+     '{"teamId":501,"memberId":105,"memberName":"孙小雨","contestId":402,"semesterId":301}',
      'PENDING', 103, '王小明', 105, '孙小雨', 2, NULL, NULL, 501, 402, 301, 2,
      '队里缺一名前端，孙小雨技能匹配，邀请入队', NULL, NULL,
      DATE_ADD(NOW(), INTERVAL 7 DAY), 0, 0, 0, '2026-10-11 16:40:00'),
 
-    (803, 'ACHIEVEMENT_SUBMIT', NULL, '获奖成果录入 · 蓝桥杯省赛一等奖',
-     '{"achievementName":"蓝桥杯省赛软件类一等奖","achievementType":"AWARD","evidenceFile":"证书扫描件.pdf"}',
-     'PENDING', 104, '赵晓亮', NULL, NULL, 3, NULL, NULL, NULL, NULL, 301, 3,
-     '队长提交获奖成果，证书扫描件已上传，请审核', NULL, NULL,
+    (803, 'ACHIEVEMENT_SUBMIT', NULL, '芯火电子队 成果提交：全国大学生电子设计竞赛省二等奖',
+     '{"achievementId":"702","teamId":"502","name":"全国大学生电子设计竞赛省二等奖","type":"AWARD"}',
+     'PENDING', 105, '孙小雨', NULL, NULL, 3, NULL, NULL, 502, 402, 301, 3,
+     '芯火电子队获奖，成果证书扫描件后续补交，请审核', NULL, NULL,
      DATE_ADD(NOW(), INTERVAL 7 DAY), 0, 0, 0, '2026-10-12 10:20:00'),
 
     (804, 'TEAM_CREATE', 501, '创建赛队申请 · 代码先锋队（第十六届蓝桥杯）',
@@ -160,10 +186,10 @@ VALUES
      '嵌入式方向缺人，邀请孙小雨', NULL, '2026-10-10 15:10:00',
      NULL, 1, 1, 0, '2026-10-10 14:50:00'),
 
-    (807, 'PROJECT_VIEW', NULL, '项目查看申请 · 智能小车竞速项目',
-     '{"projectName":"智能小车竞速","grantType":"LIMITED","days":7}',
-     'PENDING', 105, '孙小雨', NULL, NULL, 3, NULL, NULL, NULL, NULL, 301, 3,
-     '想参考该项目的传感器选型方案，申请限时查看', NULL, NULL,
+    (807, 'PROJECT_VIEW', 1002, '项目查看申请：智能小车竞速项目',
+     '{"grantId":1002,"projectId":1001,"applicantId":105,"grantType":"LIMITED","expireAt":"2026-10-30T23:59:59"}',
+     'PENDING', 105, '孙小雨', NULL, NULL, 2, NULL, NULL, NULL, NULL, 301, 3,
+     '想参考该项目的传感器选型方案，申请限时查看 7 天', NULL, NULL,
      DATE_ADD(NOW(), INTERVAL 7 DAY), 0, 0, 0, '2026-10-12 08:30:00')
 ON DUPLICATE KEY UPDATE
     biz_type = VALUES(biz_type), biz_id = VALUES(biz_id), biz_title = VALUES(biz_title), biz_payload = VALUES(biz_payload),
@@ -181,7 +207,7 @@ INSERT INTO approval_record (id, approval_id, action, operator_id, operator_name
 VALUES
     (811, 801, 'SUBMIT', 204, '王小明', 'APPLICANT', '和两名队友组队参加蓝桥杯', NULL, 'PENDING', '2026-10-12 09:15:00'),
     (812, 802, 'SUBMIT', 204, '王小明', 'APPLICANT', '队里缺一名前端，邀请入队', NULL, 'PENDING', '2026-10-11 16:40:00'),
-    (813, 803, 'SUBMIT', 205, '赵晓亮', 'APPLICANT', '获奖成果录入，证书已上传', NULL, 'PENDING', '2026-10-12 10:20:00'),
+    (813, 803, 'SUBMIT', NULL, '孙小雨', 'APPLICANT', '芯火电子队获奖，提交成果', NULL, 'PENDING', '2026-10-12 10:20:00'),
     (814, 804, 'SUBMIT', 204, '王小明', 'APPLICANT', '报名蓝桥杯，申请建队', NULL, 'PENDING', '2026-10-09 19:30:00'),
     (815, 804, 'APPROVE', 202, '陈志远', 'APPROVER', '同意，注意报名截止时间', 'PENDING', 'APPROVED', '2026-10-09 20:05:00'),
     (816, 805, 'SUBMIT', 204, '王小明', 'APPLICANT', '方向调整，申请解散', NULL, 'PENDING', '2026-10-10 11:20:00'),
