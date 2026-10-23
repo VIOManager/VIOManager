@@ -84,14 +84,14 @@ public class PersonQuerySupport {
 
     /**
      * M14 受限候选搜索（队长流程：预填成员 / 指导教师候选）：
-     * 所有登录角色可用；只 select 目录级七字段所需列（组长 SQL 规矩——查一堆只用几个字段是大忌，
+     * 所有登录角色可用；只 select 目录级八字段所需列（组长 SQL 规矩——查一堆只用几个字段是大忌，
      * 敏感列从查询根上就不带出，比出参置空更稳）；只出启用状态成员；keyword 走姓名/学号/学工号模糊。
      */
     public PageResult<MemberOptionVO> options(String keyword, String memberType, Integer page, Integer size) {
         int p = page == null || page < 1 ? 1 : page;
         int s = size == null || size < 1 ? 20 : Math.min(size, MAX_OPTIONS_SIZE);
         QueryWrapper<Person> wrapper = new QueryWrapper<>();
-        wrapper.select("id", "name", "member_type", "student_no", "job_no", "org_id");
+        wrapper.select("id", "name", "member_type", "student_no", "job_no", "org_id", "college");
         if (StrUtil.isNotBlank(keyword)) {
             String kw = keyword.trim();
             wrapper.and(w -> w.like("name", kw).or().like("student_no", kw).or().like("job_no", kw));
@@ -114,6 +114,7 @@ public class PersonQuerySupport {
             vo.setJobNo(person.getJobNo());
             vo.setOrgId(person.getOrgId());
             vo.setOrgName(orgNames.get(person.getOrgId()));
+            vo.setCollege(person.getCollege());
             list.add(vo);
         }
         return PageResult.of(list, result.getTotal(), p, s);

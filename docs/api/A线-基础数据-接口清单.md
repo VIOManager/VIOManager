@@ -56,7 +56,7 @@
 | M11 | GET /api/members/{id}/photo 与 /signature | 下载，权限同 M10，写审计 |
 | M12 | PUT /api/members/{id}/skills | 更新技能标签；本人或管理员；值来自 SKILL 字典 |
 | M13 | POST/PUT /api/members/{id}/account | 管理员绑定账号（登录名默认=学工号、初始密码 abc123、default_password=1）；PUT 改登录名/重置密码（重置后 default_password 回 1）。底层调组长账号服务 |
-| M14 | GET /api/members/options | 受限候选搜索（队长流程用，2026-10-23 增）：keyword 模糊（姓名/学号/学工号）、memberType 精确、page/size（size 上限 50，默认 20）；**任意登录角色可用**（B 线队长端原先直调 M01 必 403）；仅返回 id name memberType studentNo jobNo orgId orgName 七字段，无任何敏感列，只含启用状态成员，按姓名排序 |
+| M14 | GET /api/members/options | 受限候选搜索（队长流程用，2026-10-23 增）：keyword 模糊（姓名/学号/学工号）、memberType 精确、page/size（size 上限 50，默认 20）；**任意登录角色可用**（B 线队长端原先直调 M01 必 403）；仅返回 id name memberType studentNo jobNo orgId orgName college 八字段，无任何敏感列，只含启用状态成员，按姓名排序 |
 
 ### 技能字典（SKILL 字典归 A 维护）
 
