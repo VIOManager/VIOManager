@@ -10,7 +10,6 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useThemeStore } from '@/stores/theme'
-import { avatarOf } from '@/config/avatars'
 import PostDialog from '@/components/PostDialog.vue'
 
 const user = useUserStore()
@@ -60,7 +59,7 @@ function onPosted() {
         </button>
         <!-- 头像即个人中心入口（lzh 2026-10-23：个人创作/收藏/点赞集中在此） -->
         <router-link to="/me" class="av-link" :title="user.realName + ' · 个人中心'">
-          <img class="av" :src="avatarOf(user.realName, 34)" :alt="user.realName">
+          <img class="av" :src="user.avatarByName(user.realName, 34)" :alt="user.realName">
         </router-link>
       </div>
     </header>

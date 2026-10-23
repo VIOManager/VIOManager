@@ -7,17 +7,22 @@
  *    当前桩 token 非 JWT，解析失败走默认值
  */
 import { defineStore } from 'pinia'
+import { avatarOf as genAvatar } from '@/config/avatars'
 
 const TOKEN_KEY = 'vio_token'
 // 开发调试件键：mock 层据此判定当前登录人（联调后移除，改从 JWT 解析）
 const DEV_NAME_KEY = 'forum_dev_name'
 const DEV_ROLE_KEY = 'forum_dev_role'
+// 自定义头像（演示期存 localStorage 模拟服务端档案；联调后改走文件服务 member.photo_file_id）
+const AVATAR_KEY = 'forum_avatar'
 
 interface ForumUserState {
   token: string
   realName: string
   initials: string
   role: string
+  /** 自定义头像 dataURL；空串 = 未设，走 pravatar 映射（config/avatars） */
+  avatar: string
 }
 
 /** 尝试解析 JWT 载荷取 realName/role；桩 token 或解析失败返回 null */
@@ -49,12 +54,19 @@ export const useUserStore = defineStore('forum-user', {
     const claims = claimsFromJwt(token)
     const name = claims.realName ?? sessionStorage.getItem(DEV_NAME_KEY) ?? '演示成员'
     const role = claims.role ?? sessionStorage.getItem(DEV_ROLE_KEY) ?? 'SUPER_ADMIN'
-    return { token, realName: name, initials: name.slice(0, 1), role }
+    return { token, realName: name, initials: name.slice(0, 1), role, avatar: localStorage.getItem(AVATAR_KEY) ?? '' }
   },
   getters: {
     loggedIn: (s) => s.token.length > 0,
     /** 管理操作（置顶/录入/撤回）显隐用，口径同技术交流清单 9002：仅超管 */
-    isAdmin: (s) => s.role === 'SUPER_ADMIN'
+    isAdmin: (s) => s.role === 'SUPER_ADMIN',
+    /**
+     * 按名字取头像（全站渲染统一走这里，勿直连 config/avatars）：
+     * 是本人且已设自定义头像 → 自定义；其余成员 → pravatar 固定映射。
+     * 返回函数的形式让模板可传参（name, size），闭包内读 state 保证换头像后触发重渲染
+     */
+    avatarByName: (s) => (name: string, size: number) =>
+      s.avatar && name === s.realName ? s.avatar : genAvatar(name, size)
   },
   actions: {
     /**
@@ -71,6 +83,12 @@ export const useUserStore = defineStore('forum-user', {
       sessionStorage.setItem(TOKEN_KEY, this.token)
       sessionStorage.setItem(DEV_NAME_KEY, n)
       sessionStorage.setItem(DEV_ROLE_KEY, r)
+    },
+    /** 换头像：空串 = 恢复默认（pravatar 映射）；存 localStorage 模拟服务端档案 */
+    setAvatar(dataUrl: string) {
+      this.avatar = dataUrl
+      if (dataUrl) localStorage.setItem(AVATAR_KEY, dataUrl)
+      else localStorage.removeItem(AVATAR_KEY)
     }
   }
 })

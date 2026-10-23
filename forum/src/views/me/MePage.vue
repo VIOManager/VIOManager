@@ -8,7 +8,6 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { avatarOf } from '@/config/avatars'
 import {
   apiMyTopics, apiMyReplies, apiMyCollections, apiMyLikes,
   type MyReplyItem, type MyCollections, type MyLikes
@@ -16,8 +15,12 @@ import {
 import type { TopicItem } from '@/api/forum'
 import MePostRows from '@/components/me/MePostRows.vue'
 import MeReplyRows from '@/components/me/MeReplyRows.vue'
+import MeAvatarDialog from '@/components/me/MeAvatarDialog.vue'
 
 const user = useUserStore()
+
+/** 换头像弹窗显隐（头像本体即入口） */
+const avVisible = ref(false)
 
 /** 与 FeedPage 同源的订阅存储键（那边写入、这边可看可撤） */
 const SUBS_KEY = 'forum_tech_subs'
@@ -102,7 +105,11 @@ onMounted(loadAll)
     <!-- 资料头卡：方头像 + 身份 + 四格统计 -->
     <div class="box me-card">
       <div class="me-id">
-        <img class="me-ava" :src="avatarOf(user.realName, 72)" :alt="user.realName">
+        <!-- 头像即换头像入口：角上黄块"换"字，弹窗见 MeAvatarDialog -->
+        <button class="me-ava-btn" type="button" title="点这里换头像" @click="avVisible = true">
+          <img class="me-ava" :src="user.avatarByName(user.realName, 72)" :alt="user.realName">
+          <span class="me-ava-edit">换</span>
+        </button>
         <div>
           <div class="me-name">{{ user.realName }}</div>
           <div class="me-role">{{ roleLabel }}</div>
@@ -169,6 +176,9 @@ onMounted(loadAll)
         </div>
       </template>
     </div>
+
+    <!-- 换头像弹窗 -->
+    <MeAvatarDialog v-model="avVisible" />
   </div>
 </template>
 
@@ -176,7 +186,10 @@ onMounted(loadAll)
 /* 页面差异：头卡横排 + 分段题 + 订阅 chips；行与盒皮全走 skin.css */
 .me-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 20px 22px; margin-bottom: 20px; flex-wrap: wrap; }
 .me-id { display: flex; align-items: center; gap: 16px; }
-.me-ava { width: 72px; height: 72px; border: var(--vio2-bd-acc); object-fit: cover; }
+.me-ava-btn { position: relative; padding: 0; border: none; background: none; cursor: pointer; }
+.me-ava { width: 72px; height: 72px; border: var(--vio2-bd-acc); object-fit: cover; display: block; }
+.me-ava-btn:hover .me-ava { filter: brightness(0.92); }
+.me-ava-edit { position: absolute; right: -7px; bottom: -7px; background: var(--vio2-yellow); color: var(--vio2-on-ac); border: 2px solid var(--vio2-shadow); font-size: 10px; font-weight: 900; padding: 1px 6px; transform: rotate(-3deg); }
 .me-name { font-size: 24px; font-weight: 900; color: var(--vio2-ink); }
 .me-role { margin-top: 5px; font-family: var(--vio2-mono); font-size: 11px; letter-spacing: 0.1em; color: var(--vio2-ink-3); }
 .me-stats { display: flex; gap: 12px; flex-wrap: wrap; }

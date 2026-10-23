@@ -4,9 +4,12 @@
  * 行骨架全走 skin.css 的 .cell（与首页主题行同一语言）：方头像 + 标题 + mono meta + 回复数块
  * 复用处：我的主题 / 我的收藏·论坛帖 / 我的点赞·帖
  */
-import { avatarOf } from '@/config/avatars'
+import { useUserStore } from '@/stores/user'
 import { boardName } from '@/config/boards'
 import type { TopicItem } from '@/api/forum'
+
+/** 头像统一走 store：本人已换自定义头像时，我的主题/收藏/点赞列表里也跟着变 */
+const user = useUserStore()
 
 defineProps<{ items: TopicItem[] }>()
 </script>
@@ -14,7 +17,7 @@ defineProps<{ items: TopicItem[] }>()
 <template>
   <div>
     <div v-for="t in items" :key="t.id" class="cell">
-      <img class="ava" :src="avatarOf(t.author, 48)" :alt="t.author">
+      <img class="ava" :src="user.avatarByName(t.author, 48)" :alt="t.author">
       <div class="mid">
         <div class="t-title">
           <span v-if="t.pinned" class="pin">置顶</span>
