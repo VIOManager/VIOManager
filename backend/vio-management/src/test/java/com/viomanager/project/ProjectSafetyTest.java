@@ -385,8 +385,8 @@ class ProjectSafetyTest extends PmTestSupport {
         createProject(ownerToken, "子树列表项目", "ORG");
         String list = list(deptSoftToken);
         assertEquals(0, (int) JsonPath.read(list, "$.code"));
-        //total 同样按字符串序列化（全局 Long→String）
-        assertTrue(Long.parseLong(JsonPath.read(list, "$.data.total")) >= 1,
+        //total 已是 int（L10：计数一律 int，绕开全局 Long→String 字符串化），JsonPath 读回数字
+        assertTrue(((Number) JsonPath.read(list, "$.data.total")).longValue() >= 1,
                 "部门管理员应看到本子树项目: " + list);
         //外部门管理员列表不含
         String mechList = list(deptMechToken);

@@ -92,6 +92,16 @@
             <version>2.3.6</version>
         </dependency>
 
+        <!-- Redisson 分布式锁（组队超卖修复，方案 §12.5）：只用核心包不用它的 starter——
+             starter 会接管 spring.data.redis 连接工厂，与缓存的 Lettuce 冲突；
+             客户端懒创建 + 30s 熔断（TeamLockSupport），Redis 未起不挡应用启动；
+             版本锁定 3.27.2（本机 mvn_repo 已缓存，零下载） -->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson</artifactId>
+            <version>3.27.2</version>
+        </dependency>
+
         <!-- MinIO 对象存储 SDK：Step 8 文件服务 -->
         <dependency>
             <groupId>io.minio</groupId>

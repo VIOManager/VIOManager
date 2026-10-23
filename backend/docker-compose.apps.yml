@@ -1,9 +1,9 @@
-# 本地开发环境：四件套（MySQL + MinIO + ClamAV + Redis）默认启动；后端两个服务挂 app profile 按需带起。
+# 本地开发环境：四件套（MySQL + MinIO + ClamAV + Redis）默认启动；后端三个服务挂 app profile 按需带起。
 # 生产 6 容器口径（含前端 nginx、AI 服务）属部署层，不在此文件（骨架方案 K5 结论）。
 # 用法：cd backend && docker compose up -d（日常四件套，应用跑 IDEA）；
 #      一键全套演示/冒烟：docker compose --profile app up -d --build
 #      （8088 被 IDEA 占着时：要么先停 IDEA，要么 APP_PORT=18088 起容器版并行跑）；
-#      推倒重建用 docker compose down -v（本地库重建零成本，kb 库由 mysql-init 自动建）。
+#      推倒重建用 docker compose down -v（本地库重建零成本，kb 与论坛 vioforum 库由 mysql-init 自动建）。
 name: vio-backend
 
 services:
@@ -70,6 +70,9 @@ services:
     image: apache/rocketmq:5.5.0
     container_name: vio-rmqnamesrv
     command: ["sh", "mqnamesrv"]
+    environment:
+      # 限内存：runserver 默认 4g 堆，16G 开发机吃不消；JAVA_OPT_EXT 追加在 java 命令行末尾、后值覆盖默认
+      JAVA_OPT_EXT: "-Xms256m -Xmx256m"
     ports:
       - "9876:9876"   # 宿主 IDEA 直连；容器内服务用服务名
 
@@ -79,6 +82,9 @@ services:
     image: apache/rocketmq:5.5.0
     container_name: vio-rmqbroker
     command: ["sh", "mqbroker", "-n", "rocketmq-namesrv:9876", "-c", "/home/rocketmq/rocketmq-5.5.0/conf/broker.conf"]
+    environment:
+      # 限内存：runbroker 默认 8g 堆——本机实测单容器吃 2.3G，是 16G 内存挤爆的主犯（2026-10-23 组长拍板加）
+      JAVA_OPT_EXT: "-Xms512m -Xmx512m -Xmn128m"
     ports:
       - "10909:10909"   # VIP 通道（部分客户端走 listenPort-2）
       - "10911:10911"   # 主端口，宿主 Java 客户端实际连它
@@ -105,8 +111,18 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-viomanager}
       MYSQL_USERNAME: root
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev-root-123}
+      # 容器内连 Redis 用服务名（与 kb 服务一致）；漏配时默认 localhost 连不上，缓存会静默熔断降级直查库
+      REDIS_HOST: redis
+      VIO_CACHE_ORG: "false"
+      VIO_CACHE_UNREAD: "false"
+      # CORS 白名单：nginx 转发用 $host 剥掉端口号，后端会把同源请求误判成跨域再 403
+      # （2026-10-23 实锤：浏览器 POST 一律带 Origin，登录 403"Invalid CORS request"弹网络异常；
+      # 8090=容器版主前端源，5174=vite 开发服务器直连源）
+      VIO_CORS_ALLOWED_ORIGINS: http://localhost:8090,http://localhost:5174
       # MinIO 凭据与上方 minio 服务共用同一套环境变量，改一处两端同步；桶由应用启动后自建
-      MINIO_ENDPOINT: http://minio:9000
+      # 端点默认走容器网络服务名直连（2026-10-23 起口径：host.docker.internal 在 WSL 重启后
+      # 解析成 IPv6 且不通，容器间依赖一律走服务名；exe 时代历史见 docs）
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-vio-minio}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev-minio-123}
       CLAMAV_HOST: clamav
@@ -114,14 +130,15 @@ services:
       # 必须与下方 kb 服务同值（kb 不设此变量会走默认值，主服务签发的 token 到 kb 全 401）
       JWT_SECRET: ${JWT_SECRET:-viomanager-local-dev-secret-key-32bytes-minimum}
       TZ: Asia/Shanghai
+
     ports:
       # 宿主端口可用 APP_PORT 覆盖：IDEA 实例占着 8088 时 APP_PORT=18088 起容器版并行
       - "${APP_PORT:-8088}:8088"
     depends_on:
       mysql:
         condition: service_healthy   # Flyway 建表赶在库就绪前会启动失败，等健康检查过了再起
-      minio:
-        condition: service_started
+      # minio 依赖刻意去掉：本机 MinIO 是宿主原生进程（app 用 MINIO_ENDPOINT 指过去），
+      # 起 minio 容器的全容器模式下端点自己指服务名，也不需要启动顺序保证
       clamav:
         condition: service_started
 
@@ -148,6 +165,28 @@ services:
         condition: service_healthy   # kb 自己的 Flyway 建 kb 库三表两基座，同样要等库就绪
       redis:
         condition: service_started
+
+  # 论坛服务（8089）：与 app/kb 同一镜像、构建一次，command 换跑 forum.jar。
+  # 独立库 vioforum（新卷由 mysql-init 自动建，老卷手工补建一次）；无 redis/minio 依赖；
+  # token 由主服务签发（同 JWT_SECRET 只验签）；MYSQL_DATABASE 必须显式传 vioforum 防走管理库默认值。
+  forum:
+    image: vio-backend-app:dev
+    container_name: vio-forum-app
+    profiles: ["app"]
+    command: ["forum.jar"]
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: vioforum
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev-root-123}
+      JWT_SECRET: ${JWT_SECRET:-viomanager-local-dev-secret-key-32bytes-minimum}
+      TZ: Asia/Shanghai
+    ports:
+      - "8089:8089"
+    depends_on:
+      mysql:
+        condition: service_healthy   # forum 的 Flyway 建 vioforum 库表，同样要等库就绪
 
 volumes:
   vio-mysql-data:
