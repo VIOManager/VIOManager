@@ -1,0 +1,21 @@
+# 全容器化模式覆盖文件：后端容器栈在跑时用——
+#   docker compose -f docker-compose.yml -f docker-compose.backend-net.yml up -d
+# 动机（2026-10-23）：WSL 重启后容器内 host.docker.internal 只解析出 IPv6 且不可达
+#   （nginx 日志 Network unreachable，前端时好时坏弹"网络异常"）；
+#   加入后端 compose 网络、nginx 按服务名直转，彻底绕开 host.docker.internal。
+# 注意：后端容器没在跑时别用本文件（外部网络不存在会报错），
+#   退回单文件 up -d 即恢复原"指向宿主机"模式。
+
+services:
+  web:
+    environment:
+      BACKEND_ORIGIN: http://app:8088
+      KB_ORIGIN: http://kb:8091
+    networks:
+      - default
+      - viobackend
+
+networks:
+  viobackend:
+    name: vio-backend_default
+    external: true

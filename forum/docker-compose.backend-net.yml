@@ -1,0 +1,22 @@
+# 全容器化 + 真实接口模式覆盖文件：后端容器栈在跑时用——
+#   cd forum && docker compose -f docker-compose.yml -f docker-compose.backend-net.yml up -d --build
+# ① USE_MOCK=false 构建期烘焙真实接口（默认 true 是论坛后端未实现时代的演示模式，2026-10-23 后端已合入可切）
+# ② BACKEND_ORIGIN 指向论坛后端容器服务名 forum 8089
+#   （原默认 host.docker.internal:8088 既指错了服务也踩了本机 IPv6 不通的雷，同日前端主站同雷已修）
+# 注意：后端容器没在跑时别用本文件（外部网络不存在会报错），退回单文件 up -d 即恢复演示模式。
+
+services:
+  web:
+    build:
+      args:
+        USE_MOCK: "false"
+    environment:
+      BACKEND_ORIGIN: http://forum:8089
+    networks:
+      - default
+      - viobackend
+
+networks:
+  viobackend:
+    name: vio-backend_default
+    external: true
