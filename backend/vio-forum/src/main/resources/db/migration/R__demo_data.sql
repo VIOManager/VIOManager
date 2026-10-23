@@ -1,8 +1,9 @@
 -- =====================================================================
 -- R__demo_data.sql —— 论坛库演示数据（Flyway repeatable：校验和变化即重跑）
 --
--- ⚠️ 幂等是生死线：固定 ID + INSERT ... AS new ON DUPLICATE KEY UPDATE，
---    第二次跑走更新分支，绝不撞主键。
+-- ⚠️ 幂等是生死线：固定 ID + INSERT ... ON DUPLICATE KEY UPDATE ... = VALUES(col)
+--    （MySQL 8.0/8.4 全兼容：VALUES() 在 8.0.20+ 标记废弃但仍受支持；
+--     不用 8.0.19+ 的 AS new 行别名——本机 8.0.16 不认），第二次跑走更新分支，绝不撞主键。
 -- ⚠️ 生产环境禁用：上线部署前删除本文件或清空内容（见上线检查清单）。
 --
 -- ID 段位（对照管理侧 R__demo_data 实占段，无碰撞）：
@@ -22,10 +23,9 @@ VALUES
     (9902, 'EE',       '电控', '电控组技术讨论',       2, 'NORMAL', 0),
     (9903, 'MODELING', '建模', '建模与结构设计',       3, 'NORMAL', 0),
     (9904, 'AI',       'AI',   'AI 组技术讨论',        4, 'NORMAL', 0)
-AS new
 ON DUPLICATE KEY UPDATE
-    name = new.name, description = new.description,
-    sort_order = new.sort_order, status = new.status;
+    name = VALUES(name), description = VALUES(description),
+    sort_order = VALUES(sort_order), status = VALUES(status);
 
 -- ---------------- 用户快照 5 人（9601-9605，memberCount 数据源） ----------------
 INSERT INTO forum_user (id, user_id, real_name, org_id, org_name, first_seen_at, last_active_at)
@@ -35,10 +35,9 @@ VALUES
     (9603, 203, '刘慧',       3,    '电子信息学院',     '2026-10-09 14:00:00', NOW() - INTERVAL 26 HOUR),
     (9604, 204, '王小明',     4,    '智能软件工作室',   '2026-10-08 11:00:00', NOW() - INTERVAL 1 HOUR),
     (9605, 205, '赵晓亮',     5,    '嵌入式创客空间',   '2026-10-09 09:30:00', NOW() - INTERVAL 20 MINUTE)
-AS new
 ON DUPLICATE KEY UPDATE
-    real_name = new.real_name, org_id = new.org_id, org_name = new.org_name,
-    last_active_at = new.last_active_at;
+    real_name = VALUES(real_name), org_id = VALUES(org_id), org_name = VALUES(org_name),
+    last_active_at = VALUES(last_active_at);
 
 -- ---------------- 主题 15 帖（9001-9010 原有 + 9011-9015 技术向，2026-10-15 承接原推送域） ----------------
 INSERT INTO forum_topic (id, board_id, title, body, tags, author_user_id, author_name, author_group,
@@ -105,14 +104,13 @@ VALUES
      '三段式模板：\n角色段告诉模型它是谁。\n约束段给出输出格式与禁区。\n示例段给一两个理想输出样例。\n套上之后 JSON 解析成功率肉眼可见地涨，周报模板就是照这个改的。',
      '提示词,LLM', 204, '王小明', '智能软件工作室', 'NORMAL', 0, 0, 17, 3, 1,
      NOW() - INTERVAL 4 DAY, 204, '王小明', 0, NOW() - INTERVAL 4 DAY)
-AS new
 ON DUPLICATE KEY UPDATE
-    title = new.title, body = new.body, tags = new.tags,
-    author_name = new.author_name, author_group = new.author_group,
-    status = new.status, pinned = new.pinned,
-    reply_count = new.reply_count, view_count = new.view_count,
-    like_count = new.like_count, collect_count = new.collect_count,
-    last_reply_at = new.last_reply_at, last_reply_by_name = new.last_reply_by_name;
+    title = VALUES(title), body = VALUES(body), tags = VALUES(tags),
+    author_name = VALUES(author_name), author_group = VALUES(author_group),
+    status = VALUES(status), pinned = VALUES(pinned),
+    reply_count = VALUES(reply_count), view_count = VALUES(view_count),
+    like_count = VALUES(like_count), collect_count = VALUES(collect_count),
+    last_reply_at = VALUES(last_reply_at), last_reply_by_name = VALUES(last_reply_by_name);
 
 -- ---------------- 楼层（9101-9125，reply_count 与主题一致；9011-9015 新主题暂无楼层） ----------------
 INSERT INTO forum_reply (id, topic_id, floor_no, content, author_user_id, author_name, author_group,
@@ -143,9 +141,8 @@ VALUES
     (9123, 9009, 1, '试试 PA-CF 或尼龙碳纤，冲击件我们一直在用。', 202, '陈志远', '计算机学院', 2, 'NORMAL', 0, NOW() - INTERVAL 62 HOUR),
     (9124, 9009, 2, '再补一句：打印方向让层间受剪切，别受拉。', 202, '陈志远', '计算机学院', 1, 'NORMAL', 0, NOW() - INTERVAL 60 HOUR),
     (9125, 9010, 1, '答疑在此跟帖，看到就回。', 202, '陈志远', '计算机学院', 0, 'NORMAL', 0, NOW() - INTERVAL 70 HOUR)
-AS new
 ON DUPLICATE KEY UPDATE
-    content = new.content, author_name = new.author_name, author_group = new.author_group,
-    like_count = new.like_count, status = new.status;
+    content = VALUES(content), author_name = VALUES(author_name), author_group = VALUES(author_group),
+    like_count = VALUES(like_count), status = VALUES(status);
 
 -- 技术推送段（9501-9510）已随 tech_post/tech_collect 两表退役删除（V2，2026-10-15）
