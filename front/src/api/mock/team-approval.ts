@@ -12,7 +12,7 @@ import type { MockTeamMember } from './team-data'
 import { members } from './member-data'
 import type { MockMember } from './member-data'
 import { contests } from './contest-data'
-import { findTeam } from './team-util'
+import { findTeam, violatesRepeatJoin } from './team-util'
 
 let teamSeq = 100
 
@@ -50,6 +50,8 @@ registerApprovalHandler('TEAM_CREATE', {
     for (const t of teams) {
       if (t.contestId === contestId && t.name === name && t.status === 'ACTIVE') return
     }
+    // 4004 复核：审批在途期间申请人已确认同比赛他队且规则禁止重复参赛，不再建队（对齐 TE04 批准复核语义）
+    if (violatesRepeatJoin(contestId, leader.id, '')) return
     let contestName = ''
     for (const c of contests) {
       if (c.id === contestId) contestName = c.name
@@ -81,6 +83,8 @@ registerApprovalHandler('TEAM_ADD_MEMBER', {
     for (const m of t.members) {
       if (m.memberId === memberId && (m.status === 'CONFIRMED' || m.status === 'UNCONFIRMED')) return
     }
+    // 4004 复核：审批在途期间目标人已确认同比赛他队且规则禁止，不再入队（清单 TE04"审批时按最新成员关系复核"）
+    if (violatesRepeatJoin(t.contestId, memberId, t.id)) return
     const target = memberOf(memberId)
     if (!target) return
     t.members.push(toTeamMember(target, 'MEMBER', 'UNCONFIRMED'))

@@ -2,7 +2,7 @@
  * 赛队 mock（B 线 TE01–TE13）
  * ⚠️ 演示：组队/加人/移除不直接生效，写入 mock 审批单（approval.ts）；队员确认直接流转（演示 UNCONFIRMED→CONFIRMED）
  * 视角裁剪（TE02/TE11）：管理端/队长/指导教师见全字段；普通队员仅本人全字段+他人公开字段；非本队 4008
- * 校验：4002 队名同比赛重复 / 4003 超上限 / 4004 重复参赛仅拦已确认且规则禁止时 / 4005 已在队 / 4006 非教师 / 4009 有阻断拒解散 / 4010 队长不可移除
+ * 校验：4002 队名同比赛重复 / 4003 超上限 / 4004 重复参赛仅拦已确认且规则禁止时 / 4005 已在队 / 4006 非教师 / 4007 同队同目标待审批 / 4009 有阻断拒解散 / 4010 队长不可移除
  * 辅助函数（查找/视角判定/列表详情转换/规则取数）拆在 mock/team-util.ts
  * TODO(联调)：后端赛队接口就绪后删除本文件；审批复核时序漏洞由后端在审批通过时按最新关系复核
  */
@@ -10,10 +10,10 @@ import { fail, ok, registerMock } from './registry'
 import { findMockUserByToken } from './auth'
 import { meAsMember } from './member'
 import { contests } from './contest-data'
-import { pushApproval } from './approval-data'
+import { hasPendingApproval, pushApproval } from './approval-data'
 import { orgIdOfMember } from './scope'
 import { teams } from './team-data'
-import { contestRuleBool, contestRuleNumber, findTeam, toDetail, toListItem, viewerRoleOf } from './team-util'
+import { contestRuleBool, contestRuleNumber, findTeam, toDetail, toListItem, viewerRoleOf, violatesRepeatJoin } from './team-util'
 import { teamVisible } from './scope'
 import type { TeamListItem, TeamMemberSearchItem } from '@/api/team'
 import { members } from './member-data'
@@ -152,6 +152,8 @@ registerMock({
     const active = t.members.filter((m) => m.status === 'CONFIRMED' || m.status === 'UNCONFIRMED')
     const limit = contestRuleNumber(t.contestId, 'memberLimit', 3)
     if (active.length >= limit) return fail(4003, '队伍人数超上限（' + limit + '）')
+    // 4004：目标人已确认参加同比赛其他队伍且规则禁止重复参赛（清单 TE04 校验序）
+    if (violatesRepeatJoin(t.contestId, memberId, t.id)) return fail(4004, '目标人已确认参加该比赛其他队伍（allowRepeatJoin=否）')
     for (const m of active) {
       if (m.memberId === memberId) return fail(4005, '目标人已在队或已有待审批申请')
     }
@@ -160,6 +162,8 @@ registerMock({
       if (m.id === memberId) target = m
     }
     if (!target) return fail(1004, '目标人不存在')
+    // 4007：同队伍同目标已有待审批申请（清单 TE04 校验序）
+    if (hasPendingApproval('TEAM_ADD_MEMBER', t.id, memberId)) return fail(4007, '同队伍同目标已有待审批申请')
     pushApproval({
       bizType: 'TEAM_ADD_MEMBER', bizId: t.id,
       bizTitle: t.leaderName + ' · ' + t.name + '申请加人：' + target.name,
@@ -186,6 +190,8 @@ registerMock({
       if (m.memberId !== ctx.params.memberId) continue
       if (!me || me.id !== m.memberId) return fail(1003, '只能本人确认')
       if (m.status !== 'UNCONFIRMED') return fail(1001, '当前状态不可确认')
+      // 4004 复核：确认入队瞬间已确认同比赛他队且规则禁止时拦截（封堵两队同时邀请同一人的时序漏洞）
+      if (String(ctx.body.action) !== 'REJECT' && violatesRepeatJoin(t.contestId, m.memberId, t.id)) return fail(4004, '你已确认参加该比赛其他队伍（allowRepeatJoin=否）')
       m.status = String(ctx.body.action) === 'REJECT' ? 'REJECTED' : 'CONFIRMED'
       return ok(null)
     }
