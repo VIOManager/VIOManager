@@ -8,6 +8,7 @@
  */
 import { defineStore } from 'pinia'
 import { avatarOf as genAvatar } from '@/config/avatars'
+import { useThemeStore } from '@/stores/theme'
 
 const TOKEN_KEY = 'vio_token'
 // 开发调试件键：mock 层据此判定当前登录人（联调后移除，改从 JWT 解析）
@@ -62,11 +63,14 @@ export const useUserStore = defineStore('forum-user', {
     isAdmin: (s) => s.role === 'SUPER_ADMIN',
     /**
      * 按名字取头像（全站渲染统一走这里，勿直连 config/avatars）：
-     * 是本人且已设自定义头像 → 自定义；其余成员 → pravatar 固定映射。
-     * 返回函数的形式让模板可传参（name, size），闭包内读 state 保证换头像后触发重渲染
+     * 是本人且已设自定义头像 → 自定义；其余成员 → 主站同款首字块。
+     * 闭包内读 theme store 的响应式值：切主题时依赖变化触发全站重渲染，
+     * 首字块按新主题档的绿令牌重画（config/avatars 缓存键含主题，不重复画）
      */
     avatarByName: (s) => (name: string, size: number) =>
-      s.avatar && name === s.realName ? s.avatar : genAvatar(name, size)
+      s.avatar && name === s.realName
+        ? s.avatar
+        : genAvatar(name, size, useThemeStore().current)
   },
   actions: {
     /**
