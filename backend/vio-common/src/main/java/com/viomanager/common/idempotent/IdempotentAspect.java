@@ -74,7 +74,7 @@ public class IdempotentAspect {
             if (!expired) {
                 String storedHash = (String) existing.get("request_hash");
                 if (storedHash != null && !storedHash.equals(requestHash)) {
-                    log.warn("幂等键同键不同参（疑似前端键生成随机数不足）：key={}, bizType={}",
+                     log.warn("幂等键同键不同参（疑似前端键生成随机数不足）：key={}, bizType={}",
                             idemKey, idempotent.bizType());
                 }
                 throw new BizException(CommonErrorCode.DUPLICATE_SUBMIT);
@@ -106,6 +106,7 @@ public class IdempotentAspect {
             throw businessError;
         }
     }
+
 
     /** 首次执行结果摘要："code=0,message=ok,data=..." 形态，超长截断到列宽 */
     private String summarize(Object result) {

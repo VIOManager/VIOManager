@@ -102,6 +102,16 @@
             <version>3.27.2</version>
         </dependency>
 
+        <!-- springdoc OpenAPI（Apifox 导入底座）：/v3/api-docs 自动导出全部接口的 OpenAPI JSON，
+             Apifox 按该 URL 导入或定时同步；swagger-ui 网页端刻意不开（yml 关闭）——
+             JwtAuthFilter 免认证白名单是精确匹配，一个 JSON 端点就够，不放行一堆静态资源；
+             版本锁定 2.8.8（本机 mvn_repo 已缓存，零下载） -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.8.8</version>
+        </dependency>
+
         <!-- MinIO 对象存储 SDK：Step 8 文件服务 -->
         <dependency>
             <groupId>io.minio</groupId>

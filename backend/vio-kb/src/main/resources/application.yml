@@ -21,9 +21,9 @@ spring:
       connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
   datasource:
     # 独立库 viomanager_kb（与主库同实例不同 schema；库需一次性手工创建，见本模块 README）
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${KB_DATABASE:viomanager_kb}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${KB_DATABASE:viomanager_kb}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:root}
-    password: ${MYSQL_PASSWORD:root}
+    password: ${MYSQL_PASSWORD:dev-root-123}
   flyway:
     enabled: true
     locations: classpath:db/migration

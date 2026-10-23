@@ -12,7 +12,7 @@ import lombok.experimental.Accessors;
  * 前后端传输一律走 dto 包的 DTO/VO，禁止把本实体直接返回给前端。
  * ⚠️ 敏感字段标记（加密/脱敏在 service 层做，见 PersonSensitiveSupport）：
  *  - idCard：身份证号，数据库只存 AES 密文，出参只对超管解密返回；
- *  - phone：手机号，出参对非超管中间 4 位打星；
+ *  - phone：手机号，FULL/CAPTAIN 视角出完整号（M02 四档裁剪见 PersonQuerySupport.toVO）。
  *  - idCardLast4：身份证尾号 4 位，专供列表脱敏展示，避免解密。
  */
 @Data
@@ -37,7 +37,7 @@ public class Person extends BaseEntity {
     private String jobNo;
 
     /**
-     * 手机号 ⚠️ 敏感字段：非超管出参脱敏（138****5678）
+     * 手机号 ⚠️ 敏感字段：出参按 M02 视角裁剪（LIMITED 档不返回，FULL/CAPTAIN 档完整）
      */
     private String phone;
 

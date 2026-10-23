@@ -75,16 +75,12 @@ class PersonViewTest extends PersonTestBase {
     }
 
     @Test
-    void deptAdminOfOtherOrgGetsLimited() throws Exception {
-        //机械学院管理员看计算机学院的人：受限档，不报错（契约：其他仅姓名/学院/班级/技能）
+    void deptAdminOfOtherOrgGetsRejected() throws Exception {
+        //机械学院管理员看计算机学院的人：403+1003 拒绝（2026-10-23 M02 收紧：门禁先行，不再返回脱敏视图）
         mockMvc.perform(get("/api/members/" + PERSON_TARGET)
                         .header("Authorization", "Bearer " + deptMeToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.limited").value(true))
-                .andExpect(jsonPath("$.data.name").value("目标人"))
-                .andExpect(jsonPath("$.data.phone").value(nullValue()))
-                .andExpect(jsonPath("$.data.studentNo").value(nullValue()))
-                .andExpect(jsonPath("$.data.idCard").value(nullValue()));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(1003));
     }
 
     @Test
@@ -110,13 +106,45 @@ class PersonViewTest extends PersonTestBase {
     }
 
     @Test
-    void strangerStudentGetsLimited() throws Exception {
+    void strangerStudentGetsRejected() throws Exception {
+        //陌生学生查无关人：403+1003 拒绝（2026-10-23 M02 收紧：学生仅可查本人，队长视角走 isCaptainOf 放行）
         mockMvc.perform(get("/api/members/" + PERSON_TARGET)
                         .header("Authorization", "Bearer " + strangerToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(1003));
+    }
+
+    @Test
+    void studentCanSearchOptionsWithLeanFields() throws Exception {
+        //M14 受限候选搜索：学生可用（队长流程加载候选的受限口），字段只有目录级七项，
+        //敏感列（手机号/身份证/邮箱）从查询 select 根上就不带出
+        mockMvc.perform(get("/api/members/options?keyword=目标")
+                        .header("Authorization", "Bearer " + strangerToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.limited").value(true))
-                .andExpect(jsonPath("$.data.name").value("目标人"))
-                .andExpect(jsonPath("$.data.phone").value(nullValue()));
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.list[0].name").value("目标人"))
+                .andExpect(jsonPath("$.data.list[0].studentNo").value("s94011"))
+                .andExpect(jsonPath("$.data.list[0].memberType").value("STUDENT"))
+                .andExpect(jsonPath("$.data.list[0].phone").doesNotExist())
+                .andExpect(jsonPath("$.data.list[0].idCard").doesNotExist())
+                .andExpect(jsonPath("$.data.list[0].email").doesNotExist());
+    }
+
+    @Test
+    void optionsFilterByMemberType() throws Exception {
+        //指导教师候选口径：memberType=TEACHER 只出教师；学生关键词配教师类型应为空
+        jdbcTemplate.update(
+                "INSERT INTO member (id, name, job_no, org_id, member_type, status, has_account) "
+                        + "VALUES (94199, '选项教师', 't9901', " + ORG_SUB + ", 'TEACHER', 1, 0)");
+        mockMvc.perform(get("/api/members/options?keyword=选项教师&memberType=TEACHER")
+                        .header("Authorization", "Bearer " + captainToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.list[0].name").value("选项教师"))
+                .andExpect(jsonPath("$.data.list[0].jobNo").value("t9901"));
+        mockMvc.perform(get("/api/members/options?keyword=目标人&memberType=TEACHER")
+                        .header("Authorization", "Bearer " + captainToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0));
     }
 
     @Test

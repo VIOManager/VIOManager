@@ -5,6 +5,7 @@ import com.viomanager.common.auth.RequireRole;
 import com.viomanager.common.idempotent.Idempotent;
 import com.viomanager.common.result.PageResult;
 import com.viomanager.common.result.Result;
+import com.viomanager.person.dto.MemberOptionVO;
 import com.viomanager.person.dto.PersonAccountDTO;
 import com.viomanager.person.dto.PersonCreateDTO;
 import com.viomanager.person.dto.PersonFileBindDTO;
@@ -49,6 +50,18 @@ public class PersonController {
     @GetMapping
     public Result<PageResult<PersonVO>> page(@Valid PersonQueryDTO dto) {
         return personService.page(dto);
+    }
+
+    /** M14 受限候选搜索（队长流程用）：任意登录用户可调（同 M02 口径不在此处限角色），
+     *  出参仅目录级七字段无任何敏感列；B 线队长端加载预填成员/指导教师候选专用
+     *  （原先直调 M01 必 403，2026-10-23 增此受限口）。字面路径优先于 /{id} 模板匹配。 */
+    @GetMapping("/options")
+    public Result<PageResult<MemberOptionVO>> options(
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "memberType", required = false) String memberType,
+            @RequestParam(value = "page", required = false, defaultValue = "1") Integer page,
+            @RequestParam(value = "size", required = false, defaultValue = "20") Integer size) {
+        return personService.options(keyword, memberType, page, size);
     }
 
     /** M02 详情：任意登录用户可调，出参按四档视角裁剪（服务层），不在此处限角色 */
@@ -132,6 +145,7 @@ public class PersonController {
     }
 
     /** M10 完整身份证号：超管/本部门管理员/本队队长/本人（3010），每次查看写审计 */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN", "STUDENT"})
     @AuditLog(bizType = "MEMBER_ID_CARD", label = "查看身份证",
             summary = "'查看身份证：人员' + #id")
     @GetMapping("/{id}/id-card")
@@ -140,6 +154,7 @@ public class PersonController {
     }
 
     /** M11a 证件照下载：权限同 M10，写审计；文件本体走文件服务的病毒闸门与下载计数 */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN", "STUDENT"})
     @AuditLog(bizType = "MEMBER_PHOTO_VIEW", label = "下载证件照",
             summary = "'下载证件照：人员' + #id")
     @GetMapping("/{id}/photo")
@@ -148,6 +163,7 @@ public class PersonController {
     }
 
     /** M11b 电子签名下载：权限同 M10，写审计 */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN", "STUDENT"})
     @AuditLog(bizType = "MEMBER_SIGNATURE_VIEW", label = "下载电子签名",
             summary = "'下载电子签名：人员' + #id")
     @GetMapping("/{id}/signature")

@@ -10,6 +10,7 @@ import com.viomanager.common.exception.BizException;
 import com.viomanager.common.result.PageResult;
 import com.viomanager.common.result.Result;
 import com.viomanager.file.service.IFileService;
+import com.viomanager.person.dto.MemberOptionVO;
 import com.viomanager.person.dto.PersonAccountDTO;
 import com.viomanager.person.dto.PersonCreateDTO;
 import com.viomanager.person.dto.PersonFileBindDTO;
@@ -46,8 +47,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class PersonServiceImpl implements PersonService {
 
-    private static final int MAX_PAGE_SIZE = 100;
-
     @Resource
     private PersonMapper personMapper;
 
@@ -77,36 +76,26 @@ public class PersonServiceImpl implements PersonService {
 
     @Override
     public Result<PageResult<PersonVO>> page(PersonQueryDTO dto) {
-        //1.分页参数兜底（规范 §2.3：默认 1/20，size 上限 100）
-        int page = dto.getPage() == null || dto.getPage() < 1 ? 1 : dto.getPage();
-        int size = dto.getSize() == null || dto.getSize() < 1 ? 20 : Math.min(dto.getSize(), MAX_PAGE_SIZE);
-        //2.筛选拼装 + 部门管理员子树过滤（Mapper 改 SELF 后由服务层负责）
-        QueryWrapper<Person> wrapper = querySupport.buildWrapper(dto);
-        querySupport.applyDeptAdminSubtree(wrapper);
-        //3.分页查询
-        Page<Person> result = personMapper.selectPage(new Page<>(page, size), wrapper);
-        List<Person> records = result.getRecords();
-        //4.批量取技能与组织名（防 N+1）后按列表口径裁剪（身份证/证件照/签名/邮箱恒不进列表）
-        Map<Long, List<String>> skillsMap = querySupport.loadSkills(
-                records.stream().map(Person::getId).toList());
-        Map<Long, String> orgNames = querySupport.loadOrgNames(
-                records.stream().map(Person::getOrgId).filter(Objects::nonNull).distinct().toList());
-        List<PersonVO> list = new ArrayList<>(records.size());
-        for (Person person : records) {
-            PersonVO vo = querySupport.toVO(person, skillsMap.get(person.getId()), View.FULL, true);
-            vo.setOrgName(orgNames.get(person.getOrgId()));
-            list.add(vo);
-        }
-        return Result.ok(PageResult.of(list, result.getTotal(), page, size));
+        //查询逻辑（筛选/子树/裁剪）在 PersonQuerySupport.page
+        return Result.ok(querySupport.page(dto));
+    }
+
+    @Override
+    public Result<PageResult<MemberOptionVO>> options(String keyword, String memberType,
+                                                       Integer page, Integer size) {
+        //M14 受限候选搜索：查询逻辑（列裁剪/过滤/分页兜底）在 PersonQuerySupport.options
+        return Result.ok(querySupport.options(keyword, memberType, page, size));
     }
 
     @Override
     public Result<PersonVO> detail(Long id) {
-        //1.查档案（Mapper SELF：任意登录人可查到行，可见范围靠出参裁剪；不存在 1004）
+        //1.查档案（Mapper SELF：不存在 1004）
         Person person = loadPerson(id);
-        //2.四档视角判定：超管/本部门管理员/本人全量，本队队长大部分，其他受限
+        //2.访问门禁：部门管理员限子树、学生只能看自己；通过后再做四档视角裁剪
+        viewerSupport.assertCanViewDetail(person);
+        //3.四档视角判定（超管/本部门管理员/本人全量，本队队长大部分，其他受限）
         View view = viewerSupport.decideView(person);
-        //3.技能 + 视角裁剪 + 组织名
+        //4.技能 + 视角裁剪 + 组织名
         return Result.ok(buildDetailVo(person, view));
     }
 
@@ -187,9 +176,11 @@ public class PersonServiceImpl implements PersonService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Result<PersonImportVO> importExcel(MultipartFile file) {
-        //逐行校验/跳过/入库的完整口径在 PersonImportSupport（组织按名称、已存在学号跳过）
+        //⚠️ 无 @Transactional：PersonImportSupport 内部逐行 try/catch DataIntegrityViolationException
+        //  转逐行错误。若外层加事务，Spring 声明式事务会在单行异常时标记 rollbackOnly，
+        //  即使 catch 了也会在 commit 时 UnexpectedRollbackException → 整批全部回滚，
+        //  把"逐行回滚防线"完全击穿。导入本来就是逐行独立，不需要外层事务。
         return Result.ok(importSupport.importExcel(file));
     }
 
@@ -254,6 +245,7 @@ public class PersonServiceImpl implements PersonService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void bindAccount(Long id, PersonAccountDTO dto) {
         //1.查档案（1004）+ 子树封堵
         Person person = loadPerson(id);
@@ -263,10 +255,12 @@ public class PersonServiceImpl implements PersonService {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "该人员已绑定登录账号");
         }
         //3.建账号（登录名默认链 + 初始密码 abc123 + 2003 查重在账号服务）并回写标记
+        //（事务：建账号与 has_account 回写必须同生共死，否则出现"账号已建但标记未写"的卡死态）
         commandSupport.bindAccountFor(person, dto.getLoginName());
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void changeAccount(Long id, PersonAccountDTO dto) {
         //1.查档案（1004）+ 子树封堵
         Person person = loadPerson(id);

@@ -44,7 +44,7 @@
 | 编号 | 接口 | 说明 |
 |------|------|------|
 | M01 | GET /api/members | 列表。筛选：keyword（姓名/学号/手机号模糊）、orgId、memberType、skill、hasAccount。列表项：id name studentNo college major className phone memberType orgName hasAccount idCardLast4 skills。**列表不返回身份证、证件照、邮箱**，进详情 |
-| M02 | GET /api/members/{id} | 详情。字段按 §2.3 裁剪：超管/本部门管理员全量；本队队长见大部分（身份证走 M10）；本人全量；其他仅姓名/学院/班级/技能 |
+| M02 | GET /api/members/{id} | 详情。字段按 §2.3 裁剪：超管/本部门管理员（限本组织子树）全量；本队队长见大部分（身份证走 M10）；本人全量；其他 1003 拒绝（2026-10-23 拍板收紧：学生仅可查本人，原"其他仅姓名/学院/班级/技能"的脱敏视图取消） |
 | M03 | POST /api/members | 手工新建（管理员）。studentNo 可空、不可重复（3001） |
 | M04 | PUT /api/members/{id} | 编辑。studentNo 不接受变更（3002） |
 | M05 | DELETE /api/members/{id} | 队长拒绝（3003）；当前登录账号拒绝（3004）；普通队员删除时清除队伍成员关系；材料/成果等业务记录保留 |
@@ -56,6 +56,7 @@
 | M11 | GET /api/members/{id}/photo 与 /signature | 下载，权限同 M10，写审计 |
 | M12 | PUT /api/members/{id}/skills | 更新技能标签；本人或管理员；值来自 SKILL 字典 |
 | M13 | POST/PUT /api/members/{id}/account | 管理员绑定账号（登录名默认=学工号、初始密码 abc123、default_password=1）；PUT 改登录名/重置密码（重置后 default_password 回 1）。底层调组长账号服务 |
+| M14 | GET /api/members/options | 受限候选搜索（队长流程用，2026-10-23 增）：keyword 模糊（姓名/学号/学工号）、memberType 精确、page/size（size 上限 50，默认 20）；**任意登录角色可用**（B 线队长端原先直调 M01 必 403）；仅返回 id name memberType studentNo jobNo orgId orgName 七字段，无任何敏感列，只含启用状态成员，按姓名排序 |
 
 ### 技能字典（SKILL 字典归 A 维护）
 

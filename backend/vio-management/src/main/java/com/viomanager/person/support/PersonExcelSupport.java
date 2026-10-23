@@ -25,6 +25,9 @@ import org.springframework.web.multipart.MultipartFile;
  */
 public final class PersonExcelSupport {
 
+    /** 单文件字节上限：先于整包读内存拦截超大文件，防 OOM（5000 行 xlsx 远小于此值） */
+    private static final long MAX_FILE_BYTES = 5L * 1024 * 1024;
+
     private PersonExcelSupport() {
     }
 
@@ -35,6 +38,9 @@ public final class PersonExcelSupport {
     public static List<List<String>> read(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "请选择要导入的 Excel 文件");
+        }
+        if (file.getSize() > MAX_FILE_BYTES) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "Excel 文件过大（上限 5MB），请分批导入");
         }
         String fileName = file.getOriginalFilename();
         if (fileName == null || !fileName.toLowerCase().endsWith(".xlsx")) {

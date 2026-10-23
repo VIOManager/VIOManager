@@ -70,18 +70,19 @@ class DemoDataTest {
 
     @Test
     void orgTreeContainsTwoSubOrgs() {
-        // 组织树 5 个节点，其中 2 个分子组织（方案演示要求）
+        // 组织树 3 个节点：中心 → 2 个协会直挂（2026-10-23 改回 PRD §3.3 原意形状，
+        // 学院/专业/班级回归人员档案文本字段，不再是树节点）
         Long orgCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM sys_org WHERE id IN (1, 2, 3, 4, 5) AND deleted = 0", Long.class);
+                "SELECT COUNT(*) FROM sys_org WHERE id IN (1, 2, 3) AND deleted = 0", Long.class);
         orgCount = orgCount == null ? 0 : orgCount;
-        org.junit.jupiter.api.Assertions.assertEquals(5, orgCount);
+        org.junit.jupiter.api.Assertions.assertEquals(3, orgCount);
         Long subOrgCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM sys_org WHERE is_sub_org = 1 AND deleted = 0", Long.class);
         org.junit.jupiter.api.Assertions.assertEquals(2, subOrgCount == null ? 0 : subOrgCount);
-        // 分子组织的 path 挂在学院下面（数据范围子树演示的根基）
+        // 协会直挂中心（数据范围子树演示的根基）
         String path = jdbcTemplate.queryForObject(
-                "SELECT path FROM sys_org WHERE id = 4", String.class);
-        org.junit.jupiter.api.Assertions.assertEquals("/0/1/2/4/", path);
+                "SELECT path FROM sys_org WHERE id = 2", String.class);
+        org.junit.jupiter.api.Assertions.assertEquals("/0/1/2/", path);
     }
 
     @Test

@@ -39,6 +39,14 @@ spring:
       timeout: ${REDIS_TIMEOUT:1s}
       connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
 
+springdoc:
+  # OpenAPI JSON 端点（Apifox 导入用）：生产置 VIO_API_DOCS=false 整体关闭；
+  # swagger-ui 网页端不开——JwtAuthFilter 白名单是精确匹配，只放 /v3/api-docs 一个口
+  api-docs:
+    enabled: ${VIO_API_DOCS:true}
+  swagger-ui:
+    enabled: false
+
 minio:
   # 对象存储连接位：Step 8 文件服务才接入 SDK，此处先落配置约定
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
@@ -63,7 +71,7 @@ vio:
     expire-hours: 2   # 阶段2 论坛只验签不查库，改密踢人靠短时效兜底（架构调整方案 §4）
   auth:
     # 免认证路径，逗号分隔；以后新增公开接口在此登记
-    skip-paths: /api/health,/api/auth/login
+    skip-paths: /api/health,/api/auth/login,/v3/api-docs
   cors:
     # 跨域白名单：阶段 1 前后端直连（Vite dev 5174），阶段 2 Nginx 同源后置空
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5174,http://127.0.0.1:5174}

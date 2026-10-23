@@ -64,6 +64,42 @@ public class PersonViewerSupport {
     }
 
     /**
+     * M02 详情访问门禁（与 decideView 配合：门禁先挡无权查看，decideView 再出参裁剪；
+     * 不改动 decideView 本身——它被 M10/M11 的 assertCanViewSensitive 共用，改成 throw 会连累那些路径）。
+     * 角色口径：
+     *  - SUPER_ADMIN：放行（可看所有）
+     *  - DEPT_ADMIN：目标组织必须在自己子树内（与 PUT/DELETE 的 assertAdminCanManage 保持统一）
+     *  - STUDENT（及其他角色）：只能看自己；登录人未绑档案 → 1003
+     */
+    public void assertCanViewDetail(Person person) {
+        CurrentUser user = UserHolder.getUser();
+        if (user == null) {
+            throw new BizException(CommonErrorCode.FORBIDDEN);
+        }
+        if ("SUPER_ADMIN".equals(user.getRole())) {
+            return;
+        }
+        if ("DEPT_ADMIN".equals(user.getRole())) {
+            if (!orgInMySubtree(user.getOrgId(), person.getOrgId())) {
+                throw new BizException(CommonErrorCode.FORBIDDEN, "无权查看该组织的人员详情");
+            }
+            return;
+        }
+        // 其他角色（STUDENT/CAPTAIN 等）：本人放行，本队队长可看队员（与 decideView 的 CAPTAIN 视角对齐）
+        Long memberId = currentMemberId(user.getUserId());
+        if (memberId == null) {
+            throw new BizException(CommonErrorCode.FORBIDDEN);
+        }
+        if (memberId.equals(person.getId())) {
+            return;
+        }
+        if (personTeamSupport.isCaptainOf(memberId, person.getId())) {
+            return;
+        }
+        throw new BizException(CommonErrorCode.FORBIDDEN);
+    }
+
+    /**
      * M10 身份证 / M11 证件照签名的查看判定：视角达到 CAPTAIN 及以上才放行，否则 3010。
      */
     public void assertCanViewSensitive(Person person) {

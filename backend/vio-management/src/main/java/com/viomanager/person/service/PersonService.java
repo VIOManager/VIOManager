@@ -2,6 +2,7 @@ package com.viomanager.person.service;
 
 import com.viomanager.common.result.PageResult;
 import com.viomanager.common.result.Result;
+import com.viomanager.person.dto.MemberOptionVO;
 import com.viomanager.person.dto.PersonAccountDTO;
 import com.viomanager.person.dto.PersonCreateDTO;
 import com.viomanager.person.dto.PersonFileBindDTO;
@@ -15,7 +16,7 @@ import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 人员档案服务（A 线契约 M01–M13 + export 补充接口）。
+ * 人员档案服务（A 线契约 M01–M14 + export 补充接口）。
  * controller 只收参数转发；复杂逻辑拆在 support 包：
  * 视角判定 PersonViewerSupport、查询裁剪 PersonQuerySupport、写侧动作 PersonCommandSupport、
  * 导入 PersonImportSupport、Excel 读写 PersonExcelSupport / PersonExcelWriter。
@@ -24,6 +25,10 @@ public interface PersonService {
 
     /** M01 分页列表：部门管理员服务端叠加组织子树过滤；列表永不返回身份证/证件照/邮箱。 */
     Result<PageResult<PersonVO>> page(PersonQueryDTO dto);
+
+    /** M14 受限候选搜索（队长流程用）：任意登录角色，仅目录级七字段（id/姓名/类型/学号/工号/组织），
+     *  无任何敏感列；B 线队长端加载预填成员与指导教师候选专用（原先直调 M01 必 403）。 */
+    Result<PageResult<MemberOptionVO>> options(String keyword, String memberType, Integer page, Integer size);
 
     /** M02 详情：任意登录用户，出参按四档视角裁剪（全量/队长大部分/受限）。 */
     Result<PersonVO> detail(Long id);
