@@ -10,6 +10,7 @@ import com.viomanager.approval.entity.ApprovalRecord;
 import com.viomanager.approval.mapper.ApprovalMapper;
 import com.viomanager.approval.mapper.ApprovalRecordMapper;
 import com.viomanager.approval.service.IApprovalQueryService;
+import com.viomanager.approval.support.ApprovalUnreadCache;
 import com.viomanager.approval.support.UnreadCounter;
 import com.viomanager.approval.vo.ApprovalDetailVO;
 import com.viomanager.approval.vo.ApprovalRecordVO;
@@ -54,6 +55,9 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
     @Resource
     private UnreadCounter unreadCounter;
 
+    @Resource
+    private ApprovalUnreadCache approvalUnreadCache;
+
     @Override
     public Result<PageResult<ApprovalVO>> list(ApprovalQueryDTO dto) {
         CurrentUser user = UserHolder.getUser();
@@ -87,7 +91,9 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
             wrapper.like("biz_title", dto.getKeyword());
         }
         wrapper.orderByDesc("created_at");
-        //3.分页查询转 VO
+        //3.分页查询转 VO：列表只要 VO 的窄列——biz_payload 快照列宽（详情页才用），
+        //分页白拉它最亏（2026-10-20 组长规矩：SQL 禁 SELECT *，隐式全列同理）
+        wrapper.select(Approval.class, info -> !"biz_payload".equals(info.getColumn()));
         Page<Approval> page = approvalMapper.selectPage(
                 new Page<>(dto.getPage(), dto.getSize()), wrapper);
         List<ApprovalVO> voList = new ArrayList<>();
@@ -163,8 +169,10 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
             vo.setResultCount(0);
             return Result.ok(vo);
         }
-        //2.计数口径收口到 UnreadCounter：读路径与消费者重算回写走同一段逻辑，数字不会漂移
-        return Result.ok(unreadCounter.countFor(memberId));
+        //2.计数口径收口到 UnreadCounter：读路径走 cache-aside（插入点②），miss 现算回填——
+        //  与消费者重算回写走同一段计数逻辑，数字不会漂移；开关关时就是现状直查库
+        return Result.ok(approvalUnreadCache.get(memberId,
+                () -> unreadCounter.countFor(memberId)));
     }
 
     /** 详情可见性：超管 / 发起人 / 目标人 / 审批组织子树内管理员，其余 6002 */
