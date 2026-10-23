@@ -11,6 +11,7 @@ const HomePage = () => import('@/views/home/HomePage.vue')
 const TopicPage = () => import('@/views/topic/TopicPage.vue')
 const FeedPage = () => import('@/views/feed/FeedPage.vue')
 const GatePage = () => import('@/views/gate/GatePage.vue')
+const MePage = () => import('@/views/me/MePage.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -22,7 +23,8 @@ const router = createRouter({
       children: [
         { path: '', component: HomePage, meta: { title: '首页' } },
         { path: 'topic/:id', component: TopicPage, meta: { title: '帖子详情' } },
-        { path: 'feed', component: FeedPage, meta: { title: '技术交流' } }
+        { path: 'feed', component: FeedPage, meta: { title: '技术交流' } },
+        { path: 'me', component: MePage, meta: { title: '个人中心' } }
         // 知识库 2026-10-13 迁回主站（/kb 由主站承载）
       ]
     },

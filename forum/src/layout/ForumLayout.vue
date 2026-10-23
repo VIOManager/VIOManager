@@ -52,12 +52,16 @@ function onPosted() {
         <nav class="topnav">
           <router-link to="/" exact-active-class="on">首页</router-link>
           <router-link to="/feed" active-class="on">技术交流</router-link>
+          <router-link to="/me" active-class="on">个人中心</router-link>
         </nav>
         <button class="btn-bar" type="button" @click="postVisible = true">＋ 创作新主题</button>
         <button class="tg" type="button" :aria-label="theme.current === 'light' ? '切换到深色' : '切换到浅色'" @click="theme.toggle()">
           {{ theme.current === 'light' ? '☾' : '☀' }}
         </button>
-        <img class="av" :src="avatarOf(user.realName, 34)" :alt="user.realName" :title="user.realName">
+        <!-- 头像即个人中心入口（lzh 2026-10-23：个人创作/收藏/点赞集中在此） -->
+        <router-link to="/me" class="av-link" :title="user.realName + ' · 个人中心'">
+          <img class="av" :src="avatarOf(user.realName, 34)" :alt="user.realName">
+        </router-link>
       </div>
     </header>
 
@@ -116,7 +120,8 @@ function onPosted() {
 .tg { width: 40px; height: 36px; border: 3px solid #000; background: #FFF; color: #101010; font-size: 15px; cursor: pointer; box-shadow: 3px 3px 0 rgba(255, 255, 255, 0.25); }
 :root[data-theme='dark'] .tg { background: var(--vio2-panel); border-color: var(--vio2-bd); color: var(--vio2-yellow); box-shadow: 3px 3px 0 #04060B; }
 
-/* 头像：方形粗边（brutalist 不做圆角） */
+/* 头像：方形粗边（brutalist 不做圆角）；外层链到个人中心 */
+.av-link { display: flex; }
 .av { width: 34px; height: 34px; border: 3px solid #000; object-fit: cover; }
 :root[data-theme='dark'] .av { border-color: #04060B; }
 

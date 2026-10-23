@@ -54,7 +54,7 @@ export const topics: MockTopic[] = [
   {
     id: '331', board: 'EE', title: '赛季电控培训第三期：STM32 HAL 库电机闭环控制速成',
     author: '赵天宇', authorGroup: '电控组 · 版主', tags: ['STM32', '电机控制', '培训'],
-    replyCount: 6, viewCount: 1200, likeCount: 58, liked: false, collected: false,
+    replyCount: 6, viewCount: 1200, likeCount: 58, liked: true, collected: false,
     publishAt: '10-07 20:15', lastActiveAt: '3 小时前', lastReplyBy: '李明轩', pinned: true, hot: true,
     body: [
       '本周五晚 19:30 电控工作室开第三期培训，目标是把电机闭环从"听说过"讲到"能上手"。零基础可来，带电脑。',
@@ -69,8 +69,8 @@ export const topics: MockTopic[] = [
   {
     id: '330', board: 'MODELING', title: '建模组十月招新面试题与评分标准公示',
     author: '陈子昂', authorGroup: '建模组', tags: ['招新', '公示'],
-    replyCount: 3, viewCount: 986, likeCount: 47, liked: false, collected: false,
-    publishAt: '10-06 10:00', lastActiveAt: '5 小时前', lastReplyBy: '王雨桐', pinned: false, hot: true,
+    replyCount: 4, viewCount: 986, likeCount: 47, liked: false, collected: false,
+    publishAt: '10-06 10:00', lastActiveAt: '1 小时前', lastReplyBy: '演示成员', pinned: false, hot: true,
     body: [
       '十月招新面试题与评分标准现予公示，面试时间 10 月 18 日全天，地点机械工作室。',
       '评分维度：空间想象 40 分、软件基础 30 分、动手习惯 30 分。面试题库与评分细则见附件链接，欢迎监督。'
@@ -102,7 +102,7 @@ export const topics: MockTopic[] = [
   {
     id: '327', board: 'EE', title: 'RoboMaster 电控复盘：步兵机器人的功率限制策略',
     author: '孙嘉仪', authorGroup: '电控组', tags: ['RoboMaster', '功率控制'],
-    replyCount: 2, viewCount: 866, likeCount: 42, liked: false, collected: false,
+    replyCount: 2, viewCount: 866, likeCount: 42, liked: true, collected: true,
     publishAt: '10-04 22:10', lastActiveAt: '昨天 21:30', lastReplyBy: '陈子昂', pinned: false, hot: true,
     body: [
       '赛季结束把步兵的功率限制策略复盘了一遍：缓冲能量模型、三档限速、裁判系统超功率惩罚规避。',
@@ -135,7 +135,7 @@ export const topics: MockTopic[] = [
   {
     id: '324', board: 'AI', title: 'GLM 写周报的提示词模板（内测一周，反馈不错）',
     author: '王雨桐', authorGroup: 'AI 组', tags: ['GLM', '提示词'],
-    replyCount: 2, viewCount: 275, likeCount: 19, liked: false, collected: false,
+    replyCount: 2, viewCount: 275, likeCount: 19, liked: false, collected: true,
     publishAt: '10-02 20:00', lastActiveAt: '3 天前', lastReplyBy: '周子墨', pinned: false, hot: false,
     body: [
       '把周报生成做成了提示词模板：喂本周提交记录和排班备注，产出分工作/学习/风险三段的结构化周报。',
@@ -195,6 +195,17 @@ export const topics: MockTopic[] = [
     body: [
       '招新宣讲想现场跑一个目标检测演示，摄像头拍观众席实时框人脸/手机，模型用轻量的即可。',
       '求一个断网也能跑的方案，教室网络不能指望。'
+    ],
+    attach: []
+  },
+  {
+    id: '332', board: 'GENERAL', title: '新人报到：数媒方向，想找视觉类的项目跟组',
+    author: '演示成员', authorGroup: '综合', tags: ['新人', '数媒'],
+    replyCount: 0, viewCount: 23, likeCount: 2, liked: false, collected: false,
+    publishAt: '10-09 10:05', lastActiveAt: '10-09 10:05', lastReplyBy: '演示成员', pinned: false, hot: false,
+    body: [
+      '十月新进的数媒方向成员，之前剪过两年短片、碰过一点 AE 跟踪，想在比赛里做视觉类的内容输出。',
+      '想请教：视觉组的项目周期一般多长？现在进组来得及赶上本赛季的宣传物料吗？'
     ],
     attach: []
   }
