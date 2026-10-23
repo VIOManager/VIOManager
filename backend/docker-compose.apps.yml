@@ -116,9 +116,9 @@ services:
       VIO_CACHE_ORG: "false"
       VIO_CACHE_UNREAD: "false"
       # MinIO 凭据与上方 minio 服务共用同一套环境变量，改一处两端同步；桶由应用启动后自建
-      # 端点默认指宿主原生 MinIO（本机口径，历史文件都在里面）；
-      # 全容器套件（起 minio 容器）时显式设 MINIO_ENDPOINT=http://minio:9000
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://host.docker.internal:9000}
+      # 端点默认走容器网络服务名直连（2026-10-23 起口径：host.docker.internal 在 WSL 重启后
+      # 解析成 IPv6 且不通，容器间依赖一律走服务名；exe 时代历史见 docs）
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-vio-minio}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev-minio-123}
       CLAMAV_HOST: clamav
