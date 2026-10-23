@@ -6,8 +6,11 @@ server {
     index index.html;
 
     # SPA 路由兜底：vue-router history 模式，直接访问/刷新非根路径不 404
+    # ⚠️ index.html 必须 no-cache（每次向服务器确认最新版）：否则发新版后浏览器拿旧首页
+    # + 缓存里的旧 assets 拼出完整旧页面，怎么刷新都"回退版本"（2026-10-21 lzh 踩过）
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
     }
 
     # 接口同源反代到后端（演示模式下不请求；切真实接口后由这里转发）

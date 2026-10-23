@@ -10,11 +10,14 @@
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { BOARDS, boardName } from '@/config/boards'
-import { avatarOf } from '@/config/avatars'
+import { useUserStore } from '@/stores/user'
 import { apiTopicList, apiHotTopics, apiForumStats, type TopicItem, type HotTopicItem } from '@/api/forum'
 
 const mainSite = import.meta.env.VITE_MAIN_SITE_URL ?? 'http://localhost:5174'
 const PAGE_SIZE = 10
+
+/** 头像统一走 store（本人已换自定义头像时列表里也是新的） */
+const user = useUserStore()
 
 /** 当前选中版块：'ALL' 为"全部"（boards 之外的伪选项） */
 const activeBoard = ref<string>('ALL')
@@ -137,7 +140,7 @@ loadSide()
 
         <!-- 主题行：48px 方头像 + 标题 + mono meta + 回复数块（热帖黄底） -->
         <div v-for="t in topics" :key="t.id" class="cell">
-          <img class="ava" :src="avatarOf(t.author, 48)" :alt="t.author">
+          <img class="ava" :src="user.avatarByName(t.author, 48)" :alt="t.author">
           <div class="mid">
             <div class="t-title">
               <span v-if="t.pinned" class="pin">置顶</span>

@@ -20,7 +20,7 @@ export interface MockReply {
 
 /** 全部楼层（按帖分组有序，floorNo 连续） */
 export const replies: MockReply[] = [
-  { id: '331-1', topicId: '331', floorNo: 1, author: '陈子昂', authorGroup: '电控组', publishAt: '10-07 20:41', text: '上一期听完把自家车的速度环整定时间从两天压到两小时，这期必到。问下：电流环会讲到 FOC 吗？', likeCount: 12, liked: false, quoteReplyId: null },
+  { id: '331-1', topicId: '331', floorNo: 1, author: '陈子昂', authorGroup: '电控组', publishAt: '10-07 20:41', text: '上一期听完把自家车的速度环整定时间从两天压到两小时，这期必到。问下：电流环会讲到 FOC 吗？', likeCount: 12, liked: true, quoteReplyId: null },
   { id: '331-2', topicId: '331', floorNo: 2, author: '赵天宇', authorGroup: '电控组 · 版主', publishAt: '10-07 20:58', text: '这期只到电流环概念和波形，FOC 放第四期单独讲，先把 PI 整定的手感练出来。', likeCount: 8, liked: false, quoteReplyId: '331-1' },
   { id: '331-3', topicId: '331', floorNo: 3, author: '李明轩', authorGroup: '建模组', publishAt: '10-07 21:32', text: '机械组的能来旁听吗？我们底盘那边也想蹭一下。', likeCount: 3, liked: false, quoteReplyId: null },
   { id: '331-4', topicId: '331', floorNo: 4, author: '孙嘉仪', authorGroup: '电控组', publishAt: '10-07 22:10', text: '可以，版主说过不限组。座位有限，早点来。', likeCount: 5, liked: false, quoteReplyId: '331-3' },
@@ -30,13 +30,14 @@ export const replies: MockReply[] = [
   { id: '330-1', topicId: '330', floorNo: 1, author: '王雨桐', authorGroup: 'AI 组', publishAt: '10-06 11:20', text: '评分标准里的"软件基础"建议写明考什么软件，去年有人以为考 Office。', likeCount: 6, liked: false, quoteReplyId: null },
   { id: '330-2', topicId: '330', floorNo: 2, author: '陈子昂', authorGroup: '建模组', publishAt: '10-06 11:35', text: '已补充：SolidWorks 任一版本的基础操作，出题范围是草绘与装配。', likeCount: 9, liked: false, quoteReplyId: '330-1' },
   { id: '330-3', topicId: '330', floorNo: 3, author: '赵天宇', authorGroup: '电控组 · 版主', publishAt: '10-06 14:00', text: '电控组参照这份格式出了自己的面试题，晚点也公示。', likeCount: 3, liked: false, quoteReplyId: null },
+  { id: '330-4', topicId: '330', floorNo: 4, author: '演示成员', authorGroup: '综合', publishAt: '10-09 10:20', text: '新人问一句：面试要自带电脑吗？SolidWorks 学校机房的 2022 版可以吗？', likeCount: 1, liked: false, quoteReplyId: null },
 
   { id: '329-1', topicId: '329', floorNo: 1, author: '孙嘉仪', authorGroup: '电控组', publishAt: '10-05 22:30', text: '去耦电容那条"先大后小、近远搭配"太好用了，上次按这个改完纹波直接减半。', likeCount: 7, liked: false, quoteReplyId: null },
   { id: '329-2', topicId: '329', floorNo: 2, author: '陈子昂', authorGroup: '电控组', publishAt: '10-06 08:50', text: '补充一条：电源层分割后的跨分割走线也检查下，比过孔残桩更隐蔽。', likeCount: 5, liked: false, quoteReplyId: null },
 
   { id: '328-1', topicId: '328', floorNo: 1, author: '赵天宇', authorGroup: '电控组 · 版主', publishAt: '10-05 16:40', text: '跑动才丢、静止不复现，优先查接插件振动松脱和屏蔽层接地，示波器挂在 CAN_H 对地看共模噪声。', likeCount: 10, liked: false, quoteReplyId: null },
   { id: '328-2', topicId: '328', floorNo: 2, author: '李明轩', authorGroup: '建模组', publishAt: '10-05 17:05', text: '接插件重新压接了端子，问题还在。共模噪声明天借示波器量。', likeCount: 2, liked: false, quoteReplyId: '328-1' },
-  { id: '328-3', topicId: '328', floorNo: 3, author: '赵天宇', authorGroup: '电控组 · 版主', publishAt: '10-06 09:30', text: '再加一条：确认电机端和主控端两处终端电阻是 120Ω 并联成 60Ω，只测单端会误判。', likeCount: 8, liked: false, quoteReplyId: null },
+  { id: '328-3', topicId: '328', floorNo: 3, author: '赵天宇', authorGroup: '电控组 · 版主', publishAt: '10-06 09:30', text: '再加一条：确认电机端和主控端两处终端电阻是 120Ω 并联成 60Ω，只测单端会误判。', likeCount: 8, liked: true, quoteReplyId: null },
 
   { id: '327-1', topicId: '327', floorNo: 1, author: '陈子昂', authorGroup: '电控组', publishAt: '10-04 22:40', text: '缓冲能量留 20% 这个结论和我们底盘实测一致，去年就是全当库用，最后 30 秒被限速打得抬不起头。', likeCount: 11, liked: false, quoteReplyId: null },
   { id: '327-2', topicId: '327', floorNo: 2, author: '赵天宇', authorGroup: '电控组 · 版主', publishAt: '10-05 10:00', text: '把三档限速的切换阈值也整理进复盘附录了，需要的回帖留邮箱。', likeCount: 6, liked: false, quoteReplyId: null },

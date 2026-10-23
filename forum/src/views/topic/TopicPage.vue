@@ -9,7 +9,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { avatarOf } from '@/config/avatars'
+import { useUserStore } from '@/stores/user'
 import { boardName } from '@/config/boards'
 import {
   apiTopicDetail, apiReplyList, apiCreateReply, apiLikeTopic, apiCollectTopic, apiLikeReply,
@@ -18,6 +18,9 @@ import {
 
 const route = useRoute()
 const topicId = String(route.params.id)
+
+/** 头像统一走 store（本人已换自定义头像时主楼/楼层也是新的） */
+const user = useUserStore()
 
 const detail = ref<TopicDetail | null>(null)
 const floors = ref<ReplyItem[]>([])
@@ -166,7 +169,7 @@ function attachTip() {
         <div v-if="detail" class="box post">
           <div class="in">
             <div class="p-top">
-              <img class="pava" :src="avatarOf(detail.author, 73)" :alt="detail.author">
+              <img class="pava" :src="user.avatarByName(detail.author, 73)" :alt="detail.author">
               <div class="ph-main">
                 <h1><span v-if="detail.pinned" class="pin">置顶</span>{{ detail.title }}</h1>
                 <div class="p-meta"><b>{{ detail.author }}</b> · <span class="node">{{ boardName(detail.board) }}</span> · {{ detail.publishAt }} · 阅读 {{ detail.viewCount }}</div>
@@ -193,7 +196,7 @@ function attachTip() {
         <div class="box replies">
           <div class="box-h"><b>{{ floors.length }} 条回复 · 按时间正序</b><span><a href="#reply" class="h-link">添加新回复 ↓</a></span></div>
           <div v-for="f in floors" :key="f.id" class="floor">
-            <img class="ava" :src="avatarOf(f.author, 48)" :alt="f.author">
+            <img class="ava" :src="user.avatarByName(f.author, 48)" :alt="f.author">
             <div class="f-main">
               <div class="f-meta"><b>{{ f.author }}</b>{{ f.authorGroup }} · {{ f.publishAt }}<span class="fno">#{{ f.floorNo }}</span></div>
               <div v-if="f.quote" class="quote">@{{ f.quote.author }} #{{ f.quote.floorNo }}：{{ f.quote.text }}</div>
@@ -230,7 +233,7 @@ function attachTip() {
           <div class="box-h"><b>关于作者</b><span>AUTHOR</span></div>
           <div class="bd">
             <div class="author">
-              <img class="ava" :src="avatarOf(detail.author, 48)" :alt="detail.author">
+              <img class="ava" :src="user.avatarByName(detail.author, 48)" :alt="detail.author">
               <div><b>{{ detail.author }}</b><div class="gray2">{{ detail.authorGroup }}</div></div>
             </div>
             <div class="astat">
