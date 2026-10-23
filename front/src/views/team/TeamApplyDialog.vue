@@ -9,8 +9,8 @@ import { ElMessage } from 'element-plus'
 import { apiContests, apiContestDetail } from '@/api/contest'
 import type { ContestListItem, ContestTrack } from '@/api/contest'
 import { apiCreateTeam } from '@/api/team'
-import { apiMembers } from '@/api/member'
-import type { MemberListItem } from '@/api/member'
+import { apiMemberOptions } from '@/api/member'
+import type { MemberOption } from '@/api/member'
 import { RULE_KEY_LABEL, ruleValueText } from '@/config/labels'
 
 const visible = defineModel<boolean>({ required: true })
@@ -19,7 +19,7 @@ const emit = defineEmits<{ submitted: [] }>()
 const contests = ref<ContestListItem[]>([])
 const tracks = ref<ContestTrack[]>([])
 const form = reactive({ contestId: '', trackId: '', name: '', projectName: '', prefillMemberIds: [] as string[] })
-const memberOptions = ref<MemberListItem[]>([])
+const memberOptions = ref<MemberOption[]>([])
 const prefillLimit = ref(0)
 const submitting = ref(false)
 
@@ -56,8 +56,8 @@ async function onTrackChange() {
   form.prefillMemberIds = []
   memberOptions.value = []
   if (!form.contestId) return
-  // 预填成员候选走人员列表（A 线 M01），演示数据量小一次拉全
-  const resp = await apiMembers({ page: 1, size: 50 })
+  // 预填成员候选走 M14 受限搜索口（任意登录角色可用；M01 是管理员专属，学生队长调必 403）
+  const resp = await apiMemberOptions({ page: 1, size: 50 })
   memberOptions.value = resp.list
 }
 

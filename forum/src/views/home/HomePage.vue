@@ -50,7 +50,8 @@ async function load() {
   loading.value = true
   try {
     const res = await apiTopicList({
-      board: activeBoard.value,
+      // 'ALL' 是前端伪选项：后端契约 board 不传即全部（传 ALL 会当未知板块码返回空列表）
+      board: activeBoard.value === 'ALL' ? undefined : activeBoard.value,
       sort: activeSort.value,
       keyword: keyword.value,
       page: page.value,
