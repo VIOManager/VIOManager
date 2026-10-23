@@ -146,6 +146,20 @@ export function settleByBiz(bizId: string, result: 'APPROVED' | 'REJECTED', oper
   }
 }
 
+/** 4007 复核：同业务对象同目标人是否已有 PENDING 的指定类型审批单（payload 快照比对 memberId） */
+export function hasPendingApproval(bizType: string, bizId: string, memberId: string): boolean {
+  for (const a of approvals) {
+    if (a.bizType !== bizType || a.bizId !== bizId || a.status !== 'PENDING') continue
+    try {
+      const p = JSON.parse(a.payloadJson || '{}') as Record<string, unknown>
+      if (String(p.memberId ?? '') === memberId) return true
+    } catch {
+      // 坏快照当不匹配
+    }
+  }
+  return false
+}
+
 /** 种子数据见下方：覆盖三视角与各终态（ap1/ap5 待办红点，ap4 结果红点，ap2 跨部门不可见，ap6 历史已通过） */
 export const approvals: MockApproval[] = [
   {

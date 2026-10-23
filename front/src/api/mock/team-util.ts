@@ -89,3 +89,18 @@ export function contestRuleNumber(contestId: string, key: string, fallback: numb
 export function contestRuleBool(contestId: string, key: string): boolean {
   return mergedRule(contestId, key) === true
 }
+
+/**
+ * 4004 统一判定：规则禁止重复参赛（allowRepeatJoin=否）且目标人已"确认"在同比赛其他 ACTIVE 队伍时为真。
+ * 待确认不算（lzh 2026-10-10 拍板）；TE04 提交、TE06 确认、TEAM_CREATE/TEAM_ADD_MEMBER 批准回调四处复用
+ */
+export function violatesRepeatJoin(contestId: string, memberId: string, excludeTeamId: string): boolean {
+  if (contestRuleBool(contestId, 'allowRepeatJoin')) return false
+  for (const t of teams) {
+    if (t.id === excludeTeamId || t.contestId !== contestId || t.status !== 'ACTIVE') continue
+    for (const m of t.members) {
+      if (m.memberId === memberId && m.status === 'CONFIRMED') return true
+    }
+  }
+  return false
+}
