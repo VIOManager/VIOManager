@@ -115,6 +115,10 @@ services:
       REDIS_HOST: redis
       VIO_CACHE_ORG: "false"
       VIO_CACHE_UNREAD: "false"
+      # CORS 白名单：nginx 转发用 $host 剥掉端口号，后端会把同源请求误判成跨域再 403
+      # （2026-10-23 实锤：浏览器 POST 一律带 Origin，登录 403"Invalid CORS request"弹网络异常；
+      # 8090=容器版主前端源，5174=vite 开发服务器直连源）
+      VIO_CORS_ALLOWED_ORIGINS: http://localhost:8090,http://localhost:5174
       # MinIO 凭据与上方 minio 服务共用同一套环境变量，改一处两端同步；桶由应用启动后自建
       # 端点默认走容器网络服务名直连（2026-10-23 起口径：host.docker.internal 在 WSL 重启后
       # 解析成 IPv6 且不通，容器间依赖一律走服务名；exe 时代历史见 docs）

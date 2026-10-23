@@ -86,6 +86,8 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev-minio-123}
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
+      # CORS 白名单：nginx $host 剥端口号致同源误判跨域 403（详见 apps.yml 同名注释）
+      VIO_CORS_ALLOWED_ORIGINS: http://localhost:8090,http://localhost:5174
       # 必须与下方 kb 服务同值（kb 不设此变量会走默认值，主服务签发的 token 到 kb 全 401）
       JWT_SECRET: ${JWT_SECRET:-viomanager-local-dev-secret-key-32bytes-minimum}
       TZ: Asia/Shanghai
