@@ -38,16 +38,18 @@ ON DUPLICATE KEY UPDATE
 -- ---------------- 人员档案：2 教师 + 3 学生 ----------------
 -- 105 故意不绑账号，演示"有档案无账号"；103 王小明档案学院是电气与控制工程学院、
 -- 组织挂程序设计协会——演示"协会是大家族，成员来自任何学院"。
-INSERT INTO member (id, name, member_type, student_no, college, class_name, org_id, has_account, status)
+-- 手机号全员补齐（2026-10-23）：空值曾被前端显示成"无权查看"（数据缺失≠无权限），
+-- 顺带让 M01 的 keyword 按手机号搜可演示。
+INSERT INTO member (id, name, member_type, student_no, college, class_name, phone, org_id, has_account, status)
 VALUES
-    (101, '陈志远', 'TEACHER', NULL,         '计算机学院', NULL,           2, 1, 1),
-    (102, '刘慧',   'TEACHER', NULL,         '电子信息学院', NULL,         3, 1, 1),
-    (103, '王小明', 'STUDENT', '2023010001', '电气与控制工程学院', '自动化2301班', 2, 1, 1),
-    (104, '赵晓亮', 'STUDENT', '2023020002', '电子信息学院', '电信2302班', 3, 1, 1),
-    (105, '孙小雨', 'STUDENT', '2023020003', '电子信息学院', '电信2302班', 3, 0, 1)
+    (101, '陈志远', 'TEACHER', NULL,         '计算机学院', NULL,           '13804510001', 2, 1, 1),
+    (102, '刘慧',   'TEACHER', NULL,         '电子信息学院', NULL,         '13804510002', 3, 1, 1),
+    (103, '王小明', 'STUDENT', '2023010001', '电气与控制工程学院', '自动化2301班', '13804510003', 2, 1, 1),
+    (104, '赵晓亮', 'STUDENT', '2023020002', '电子信息学院', '电信2302班', '13804510004', 3, 1, 1),
+    (105, '孙小雨', 'STUDENT', '2023020003', '电子信息学院', '电信2302班', '13804510005', 3, 0, 1)
 ON DUPLICATE KEY UPDATE
     name = VALUES(name), member_type = VALUES(member_type), student_no = VALUES(student_no),
-    college = VALUES(college), class_name = VALUES(class_name), org_id = VALUES(org_id),
+    college = VALUES(college), class_name = VALUES(class_name), phone = VALUES(phone), org_id = VALUES(org_id),
     has_account = VALUES(has_account), status = VALUES(status);
 
 -- ---------------- 登录账号 5 个（密码列刻意不参与重跑更新：改过密码不被演示数据冲掉） ----------------
@@ -146,6 +148,8 @@ ON DUPLICATE KEY UPDATE
 -- 故事线：801/804 呼应赛队 501 代码先锋队的由来；802 的目标人 105 有待处理邀请红点；
 --        804/805 留 applicant_read=0 给发起人 103 造"结果未读"红点；803 是电子设计协会待办（芯火电子队成果 702）；
 --        807 是程序设计协会待办（孙小雨跨协会限时查看项目 1001，授权行 1002 随批准生效）。
+--        805 原为 TEAM_DISSOLVE 死类型演示单（解散实为 TE12 直删不走审批，真实流程永不产生该类型审批，
+--        2026-10-23 换成移除队员被驳回，保留 REJECTED 状态与发起人未读红点的演示位）。
 -- ⚠️ payload 是回调 Handler 的机器契约（字段名对齐 TeamCommandServiceImpl / TeamCommandSupport /
 --    AchievementApprovalSupport / ViewGrantServiceImpl 的真实构造），缺一个字段批准就炸
 --    （801 曾缺 contestId 报 4001"比赛当前状态不允许"），改动前先对照各 Handler 的读法。
@@ -180,10 +184,10 @@ VALUES
      '报名蓝桥杯，申请创建代码先锋队', '同意，注意报名截止时间', '2026-10-09 20:05:00',
      NULL, 0, 0, 1, '2026-10-09 19:30:00'),
 
-    (805, 'TEAM_DISSOLVE', 501, '解散赛队申请 · 代码先锋队',
-     '{"teamName":"代码先锋队","reason":"队内方向调整"}',
-     'REJECTED', 103, '王小明', NULL, NULL, 2, 202, '陈志远', 501, 402, 301, 2,
-     '队伍方向调整，申请解散', '比赛尚未结束，暂不能解散', '2026-10-10 11:45:00',
+    (805, 'TEAM_REMOVE_MEMBER', 501, '移除 赵晓亮',
+     '{"teamId":501,"memberId":104,"memberName":"赵晓亮","contestId":402,"semesterId":301}',
+     'REJECTED', 103, '王小明', 104, '赵晓亮', 2, 202, '陈志远', 501, 402, 301, 2,
+     '赵晓亮长期未确认入队，申请移除', '先与本人沟通确认后再移除', '2026-10-10 11:45:00',
      NULL, 0, 0, 1, '2026-10-10 11:20:00'),
 
     (806, 'TEAM_ADD_MEMBER', NULL, '邀请孙小雨加入 芯火电子队',
@@ -216,8 +220,8 @@ VALUES
     (813, 803, 'SUBMIT', NULL, '孙小雨', 'APPLICANT', '芯火电子队获奖，提交成果', NULL, 'PENDING', '2026-10-12 10:20:00'),
     (814, 804, 'SUBMIT', 204, '王小明', 'APPLICANT', '报名蓝桥杯，申请建队', NULL, 'PENDING', '2026-10-09 19:30:00'),
     (815, 804, 'APPROVE', 202, '陈志远', 'APPROVER', '同意，注意报名截止时间', 'PENDING', 'APPROVED', '2026-10-09 20:05:00'),
-    (816, 805, 'SUBMIT', 204, '王小明', 'APPLICANT', '方向调整，申请解散', NULL, 'PENDING', '2026-10-10 11:20:00'),
-    (817, 805, 'REJECT', 202, '陈志远', 'APPROVER', '比赛尚未结束，暂不能解散', 'PENDING', 'REJECTED', '2026-10-10 11:45:00'),
+    (816, 805, 'SUBMIT', 204, '王小明', 'APPLICANT', '赵晓亮长期未确认，申请移除', NULL, 'PENDING', '2026-10-10 11:20:00'),
+    (817, 805, 'REJECT', 202, '陈志远', 'APPROVER', '先与本人沟通确认后再移除', 'PENDING', 'REJECTED', '2026-10-10 11:45:00'),
     (818, 806, 'SUBMIT', 205, '赵晓亮', 'APPLICANT', '嵌入式方向缺人，邀请入队', NULL, 'PENDING', '2026-10-10 14:50:00'),
     (819, 806, 'CANCEL', 205, '赵晓亮', 'APPLICANT', '改邀请其他同学，先取消', 'PENDING', 'CANCELLED', '2026-10-10 15:10:00'),
     (820, 807, 'SUBMIT', NULL, '孙小雨', 'APPLICANT', '参考传感器方案，限时查看', NULL, 'PENDING', '2026-10-12 08:30:00')
