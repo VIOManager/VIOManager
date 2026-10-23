@@ -25,7 +25,6 @@ class AchievementExportTest extends ApprovalTestBase {
 
     private String ownerToken;
     private String adminToken;
-    private int baselineApproved;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -38,11 +37,6 @@ class AchievementExportTest extends ApprovalTestBase {
                 TEAM_ID, "导出测试队", CONTEST_ID, 9311L, 8821L);
         ownerToken = createUserAndLogin("aet_owner", "STUDENT", 9311L, 8821L);
         adminToken = createUserAndLogin("aet_admin", "SUPER_ADMIN", 9311L, null);
-        //管理员导出是全量：库里已有演示数据，先取已通过成果基线再插数
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM achievement WHERE deleted = 0 AND status = 'APPROVED'",
-                Integer.class);
-        baselineApproved = count == null ? 0 : count;
     }
 
     @Test
@@ -59,7 +53,7 @@ class AchievementExportTest extends ApprovalTestBase {
         insertAchievement(7000301L, 8821L, "我的省一", "APPROVED");
         insertAchievement(7000302L, 8821L, "我的校二", "APPROVED");
         insertAchievement(7000303L, 8822L, "别人的成果", "APPROVED");
-        XSSFSheet sheet = exportAndParse(ownerToken);
+        XSSFSheet sheet = exportAndParse(ownerToken, null);
         assert sheet.getLastRowNum() == 2 : "学生导出应只有本人的 2 条（含表头共 3 行），实际 "
                 + sheet.getLastRowNum();
         assert "我的省一".equals(sheet.getRow(1).getCell(0).getStringCellValue());
@@ -67,13 +61,15 @@ class AchievementExportTest extends ApprovalTestBase {
 
     @Test
     void adminExportsAll() throws Exception {
-        //管理员全量：本人的 + 他人的一并导出（基线 + 3 条；库里演示成果会计入基线）
+        //管理员按队导出（本人的 + 他人的一并带出）。不带 teamId 的全量导出在演示种子下会撞 5008
+        //——种子里 803 的载体成果 702 是 PENDING，闸门宁拒不漏属正确行为，故用 teamId 圈定范围
+        //来测"管理员能看他人成果"这一核心意图（2026-10-23 种子新增 702 后跟进调整）
         insertAchievement(7000301L, 8821L, "我的省一", "APPROVED");
         insertAchievement(7000303L, 8822L, "别人的成果", "APPROVED");
         insertAchievement(7000304L, 8822L, "别人的校二", "APPROVED");
-        XSSFSheet sheet = exportAndParse(adminToken);
-        assert sheet.getLastRowNum() == baselineApproved + 3
-                : "管理员应全量导出（基线 " + baselineApproved + " + 本批 3 条），实际 "
+        XSSFSheet sheet = exportAndParse(adminToken, TEAM_ID);
+        assert sheet.getLastRowNum() == 3
+                : "管理员按队导出应带出本队 3 条（含表头共 4 行），实际 "
                 + sheet.getLastRowNum();
         //我插的那条应带出队名（loadTeamNames 批量查）
         String teamOfMine = null;
@@ -93,14 +89,19 @@ class AchievementExportTest extends ApprovalTestBase {
     }
 
     private org.springframework.test.web.servlet.ResultActions export(String token) throws Exception {
-        return mockMvc.perform(get("/api/achievements/export")
+        return export(token, null);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions export(String token, Long teamId) throws Exception {
+        return mockMvc.perform(get("/api/achievements/export"
+                        + (teamId == null ? "" : "?teamId=" + teamId))
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
     }
 
     /** 导出并按 POI 解析成工作表（xlsx 为 zip 容器，顺带验证了魔数） */
-    private XSSFSheet exportAndParse(String token) throws Exception {
-        MvcResult result = export(token).andReturn();
+    private XSSFSheet exportAndParse(String token, Long teamId) throws Exception {
+        MvcResult result = export(token, teamId).andReturn();
         byte[] body = result.getResponse().getContentAsByteArray();
         assert body.length > 4 && body[0] == 'P' && body[1] == 'K' : "响应应是 xlsx（zip 容器 PK 魔数）";
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(body))) {
