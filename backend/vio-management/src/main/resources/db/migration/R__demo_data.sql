@@ -8,37 +8,43 @@
 --
 -- 演示账号（BCrypt 散列与明文对照，改密码须重新生成散列）：
 --   admin     / Admin@123456  超级管理员（default_password=1，演示首登强制改密提示）
---   dept_chen / Dept@123456   计算机学院部门管理员（陈志远）
---   dept_liu  / Dept@123456   电子信息学院部门管理员（刘慧）
---   stu_wang  / Stu@123456    学生 王小明（智能软件工作室，队长）
---   stu_zhao  / Stu@123456    学生 赵晓亮（嵌入式创客空间）
+--   dept_chen / Dept@123456   程序设计协会负责人（陈志远，部门管理员角色）
+--   dept_liu  / Dept@123456   电子设计协会负责人（刘慧，部门管理员角色）
+--   stu_wang  / Stu@123456    学生 王小明（程序设计协会队长；档案学院是电气与控制工程学院——跨学院入会演示）
+--   stu_zhao  / Stu@123456    学生 赵晓亮（电子设计协会）
 --
--- 固定 ID 段位（测试与后续脚本勿占）：组织 1-5、成员 101-105、账号 201-205、
+-- 固定 ID 段位（测试与后续脚本勿占）：组织 1-3、成员 101-105、账号 201-205、
 -- 字典 901-904、学期 301、模板 401、比赛 402、赛队 501-502、队员 601-603、
 -- 成果 701-702、项目 1001、查看授权 1002、审批单 801-807、审批流水 811-820
 -- =====================================================================
 
--- ---------------- 组织树：1 中心 → 2/3 学院 → 4/5 分子组织 ----------------
-INSERT INTO sys_org (id, parent_id, name, code, org_type, is_sub_org, sort_no, path, level, status)
+-- ---------------- 组织树：1 中心 → 2/3 协会直挂（PRD §3.3 泓海口径） ----------------
+-- 协会按工作性质划分、成员可来自任何学院（学院/专业/班级只是人员档案文本字段，不是树节点）；
+-- 部门管理员 = 协会负责人（org.manager_id）。4/5 是学院制旧形状的残留节点，
+-- 先删防 code 撞（带名字护栏，重跑幂等删 0 行）。
+DELETE FROM sys_org WHERE id IN (4, 5) AND name IN ('智能软件工作室', '嵌入式创客空间');
+INSERT INTO sys_org (id, parent_id, name, code, org_type, is_sub_org, sort_no, path, level, status,
+                     manager_id, leader_name)
 VALUES
-    (1, 0, '大学生科创实践中心', 'CENTER',   'OTHER',     0, 1, '/0/1/',     1, 1),
-    (2, 1, '计算机学院',         'CS',       'DEPARTMENT', 0, 1, '/0/1/2/',   2, 1),
-    (3, 1, '电子信息学院',       'EE',       'DEPARTMENT', 0, 2, '/0/1/3/',   2, 1),
-    (4, 2, '智能软件工作室',     'AI_LAB',   'SUB_ORG',    1, 1, '/0/1/2/4/', 3, 1),
-    (5, 3, '嵌入式创客空间',     'EMBED_LAB','SUB_ORG',    1, 1, '/0/1/3/5/', 3, 1)
+    (1, 0, '大学生科创实践中心', 'CENTER',    'OTHER',   0, 1, '/0/1/',   1, 1, NULL, NULL),
+    (2, 1, '程序设计协会',       'PROG_CLUB', 'SUB_ORG', 1, 1, '/0/1/2/', 2, 1, 101,  '陈志远'),
+    (3, 1, '电子设计协会',       'ELEC_CLUB', 'SUB_ORG', 1, 2, '/0/1/3/', 2, 1, 102,  '刘慧')
 ON DUPLICATE KEY UPDATE
     parent_id = VALUES(parent_id), name = VALUES(name), code = VALUES(code), org_type = VALUES(org_type),
     is_sub_org = VALUES(is_sub_org), sort_no = VALUES(sort_no), path = VALUES(path),
-    level = VALUES(level), status = VALUES(status);
+    level = VALUES(level), status = VALUES(status), manager_id = VALUES(manager_id),
+    leader_name = VALUES(leader_name);
 
--- ---------------- 人员档案：2 教师 + 3 学生（105 故意不绑账号，演示"有档案无账号"） ----------------
+-- ---------------- 人员档案：2 教师 + 3 学生 ----------------
+-- 105 故意不绑账号，演示"有档案无账号"；103 王小明档案学院是电气与控制工程学院、
+-- 组织挂程序设计协会——演示"协会是大家族，成员来自任何学院"。
 INSERT INTO member (id, name, member_type, student_no, college, class_name, org_id, has_account, status)
 VALUES
-    (101, '陈志远', 'TEACHER', NULL,          '计算机学院', NULL,          NULL, 1, 1),
-    (102, '刘慧',   'TEACHER', NULL,          '电子信息学院', NULL,        NULL, 1, 1),
-    (103, '王小明', 'STUDENT', '2023010001',  '计算机学院', '软件2301班',  4,    1, 1),
-    (104, '赵晓亮', 'STUDENT', '2023020002',  '电子信息学院', '电信2302班', 5,   1, 1),
-    (105, '孙小雨', 'STUDENT', '2023020003',  '电子信息学院', '电信2302班', 5,   0, 1)
+    (101, '陈志远', 'TEACHER', NULL,         '计算机学院', NULL,           2, 1, 1),
+    (102, '刘慧',   'TEACHER', NULL,         '电子信息学院', NULL,         3, 1, 1),
+    (103, '王小明', 'STUDENT', '2023010001', '电气与控制工程学院', '自动化2301班', 2, 1, 1),
+    (104, '赵晓亮', 'STUDENT', '2023020002', '电子信息学院', '电信2302班', 3, 1, 1),
+    (105, '孙小雨', 'STUDENT', '2023020003', '电子信息学院', '电信2302班', 3, 0, 1)
 ON DUPLICATE KEY UPDATE
     name = VALUES(name), member_type = VALUES(member_type), student_no = VALUES(student_no),
     college = VALUES(college), class_name = VALUES(class_name), org_id = VALUES(org_id),
@@ -118,9 +124,9 @@ ON DUPLICATE KEY UPDATE
     achievement_type = VALUES(achievement_type), name = VALUES(name), status = VALUES(status),
     submit_channel = VALUES(submit_channel);
 
--- ---------------- 项目与查看授权：807 的载体（跨部门限时查看演示） ----------------
--- 1001 挂计算机学院（ORG 可见 = 用户组织在项目组织子树内），电信的孙小雨看不到 → 需走授权；
--- 审批责任组织 = 项目所属组织（清单 PR29），故 807 由计算机学院 dept_chen 审批
+-- ---------------- 项目与查看授权：807 的载体（跨协会限时查看演示） ----------------
+-- 1001 挂程序设计协会（ORG 可见 = 用户组织在项目组织子树内），电子设计协会的孙小雨看不到 → 需走授权；
+-- 审批责任组织 = 项目所属组织（清单 PR29），故 807 由程序设计协会 dept_chen 审批
 INSERT INTO project (id, name, description, owner_member_id, owner_name, semester_id, org_id, status, visibility)
 VALUES (1001, '智能小车竞速项目', '基于 STM32 的智能小车竞速，含循迹与避障模块', 103, '王小明', 301, 2, 'ACTIVE', 'ORG')
 ON DUPLICATE KEY UPDATE
@@ -138,8 +144,8 @@ ON DUPLICATE KEY UPDATE
 
 -- ---------------- 审批中心演示单：覆盖三视角与主要状态 ----------------
 -- 故事线：801/804 呼应赛队 501 代码先锋队的由来；802 的目标人 105 有待处理邀请红点；
---        804/805 留 applicant_read=0 给发起人 103 造"结果未读"红点；803 是电信学院待办（芯火电子队成果 702）；
---        807 是计算机学院待办（孙小雨跨部门限时查看项目 1001，授权行 1002 随批准生效）。
+--        804/805 留 applicant_read=0 给发起人 103 造"结果未读"红点；803 是电子设计协会待办（芯火电子队成果 702）；
+--        807 是程序设计协会待办（孙小雨跨协会限时查看项目 1001，授权行 1002 随批准生效）。
 -- ⚠️ payload 是回调 Handler 的机器契约（字段名对齐 TeamCommandServiceImpl / TeamCommandSupport /
 --    AchievementApprovalSupport / ViewGrantServiceImpl 的真实构造），缺一个字段批准就炸
 --    （801 曾缺 contestId 报 4001"比赛当前状态不允许"），改动前先对照各 Handler 的读法。
