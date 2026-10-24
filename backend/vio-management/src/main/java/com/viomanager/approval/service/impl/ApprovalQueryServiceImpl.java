@@ -10,6 +10,7 @@ import com.viomanager.approval.entity.ApprovalRecord;
 import com.viomanager.approval.mapper.ApprovalMapper;
 import com.viomanager.approval.mapper.ApprovalRecordMapper;
 import com.viomanager.approval.service.IApprovalQueryService;
+import com.viomanager.approval.support.ApprovalPayloadSupport;
 import com.viomanager.approval.support.ApprovalUnreadCache;
 import com.viomanager.approval.support.UnreadCounter;
 import com.viomanager.approval.vo.ApprovalDetailVO;
@@ -57,6 +58,9 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
 
     @Resource
     private ApprovalUnreadCache approvalUnreadCache;
+
+    @Resource
+    private ApprovalPayloadSupport payloadSupport;
 
     @Override
     public Result<PageResult<ApprovalVO>> list(ApprovalQueryDTO dto) {
@@ -112,9 +116,10 @@ public class ApprovalQueryServiceImpl implements IApprovalQueryService {
         }
         //2.看详情的资格：超管 / 发起人 / 目标人 / 审批组织子树内的管理员
         checkViewPermission(approval);
-        //3.组装详情：列表字段 + 快照 + 流水（时间正序）
+        //3.组装详情：列表字段 + 快照 + 流水（时间正序）；快照经出口净化，
+        //  超过 JS 安全整数的雪花 ID 转字符串，防前端 JSON.parse 舍入失真（联调 #4）
         ApprovalDetailVO vo = (ApprovalDetailVO) toVO(approval, new ApprovalDetailVO());
-        vo.setBizPayload(approval.getBizPayload());
+        vo.setBizPayload(payloadSupport.sanitize(approval.getBizPayload()));
         List<ApprovalRecord> records = approvalRecordMapper.selectList(
                 new QueryWrapper<ApprovalRecord>().eq("approval_id", id).orderByAsc("created_at"));
         List<ApprovalRecordVO> recordVoList = new ArrayList<>();
