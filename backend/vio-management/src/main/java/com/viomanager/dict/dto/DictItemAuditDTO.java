@@ -1,14 +1,18 @@
 package com.viomanager.dict.dto;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * D03 字典项审核入参：true 通过入库（APPROVED）/ false 驳回（REJECTED）。
+ * D03 管理员审核字典项（POST 形态，A 线字典审核面板用）。
+ * approve 是后端原字段；A 线前端发的是 pass——两个名字都收，
+ * 判空挪到服务层（原先 @NotNull 挡住了只发 pass 的请求）。
  */
 @Data
 public class DictItemAuditDTO {
 
-    @NotNull(message = "审核结论不能为空")
+    /** 审核结论：true 通过 / false 驳回 */
     private Boolean approve;
+
+    /** A 线前端别名字段（与 approve 等效，任填一个） */
+    private Boolean pass;
 }

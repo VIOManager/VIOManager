@@ -48,4 +48,14 @@ public interface SysDictItemMapper extends BaseMapper<SysDictItem> {
     @Select("SELECT COALESCE(MAX(sort_no), 0) FROM sys_dict_item "
             + "WHERE dict_code = #{dictCode} AND deleted = 0")
     int maxSortNo(@Param("dictCode") String dictCode);
+
+    /**
+     * SY01 类型列表的条目数/待审核数：按字典编码分组一次算全（类型就几个，免 N+1 逐个 count）。
+     * 没有条目的类型不出现该结果里，调用方按 0 兜底。调用方仅超管，但声明 ALL 与本表口径一致。
+     */
+    @DataScope(scope = DataScope.Scope.ALL)
+    @Select("SELECT dict_code AS dictCode, COUNT(*) AS itemCount, "
+            + "SUM(audit_status = 'PENDING') AS pendingCount "
+            + "FROM sys_dict_item WHERE deleted = 0 GROUP BY dict_code")
+    List<java.util.Map<String, Object>> countByCode();
 }
