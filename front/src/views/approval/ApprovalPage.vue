@@ -9,9 +9,9 @@
  * 操作入口全部在详情抽屉（按当前视角显隐按钮，已处理单子无操作钮；最终权限以后端判定为准——规范 §5.3）
  * 红点联动：打开详情即按当前视角标记已读（P07 置位幂等），处理操作后刷新 P08 红点
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { APPROVAL_CAPTAIN_TYPES, apiApprovalList, apiMarkRead } from '@/api/approval'
+import { APPROVAL_CAPTAIN_TYPES, APPROVAL_ROLE_TYPES, apiApprovalList, apiMarkRead } from '@/api/approval'
 import type { ApprovalItem, ApprovalRole, ApprovalView } from '@/api/approval'
 import { APPROVAL_STATUS_LABEL, APPROVAL_TYPE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
@@ -62,12 +62,13 @@ const tabs = computed(() => {
   return out
 })
 
-/** 类型下拉可选项：管理员剔除队长自治类型（列表侧同步过滤，双保险） */
+/** 类型下拉可选项：按角色权能出（api 层 APPROVAL_ROLE_TYPES，2026-10-24 lzh 拍板）；
+ *  管理员三栏另有 CAPTAIN_TYPES 列表过滤兜底（双保险） */
 const typeOptions = computed(() => {
+  const set = APPROVAL_ROLE_TYPES[user.role] ?? Object.keys(APPROVAL_TYPE_LABEL)
   const out: Array<{ value: string; label: string }> = []
-  for (const v of Object.keys(APPROVAL_TYPE_LABEL)) {
-    if (isAdmin.value && APPROVAL_CAPTAIN_TYPES.indexOf(v) >= 0) continue
-    out.push({ value: v, label: APPROVAL_TYPE_LABEL[v] })
+  for (const v of set) {
+    out.push({ value: v, label: APPROVAL_TYPE_LABEL[v] ?? v })
   }
   return out
 })
@@ -151,6 +152,20 @@ function switchView(v: TabKey) {
   view.value = v
   void load()
 }
+
+/** 身份异步恢复校正：页面刷新时 view 可能按默认超管初始化成 TODO（mock 的 /api/auth/me 恢复窗口），
+ *  身份落定为学生后拨回 MINE 并重载——否则学生查管理员视角被 1003 拒，列表永远空 */
+watch(isAdmin, (admin) => {
+  const adminViews: TabKey[] = ['TODO', 'DONE_OK', 'DONE_NO']
+  const onAdminView = adminViews.indexOf(view.value) >= 0
+  if (admin && !onAdminView) {
+    view.value = 'TODO'
+    void load()
+  } else if (!admin && onAdminView) {
+    view.value = 'MINE'
+    void load()
+  }
+})
 
 function onSearch() {
   void load()

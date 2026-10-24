@@ -30,6 +30,18 @@ export const APPROVAL_CAPTAIN_TYPES: string[] = [
   'MILESTONE_APPROVE'
 ]
 
+/**
+ * 各角色类型下拉可选项（2026-10-24 lzh 拍板"按权能整"）：
+ *   超管审成果与学期切换；部门管理员只审成果（学期切换超管专属）；
+ *   学生（含队长）只列本人可发起/可被指向的类型——组队申请已随直建拍板退役、学期切换与学生无关，均不提供
+ * ⚠️ 只约束筛选下拉不产噪音：列表内容仍以后端返回为准（如存量 TEAM_CREATE 单在学生"我发起的"里照常展示，靠 labels 兜底翻译）
+ */
+export const APPROVAL_ROLE_TYPES: Record<string, string[]> = {
+  SUPER_ADMIN: ['ACHIEVEMENT_SUBMIT', 'SEMESTER_SWITCH'],
+  DEPT_ADMIN: ['ACHIEVEMENT_SUBMIT'],
+  STUDENT: ['TEAM_ADD_MEMBER', 'TEAM_REMOVE_MEMBER', 'TEAM_ADD_ADVISOR', 'TEAM_DISSOLVE', 'ACHIEVEMENT_SUBMIT', 'PROJECT_VIEW', 'MILESTONE_APPROVE']
+}
+
 /** 审批单状态（PENDING 为唯一活动态） */
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED'
 
