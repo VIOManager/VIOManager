@@ -3,18 +3,16 @@
  * 项目管理页（/project，管理端，PR01–PR31）
  * 两 tab：项目列表（筛选+新建+详情抽屉）/ 比赛节点（DRAFT→提交审核→通过后自动同步任务）
  * 可见性八条由后端判定（清单 §2）；管理权显隐以 viewerCanManage 驱动（所有人 or 管理员，2026-10-16 拍板）
- * 新建支持管理员代建（ownerMemberId 帮成员创建）；节点时间出参转契约格式（MilestonePanel）
+ * 新建弹窗抽为 ProjectCreateDialog（与学生端 /my/project 共用，管理员代建与关联比赛在弹窗内）
+ * 节点时间出参转契约格式（MilestonePanel）
  */
 import { onMounted, computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { apiCreateProject, apiProjects } from '@/api/project'
+import { apiProjects } from '@/api/project'
 import type { ProjectItem } from '@/api/project'
-import { apiMembers } from '@/api/member'
-import type { MemberListItem } from '@/api/member'
-import { useUserStore } from '@/stores/user'
 import { PROJECT_STATUS_LABEL, PROJECT_VISIBILITY_LABEL } from '@/config/labels'
 import ScrollLoader from '@/components/ScrollLoader.vue'
 import ProjectDetailDrawer from './ProjectDetailDrawer.vue'
+import ProjectCreateDialog from './ProjectCreateDialog.vue'
 import MilestonePanel from './MilestonePanel.vue'
 
 type TabKey = 'list' | 'milestone'
@@ -53,64 +51,8 @@ function openDetail(id: string) {
   drawerVisible.value = true
 }
 
-// ── 新建项目（所有人=当前用户；管理员可代建=帮指定成员创建；幂等键随提交生成）──
-const userStore = useUserStore()
-const isAdmin = computed(() => userStore.role === 'SUPER_ADMIN' || userStore.role === 'DEPT_ADMIN')
-
+// ── 新建项目：弹窗抽为 ProjectCreateDialog（与学生端共用；提交成功后回调刷新）──
 const formVisible = ref(false)
-const form = ref({ name: '', description: '', visibility: 'ORG', startDate: '', endDate: '' })
-const submitting = ref(false)
-
-// 代建（仅管理员）：null=为自己建；选中成员后帮其创建（搜索走 A 线人员档案）
-const owner = ref<MemberListItem | null>(null)
-const ownerKw = ref('')
-const ownerOptions = ref<MemberListItem[]>([])
-
-async function searchOwner() {
-  if (!ownerKw.value.trim()) return
-  const r = await apiMembers({ page: 1, size: 10, keyword: ownerKw.value.trim() })
-  ownerOptions.value = r.list
-}
-
-function pickOwner(m: MemberListItem) {
-  owner.value = m
-  ownerOptions.value = []
-  ownerKw.value = ''
-}
-
-function resetCreateForm() {
-  form.value = { name: '', description: '', visibility: 'ORG', startDate: '', endDate: '' }
-  owner.value = null
-  ownerOptions.value = []
-  ownerKw.value = ''
-}
-
-async function submit() {
-  if (submitting.value) return
-  if (!form.value.name.trim()) {
-    ElMessage.warning('项目名称不能为空')
-    return
-  }
-  submitting.value = true
-  try {
-    await apiCreateProject({
-      name: form.value.name.trim(),
-      description: form.value.description,
-      visibility: form.value.visibility,
-      startDate: form.value.startDate,
-      endDate: form.value.endDate,
-      ...(owner.value ? { ownerMemberId: owner.value.id } : {})
-    })
-    ElMessage.success(owner.value
-      ? '项目已创建（所有人：' + owner.value.name + '）'
-      : '项目已创建（你是所有人，可加成员/挂赛队）')
-    formVisible.value = false
-    resetCreateForm()
-    await load()
-  } finally {
-    submitting.value = false
-  }
-}
 
 function stampClass(status: string): string {
   if (status === 'ACTIVE') return 'warn'
@@ -171,47 +113,7 @@ onMounted(load)
     </template>
     <MilestonePanel v-else />
 
-    <el-dialog v-model="formVisible" title="新建项目" width="480px">
-      <div class="form-col">
-        <label>项目名称（同学期同组织内唯一，7004）</label>
-        <input v-model="form.name" class="input-line" placeholder="如 智能循迹小车" />
-        <label>项目简介</label>
-        <textarea v-model="form.description" class="input-line" rows="3" placeholder="做什么、用什么技术"></textarea>
-        <template v-if="isAdmin">
-          <label>所有人（管理员代建，选填：不选=为自己创建）</label>
-          <template v-if="owner">
-            <div class="owner-picked">
-              <span>已选：{{ owner.name }}<em class="mono">· {{ owner.college }}</em></span>
-              <button class="btn-act" @click="owner = null">重选</button>
-            </div>
-          </template>
-          <template v-else>
-            <div style="display: flex; gap: 8px">
-              <input v-model="ownerKw" class="input-line" style="flex: 1" placeholder="姓名/学号搜索成员" @keyup.enter="searchOwner" />
-              <button class="btn-line" @click="searchOwner">搜索</button>
-            </div>
-            <div v-for="m in ownerOptions" :key="m.id" class="owner-opt" @click="pickOwner(m)">
-              <span>{{ m.name }}<em class="mono">· {{ m.college }} · {{ m.studentNo }}</em></span>
-              <span class="mono" style="font-size: 12px">选为所有人</span>
-            </div>
-          </template>
-        </template>
-        <label>可见性</label>
-        <select v-model="form.visibility" class="input-line">
-          <option v-for="(label, v) in PROJECT_VISIBILITY_LABEL" :key="v" :value="v">{{ label }}</option>
-        </select>
-        <label>起止日期</label>
-        <div style="display: flex; gap: 8px">
-          <input v-model="form.startDate" type="date" class="input-line" />
-          <input v-model="form.endDate" type="date" class="input-line" />
-        </div>
-      </div>
-      <template #footer>
-        <button class="btn-line" @click="formVisible = false">取消</button>
-        <button class="btn-ink" :disabled="submitting" @click="submit">创建</button>
-      </template>
-    </el-dialog>
-
+    <ProjectCreateDialog v-model="formVisible" @submitted="load" />
     <ProjectDetailDrawer v-model="drawerVisible" :project-id="detailId" @changed="load" />
   </div>
 </template>
@@ -231,18 +133,4 @@ onMounted(load)
 }
 .vtab:hover { transform: translate(-1px, -1px); color: var(--vio2-ink); }
 .vtab.active { background: var(--vio2-yellow); color: #101010; }
-.form-col { display: flex; flex-direction: column; gap: 6px; }
-.form-col label { font-size: 12px; color: var(--vio2-ink-2); margin-top: 6px; }
-.owner-picked {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 10px; border: 2px dashed var(--vio2-bd); background: var(--vio2-panel);
-  font-size: 13px;
-}
-.owner-picked em { font-style: normal; color: var(--vio2-ink-2); margin-left: 6px; font-size: 12px; }
-.owner-opt {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 5px 10px; border: 1px solid var(--vio2-bd); font-size: 13px; cursor: pointer;
-}
-.owner-opt:hover { background: var(--vio2-yellow); }
-.owner-opt em { font-style: normal; color: var(--vio2-ink-2); margin-left: 6px; font-size: 12px; }
 </style>
