@@ -224,15 +224,8 @@ registerMock({
     for (const m of t.members) {
       if (m.memberId !== ctx.params.memberId) continue
       if (m.role === 'LEADER') return fail(4010, '队长不可自我移除或退出')
-      pushApproval({
-        bizType: 'TEAM_REMOVE_MEMBER', bizId: t.id,
-        bizTitle: t.leaderName + ' · ' + t.name + '申请移除队员：' + m.name,
-        applyReason: '申请将' + m.name + '移出「' + t.name + '」',
-        payload: { teamId: t.id, memberId: m.memberId, memberName: m.name },
-        applicantMemberId: t.leaderId,
-        applicantName: t.leaderName,
-        approverOrgId: orgIdOfMember(t.leaderId)
-      })
+      // 队长直移免审批（2026-10-24 lzh 拍板A）：移除即生效；审计由真后端 @AuditLog 承载
+      m.status = 'REMOVED'
       return ok(null)
     }
     return fail(1004, '成员不存在')

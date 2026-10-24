@@ -99,7 +99,7 @@ export function apiAddTeamMember(teamId: string, memberId: string): Promise<null
 export function apiConfirmTeamMember(teamId: string, memberId: string, action: 'CONFIRM' | 'REJECT'): Promise<null> {
   return postIdem('/api/teams/' + teamId + '/members/' + memberId + '/confirm', { action }, crypto.randomUUID())
 }
-/** 移除成员（TE07，默认走审批；队长不可被移除 4010） */
+/** 移除成员（TE07 队长直移免审批，2026-10-24 lzh 拍板A）：直接生效挂审计；队长不可被移除 4010 */
 export function apiRemoveTeamMember(teamId: string, memberId: string): Promise<null> {
   return delIdem('/api/teams/' + teamId + '/members/' + memberId, crypto.randomUUID())
 }

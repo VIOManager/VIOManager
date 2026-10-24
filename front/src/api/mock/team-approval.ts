@@ -3,7 +3,8 @@
  * 对应契约：《审批中心-接口清单》§5；两段式见清单 §3——TEAM_ADD_MEMBER 批准后成员以 UNCONFIRMED 入队，
  *    队员本人的确认/拒绝走赛队自己的 confirm 接口，不回审批中心开第二张单
  * TEAM_CREATE 已退役（2026-10-24 lzh 拍板队长直建免审批）：建队逻辑移至 mock/team.ts 的 POST /api/teams；
- *    剩余三类（加人/移除/指导教师）队长发起、目标人同意即终结，管理员审批仅为可选旁路（前端管理员三栏已不展示）
+ * TEAM_REMOVE_MEMBER 同日拍板A 队长直移免审批：移除逻辑移至 mock/team.ts 的 DELETE 成员口；
+ * 剩余两类（加人/指导教师）队长发起、目标人同意即终结，管理员审批仅为可选旁路（前端管理员三栏已不展示）
  * TODO(联调)：后端审批回调就绪后删除本文件
  */
 import { registerApprovalHandler } from './approval-data'
@@ -51,19 +52,6 @@ registerApprovalHandler('TEAM_ADD_MEMBER', {
     const target = memberOf(memberId)
     if (!target) return
     t.members.push(toTeamMember(target, 'MEMBER', 'UNCONFIRMED'))
-  }
-})
-
-/** 批准移除队员 → 成员置 REMOVED */
-registerApprovalHandler('TEAM_REMOVE_MEMBER', {
-  onApproved: (a) => {
-    const p = parsePayload(a)
-    const t = findTeam(String(p.teamId ?? ''))
-    if (!t) return
-    const memberId = String(p.memberId ?? '')
-    for (const m of t.members) {
-      if (m.memberId === memberId && (m.status === 'CONFIRMED' || m.status === 'UNCONFIRMED')) m.status = 'REMOVED'
-    }
   }
 })
 

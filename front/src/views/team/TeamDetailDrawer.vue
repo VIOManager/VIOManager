@@ -59,15 +59,15 @@ function isSelf(m: TeamMemberItem): boolean {
 
 async function onRemove(m: TeamMemberItem) {
   try {
-    await ElMessageBox.confirm('确认申请移除队员「' + m.name + '」？将生成审批单。', '移除队员', {
-      confirmButtonText: '提交移除申请', cancelButtonText: '取消', type: 'warning'
+    await ElMessageBox.confirm('确认移除队员「' + m.name + '」？移除立即生效（队长管理权，已挂审计）。', '移除队员', {
+      confirmButtonText: '确认移除', cancelButtonText: '取消', type: 'warning'
     })
   } catch {
     return
   }
   try {
     await apiRemoveTeamMember(props.teamId, m.memberId)
-    ElMessage.success('移除申请已提交审批')
+    ElMessage.success('已移除队员「' + m.name + '」')
     emit('changed')
   } catch {
     // 4010 等提示已由拦截器弹出
