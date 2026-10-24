@@ -73,6 +73,19 @@ class AiStatusTest {
                 .andExpect(jsonPath("$.code").value(1002));
     }
 
+    /** 未装配时 chat 走 HTTP 层 9100 标准 JSON，不进 SSE 流（清单 §5） */
+    @Test
+    void chatRejectedWith9100WhenNotConfigured() throws Exception {
+        String token = login("ai_probe_chat_off");
+        mockMvc.perform(post("/api/ai/chat")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(org.springframework.http.MediaType.TEXT_EVENT_STREAM)
+                        .content("{\"content\":\"你好\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(9100));
+    }
+
     // ---------- 支撑 ----------
 
     private String login(String loginName) throws Exception {
