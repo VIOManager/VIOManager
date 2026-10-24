@@ -1,6 +1,7 @@
 package com.viomanager.person.support;
 
 import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.CommonErrorCode;
@@ -8,6 +9,8 @@ import com.viomanager.common.exception.BizException;
 import com.viomanager.datascop.OrgScopeSupport;
 import com.viomanager.person.dto.PersonCreateDTO;
 import com.viomanager.person.dto.PersonImportVO;
+import com.viomanager.person.entity.Person;
+import com.viomanager.person.mapper.PersonMapper;
 import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,16 +21,18 @@ import java.util.Set;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * M07 Excel 批量导入支撑：逐行解析校验入库，返回 successCount / failCount / 逐行错误。
- * 契约口径：
- *  - 组织按名称精确匹配 sys_org.name，不存在或不唯一该行报错（不是按 ID）；
- *  - 学号已存在的行跳过——不计成功也不计失败（可重复导入幂等，跳过行静默）；
- *  - 证件照/电子签名列读入但忽略值（照片走 M08/M09 文件服务回填），留空不报错；
- *  - 性别兼容 男/女/MALE/FEMALE/空（空当 UNKNOWN）。
- * 表头按文字定位列，容忍模板列顺序调整；行号为 Excel 实际行号（表头是第 1 行）。
+ * M07 Excel 批量导入支撑：逐行解析校验、建档并自动创建登录账号，返回 successCount / failCount / 逐行错误。
+ * 契约口径（2026-10-24 拍板：导入自动建号）：
+ *  - 建号规则复用 M13：登录名 = 学工号 → 学号（模板两值同列）、abc123、首登强制改密——学号/学工号列因此必填；
+ *  - 学号已存在且有账号 → 跳过（重导幂等）；已存在但无账号 → 只补建账号（补 M13 漏绑存量），计入成功；
+ *  - 建号失败（登录名被占等）→ 该行整体失败：行级事务回滚档案，errors 带行号与原因；
+ *  - 组织按名称精确匹配且唯一、证件照/签名列读入忽略值、性别兼容中英文；表头按文字定位容忍列序调整，行号为 Excel 实际行号（表头第 1 行）。
  */
 @Component
 public class PersonImportSupport {
@@ -41,14 +46,24 @@ public class PersonImportSupport {
     private PersonCommandSupport personCommandSupport;
 
     @Resource
+    private PersonMapper personMapper;
+
+    @Resource
     private OrgScopeSupport orgScopeSupport;
 
     @Resource
     private JdbcTemplate jdbcTemplate;
 
+    /** 行级事务（NESTED）：生产=每行独立真事务；测试外层有事务时退化为保存点，单行回滚不污染外层 */
+    private final TransactionTemplate rowTx;
+
+    public PersonImportSupport(PlatformTransactionManager txManager) {
+        this.rowTx = new TransactionTemplate(txManager);
+        this.rowTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
+    }
+
     public PersonImportVO importExcel(MultipartFile file) {
-        //1.越权封堵（与写接口 assertAdminCanManage 同口径）：导入是写操作，
-        //  部门管理员只能往自己组织子树导人（逐行校验在 validateRow 内），其他角色防御性拒绝
+        //1.越权封堵：导入是写操作，部门管理员只能往子树导人（逐行校验在 validateRow / backfillAccount）
         CurrentUser user = UserHolder.getUser();
         if (user == null || !"SUPER_ADMIN".equals(user.getRole()) && !"DEPT_ADMIN".equals(user.getRole())) {
             throw new BizException(CommonErrorCode.FORBIDDEN);
@@ -71,57 +86,73 @@ public class PersonImportSupport {
                         "模板表头缺少「" + required + "」列，请下载最新模板填写");
             }
         }
-        //4.逐行处理：合法入库 / 已存在跳过 / 非法记错误
+        //4.逐行处理：合法建档并自动建号 / 已存在有账号跳过 / 已存在无账号补建 / 非法记错误
         int success = 0;
         List<PersonImportVO.RowError> errors = new ArrayList<>();
         Set<String> seenStudentNos = new HashSet<>();
         for (int i = 1; i < rows.size(); i++) {
             int excelRowNo = i + 1;
             List<String> row = rows.get(i);
-            String cell = text(row, colMap, "姓名");
             //4.1姓名必填
-            if (StrUtil.isBlank(cell)) {
+            if (StrUtil.isBlank(text(row, colMap, "姓名"))) {
                 errors.add(new PersonImportVO.RowError(excelRowNo, "姓名不能为空"));
                 continue;
             }
-            //4.2学号：已存在（库里或本文件里）跳过——契约原文，不计成功也不计失败
+            //4.2学号必填：自动建号以学号/学工号列作登录名（M13 默认链），留空建不了账号整行失败
             String studentNo = StrUtil.trimToNull(text(row, colMap, "学号/学工号"));
-            if (studentNo != null && (seenStudentNos.contains(studentNo) || studentNoExists(studentNo))) {
+            if (studentNo == null) {
+                errors.add(new PersonImportVO.RowError(excelRowNo,
+                        "学号/学工号不能为空（导入将按其自动创建登录账号）"));
                 continue;
             }
-            //4.2.1 提前追踪：不管后续 validateRow 成功还是失败，该学号都进 seenStudentNos——
-            //  否则同文件后面再出现同学号时，因为前一行没入库/没追踪，会漏过 skip 继续走 insert
-            if (studentNo != null) {
-                seenStudentNos.add(studentNo);
+            //4.3文件内重复学号跳过——不计成功也不计失败（与库里已存在同口径，已失败的行也算处理过）
+            if (seenStudentNos.contains(studentNo)) {
+                continue;
             }
-            //4.3其余列校验，出问题记行号与原因
+            seenStudentNos.add(studentNo);
+            //4.4库里已存在：有账号跳过（重导幂等）；无账号只补建账号（重导补存量口子，计成功）
+            Person existing = findActiveByStudentNo(studentNo);
+            if (existing != null) {
+                if (existing.getHasAccount() != null && existing.getHasAccount() == 1) {
+                    continue;
+                }
+                String backfillError = backfillAccount(existing, deptAdmin);
+                if (backfillError == null) {
+                    success++;
+                } else {
+                    errors.add(new PersonImportVO.RowError(excelRowNo, backfillError));
+                }
+                continue;
+            }
+            //4.5其余列校验，出问题记行号与原因
             String reason = validateRow(row, colMap, deptAdmin);
             if (reason != null) {
                 errors.add(new PersonImportVO.RowError(excelRowNo, reason));
                 continue;
             }
-            //4.4组装入库（身份证加密在 insertPerson 内）；并发等场景仍可能撞唯一键/超长，
-            //  兜底转逐行错误（外层 importExcel 已无 @Transactional，单行异常不会拖垮整批）
+            //4.6建档 + 自动建号同一行级事务：建号失败整行回滚，不留"有档无号"半成品；并发撞唯一键兜底转逐行错误
             try {
-                personCommandSupport.insertPerson(toDto(row, colMap));
+                rowTx.executeWithoutResult(status -> {
+                    Person person = personCommandSupport.insertPerson(toDto(row, colMap));
+                    personCommandSupport.bindAccountFor(person, null);
+                });
+                success++;
+            } catch (BizException e) {
+                errors.add(new PersonImportVO.RowError(excelRowNo, "账号创建失败：" + e.getMessage()));
             } catch (DataIntegrityViolationException e) {
                 errors.add(new PersonImportVO.RowError(excelRowNo, "数据冲突：学号/学工号已存在或字段超长"));
-                continue;
             }
-            success++;
         }
         return new PersonImportVO(success, errors.size(), errors);
     }
 
     /** 行内非姓名列的校验：返回 null 表示通过，否则是错误原因 */
     private String validateRow(List<String> row, Map<String, Integer> colMap, CurrentUser deptAdmin) {
-        //1.姓名/学号/学院/专业/班级/民族/邮箱长度对齐建表列宽——超长在 MySQL 严格模式下
-        //  会 Data too long 连坐整批回滚，必须提前逐行拦
+        //1.长度对齐建表列宽——超长在 MySQL 严格模式会 Data too long 拖垮整批，必须提前逐行拦
         if (text(row, colMap, "姓名").trim().length() > 50) {
             return "姓名最长 50 字";
         }
-        String studentNo = StrUtil.trimToNull(text(row, colMap, "学号/学工号"));
-        if (studentNo != null && studentNo.length() > 32) {
+        if (text(row, colMap, "学号/学工号").trim().length() > 32) {
             return "学号/学工号最长 32 字";
         }
         String college = text(row, colMap, "学院");
@@ -195,11 +226,26 @@ public class PersonImportSupport {
         return dto;
     }
 
-    private boolean studentNoExists(String studentNo) {
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM member WHERE student_no = ? AND deleted = 0",
-                Integer.class, studentNo);
-        return count != null && count > 0;
+    /** 已存在但无账号的行：按 M13 规则补建账号；返回 null=成功，否则=失败原因 */
+    private String backfillAccount(Person existing, CurrentUser deptAdmin) {
+        //1.部门管理员只能给子树内的人补号（以档案真实组织为准，不信 Excel 行里的组织列）
+        if (deptAdmin != null && !orgScopeSupport.inSubtree(deptAdmin.getOrgId(), existing.getOrgId())) {
+            return "无权为该组织人员补建账号";
+        }
+        //2.补建：登录名走 M13 默认链（学工号→学号），被占时 2003 在账号服务内抛，落进行级事务
+        try {
+            rowTx.executeWithoutResult(status -> personCommandSupport.bindAccountFor(existing, null));
+            return null;
+        } catch (BizException e) {
+            return "账号创建失败：" + e.getMessage();
+        }
+    }
+
+    /** 按学号查在册档案（@TableLogic 自动滤已删）；正常最多一条，异常多条按不存在走建档兜错 */
+    private Person findActiveByStudentNo(String studentNo) {
+        List<Person> persons = personMapper.selectList(
+                new QueryWrapper<Person>().eq("student_no", studentNo));
+        return persons.size() == 1 ? persons.get(0) : null;
     }
 
     /** 组织名称 → ID：必须精确匹配且唯一（重名组织会让导入有歧义，按契约报错） */

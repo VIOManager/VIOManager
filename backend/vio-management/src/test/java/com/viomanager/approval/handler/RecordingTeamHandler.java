@@ -4,9 +4,10 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.stereotype.Component;
 
 /**
- * 测试用回调：注册 TEAM_CREATE 的 Handler，静态计数器记录回调次数与收到的 approvalId，
- * 测试据此断言"批准后回调真的被路由执行、参数口径正确、返回值会被回填 biz_id"
- * （B 线还没实现真 Handler，用它在测试里顶位）。只存在于测试 classpath，不影响生产。
+ * 测试用合成回调：注册 TEAM_CREATE 的 Handler，静态计数器记录回调次数与收到的 approvalId，
+ * 测试据此断言"批准后回调真的被路由执行、参数口径正确、返回值会被回填 biz_id"。
+ * TEAM_CREATE 正式 Handler 已随队长直建拍板退役（2026-10-24），本类成为该类型的
+ * 唯一注册者——纯合成测试载体，不再有顶位/冲突问题。只存在于测试 classpath，不影响生产。
  */
 @Component
 public class RecordingTeamHandler implements ApprovalHandler {

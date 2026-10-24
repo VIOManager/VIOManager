@@ -27,6 +27,7 @@
 | 3008 | 学期名称已存在 |
 | 3009 | 学期有关联业务数据，禁止删除 |
 | 3010 | 无权查看该敏感信息 |
+| 3011 | 批量删除人数超过单次上限（M05B，上限 200；3006-3009 已被组织/学期占用故取 3011） |
 
 ## 2. 组织管理（/api/orgs，表 sys_org）
 
@@ -48,8 +49,9 @@
 | M03 | POST /api/members | 手工新建（管理员）。studentNo 可空、不可重复（3001） |
 | M04 | PUT /api/members/{id} | 编辑。studentNo 不接受变更（3002） |
 | M05 | DELETE /api/members/{id} | 队长拒绝（3003）；当前登录账号拒绝（3004）；普通队员删除时清除队伍成员关系；材料/成果等业务记录保留 |
-| M06 | GET /api/members/import-template | 13 列 Excel 模板下载 |
-| M07 | POST /api/members/import | multipart 上传。学号已存在的行跳过；图片列留空不报错；所属组织按名称匹配，不存在或不唯一该行报错。返回 successCount failCount errors 行号与原因 |
+| M05B | DELETE /api/members | **批量删除（2026-10-24 拍板新增）**，body：`{"ids":[...]}`，挂 X-Idempotency-Key + 审计。**整批拒绝口径**：任一 id 不可删 → 全批不动，message 列出不可删名单与原因（导错重来要的就是全清，半删更乱）。逐 id 套 M05 同规则：不存在 1004、越权（部门管理员限子树）1003、队长 3003、当前登录账号 3004；单次上限 200（超限 3011）；重复 id 去重只删一次。全批可删返回 code 0，级联同 M05 |
+| M06 | GET /api/members/import-template | 14 列 Excel 模板下载；**学号/学工号列必填**（导入自动建号以它作登录名） |
+| M07 | POST /api/members/import | multipart 上传。**导入自动建号（2026-10-24 拍板）**：建号规则完全复用 M13——登录名=学工号列值、初始密码 abc123、default_password=1 首登强制改密；学号/学工号列必填。学号已存在且有账号的行跳过（不计成功也不计失败）；已存在但无账号的行**只补建账号**（重导补 M13 漏绑的存量，计入 successCount）；建号失败（登录名被占、行内无学工号）该行整体失败：行级事务回滚档案，errors 带行号与原因。组织按名称匹配，不存在或不唯一该行报错。返回 successCount failCount errors 行号与原因 |
 | M08 | POST /api/members/{id}/photo | 证件照上传，覆盖式单图，走文件服务回填 photo_file_id |
 | M09 | POST /api/members/{id}/signature | 电子签名上传，覆盖式单图 |
 | M10 | GET /api/members/{id}/id-card | 完整身份证号。仅超管/本部门管理员/本队队长/本人；**写审计日志（操作人、时间、IP）** |

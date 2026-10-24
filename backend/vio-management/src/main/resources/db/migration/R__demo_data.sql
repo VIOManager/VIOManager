@@ -133,12 +133,15 @@ VALUES (402, '第十六届蓝桥杯程序设计大赛', 301, 'REGISTERING', 'MAN
 ON DUPLICATE KEY UPDATE
     name = VALUES(name), semester_id = VALUES(semester_id), status = VALUES(status), source_type = VALUES(source_type);
 
--- ---------------- 两支赛队：一支材料已交、一支未开始 ----------------
+-- ---------------- 三支赛队：一支材料已交、一支未开始、一支新建待发展 ----------------
 -- leader_member_id 必须带上：服务层一切队长校验读 team.leader_member_id，缺失则种子队解散/编辑/加人全部 1003（2026-10-16 冒烟抓出）
+-- 504 星辰算法队：801 TEAM_CREATE 建队审批批准后的产物（2026-10-24 队长直建拍板落地时按方案 A
+-- 批量通过存量单触发回调建队，team id 已归一化到 504，种子与现库口径一致）
 INSERT INTO team (id, name, contest_id, semester_id, org_id, leader_member_id, status, material_status, material_complete_rate)
 VALUES
     (501, '代码先锋队', 402, 301, 2, 103, 'ACTIVE', 'SUBMITTED',  100.00),
-    (502, '芯火电子队', 402, 301, 3, 105, 'ACTIVE', 'NOT_STARTED',  0.00)
+    (502, '芯火电子队', 402, 301, 3, 105, 'ACTIVE', 'NOT_STARTED',  0.00),
+    (504, '星辰算法队', 402, 301, 4, 106, 'ACTIVE', 'NOT_STARTED',  0.00)
 ON DUPLICATE KEY UPDATE
     name = VALUES(name), contest_id = VALUES(contest_id), semester_id = VALUES(semester_id),
     org_id = VALUES(org_id), leader_member_id = VALUES(leader_member_id), status = VALUES(status),
@@ -148,17 +151,19 @@ INSERT INTO team_member (id, team_id, member_id, member_name, is_leader, status)
 VALUES
     (601, 501, 103, '王小明', 1, 'CONFIRMED'),
     (602, 501, 104, '赵晓亮', 0, 'UNCONFIRMED'),
-    (603, 502, 105, '孙小雨', 1, 'UNCONFIRMED')
+    (603, 502, 105, '孙小雨', 1, 'UNCONFIRMED'),
+    (604, 504, 106, '李浩然', 1, 'CONFIRMED')
 ON DUPLICATE KEY UPDATE
     member_id = VALUES(member_id), member_name = VALUES(member_name),
     is_leader = VALUES(is_leader), status = VALUES(status);
 
--- ---------------- 获奖记录：701 已生效；702 待审批（803 的载体，挂芯火电子队） ----------------
+-- ---------------- 获奖记录：701 已生效；702/704 待审批（803/808 的载体） ----------------
 INSERT INTO achievement (id, semester_id, org_id, owner_member_id, owner_name, team_id, contest_id,
                          achievement_type, name, status, submit_channel)
 VALUES
     (701, 301, 2, 103, '王小明', NULL, NULL, 'AWARD', '蓝桥杯省赛软件类一等奖', 'APPROVED', 'USER'),
-    (702, 301, 3, 105, '孙小雨', 502, 402, 'AWARD', '全国大学生电子设计竞赛省二等奖', 'PENDING', 'USER')
+    (702, 301, 3, 105, '孙小雨', 502, 402, 'AWARD', '全国大学生电子设计竞赛省二等奖', 'PENDING', 'USER'),
+    (704, 301, 4, 106, '李浩然', 504, 402, 'AWARD', '蓝桥杯省赛软件类二等奖', 'PENDING', 'USER')
 ON DUPLICATE KEY UPDATE
     semester_id = VALUES(semester_id), org_id = VALUES(org_id), owner_member_id = VALUES(owner_member_id),
     owner_name = VALUES(owner_name), team_id = VALUES(team_id), contest_id = VALUES(contest_id),
@@ -184,20 +189,23 @@ ON DUPLICATE KEY UPDATE
     expire_at = VALUES(expire_at), status = VALUES(status);
 
 -- ---------------- 审批中心演示单：覆盖三视角与主要状态 ----------------
--- 故事线：804/805 呼应赛队 501 代码先锋队的由来；802 的目标人 105 有待处理邀请红点
+-- 故事线：804 呼应赛队 501 代码先锋队的由来；802 的目标人 105 有待处理邀请红点
 --        （2026-10-24 孙小雨补账号后，stu_sun 登录 TARGET 视角才真正看得到）；
---        804/805 留 applicant_read=0 给发起人 103 造"结果未读"红点；803 是电子设计协会待办（芯火电子队成果 702）；
+--        804 留 applicant_read=0 给发起人 103 造"结果未读"红点；803 是电子设计协会待办（芯火电子队成果 702）；
 --        807 是程序设计协会待办（孙小雨跨协会限时查看项目 1001，授权行 1002 随批准生效）。
---        801 建队申请 2026-10-24 从王小明名下挪给李浩然：王小明已是 501 代码先锋队队长，同赛事二次建队
---        正好踩 B 线未堵的"队长重复参赛不复查"口子（联调报告 #5）；挪给无队伍的李浩然后，
---        机械创新协会 dept_wu 的待办有单可批，批准即诞生该协会第一支赛队，后续邀人/加指导教师接着演。
---        805 原为 TEAM_DISSOLVE 死类型演示单（解散实为 TE12 直删不走审批，真实流程永不产生该类型审批，
---        2026-10-23 换成移除队员被驳回，保留 REJECTED 状态与发起人未读红点的演示位）。
+--        801 建队审批 2026-10-24 按方案 A 批准落地：李浩然的星辰算法队 504 真实建队（队长直建拍板后
+--        TEAM_CREATE 类型退役，此单转 APPROVED 历史、biz_id 指向 504；applicant_read 留 0 给李浩然
+--        造"结果未读"红点）。⚠️ 已处理单必须以终态入种：PENDING 写法曾被服务重启后的种子重跑
+--        把管理员已取消的单复活回 PENDING（2026-10-24 实锤，孤儿 CANCEL 流水为证）。
+--        808 是机械创新协会 dept_wu 的新待办（星辰算法队成果 704，补回 801 转历史后该协会的待办位）。
+--        805 移除队员驳回单已删（2026-10-24 拍板A：移除队员归队长直移免审批，请求到不了管理员，
+--        "部门管理员驳回移除"的演示故事不再成立，连同 816/817 流水一并移除）。
 --        806 邀请目标 2026-10-24 从孙小雨换成李浩然：孙本就是芯火电子队队长，邀请自家队长入自家队
 --        故事不通；换李浩然保留 CANCELLED 状态演示位，顺带给干净学生留一条"被邀又取消"的历史单。
 -- ⚠️ payload 是回调 Handler 的机器契约（字段名对齐 TeamCommandServiceImpl / TeamCommandSupport /
 --    AchievementApprovalSupport / ViewGrantServiceImpl 的真实构造），缺一个字段批准就炸
 --    （801 曾缺 contestId 报 4001"比赛当前状态不允许"），改动前先对照各 Handler 的读法。
+--    退役类型（TEAM_CREATE/TEAM_REMOVE_MEMBER）存量单的 payload 已无 Handler 消费，仅作历史展示。
 -- PENDING 单的 expire_at 用 NOW()+7 天动态值，演示库长期不过期。
 INSERT INTO approval (id, biz_type, biz_id, biz_title, biz_payload, status,
                       applicant_id, applicant_name, target_member_id, target_member_name,
@@ -205,11 +213,11 @@ INSERT INTO approval (id, biz_type, biz_id, biz_title, biz_payload, status,
                       apply_reason, handle_comment, handled_at, expire_at,
                       applicant_read, target_read, approver_read, created_at)
 VALUES
-    (801, 'TEAM_CREATE', NULL, '星辰算法队·第十六届蓝桥杯程序设计大赛',
+    (801, 'TEAM_CREATE', 504, '星辰算法队·第十六届蓝桥杯程序设计大赛',
      '{"contestId":402,"contestName":"第十六届蓝桥杯程序设计大赛","trackId":null,"trackName":null,"name":"星辰算法队","projectName":"智能排课小助手","leaderMemberId":106,"leaderName":"李浩然","prefillMemberIds":[],"semesterId":301,"orgId":4}',
-     'PENDING', 106, '李浩然', NULL, NULL, 4, NULL, NULL, NULL, 402, 301, 4,
-     '和两名队友组队参加蓝桥杯，队名定为星辰算法队，请老师审批', NULL, NULL,
-     DATE_ADD(NOW(), INTERVAL 7 DAY), 0, 0, 0, '2026-10-12 09:15:00'),
+     'APPROVED', 106, '李浩然', NULL, NULL, 4, 208, '吴建国', 504, 402, 301, 4,
+     '和两名队友组队参加蓝桥杯，队名定为星辰算法队，请老师审批', '同意组队，注意报名截止时间', '2026-10-24 18:30:00',
+     NULL, 0, 0, 1, '2026-10-12 09:15:00'),
 
     (802, 'TEAM_ADD_MEMBER', NULL, '邀请 孙小雨 加入',
      '{"teamId":501,"memberId":105,"memberName":"孙小雨","contestId":402,"semesterId":301}',
@@ -229,12 +237,6 @@ VALUES
      '报名蓝桥杯，申请创建代码先锋队', '同意，注意报名截止时间', '2026-10-09 20:05:00',
      NULL, 0, 0, 1, '2026-10-09 19:30:00'),
 
-    (805, 'TEAM_REMOVE_MEMBER', 501, '移除 赵晓亮',
-     '{"teamId":501,"memberId":104,"memberName":"赵晓亮","contestId":402,"semesterId":301}',
-     'REJECTED', 103, '王小明', 104, '赵晓亮', 2, 202, '陈志远', 501, 402, 301, 2,
-     '赵晓亮长期未确认入队，申请移除', '先与本人沟通确认后再移除', '2026-10-10 11:45:00',
-     NULL, 0, 0, 1, '2026-10-10 11:20:00'),
-
     (806, 'TEAM_ADD_MEMBER', NULL, '邀请李浩然加入 芯火电子队',
      '{"teamName":"芯火电子队","targetName":"李浩然"}',
      'CANCELLED', 104, '赵晓亮', 106, '李浩然', 3, NULL, NULL, 502, 402, 301, 3,
@@ -245,7 +247,13 @@ VALUES
      '{"grantId":1002,"projectId":1001,"applicantId":105,"grantType":"LIMITED","expireAt":"2026-10-30T23:59:59"}',
      'PENDING', 105, '孙小雨', NULL, NULL, 2, NULL, NULL, NULL, NULL, 301, 3,
      '想参考该项目的传感器选型方案，申请限时查看 7 天', NULL, NULL,
-     DATE_ADD(NOW(), INTERVAL 7 DAY), 0, 0, 0, '2026-10-12 08:30:00')
+     DATE_ADD(NOW(), INTERVAL 7 DAY), 0, 0, 0, '2026-10-12 08:30:00'),
+
+    (808, 'ACHIEVEMENT_SUBMIT', NULL, '星辰算法队 成果提交：蓝桥杯省赛软件类二等奖',
+     '{"achievementId":"704","teamId":"504","name":"蓝桥杯省赛软件类二等奖","type":"AWARD"}',
+     'PENDING', 106, '李浩然', NULL, NULL, 4, NULL, NULL, 504, 402, 301, 4,
+     '队伍建好后首战蓝桥杯拿了省二，证书扫描件后续补交，请审核', NULL, NULL,
+     DATE_ADD(NOW(), INTERVAL 7 DAY), 0, 0, 0, '2026-10-24 18:40:00')
 ON DUPLICATE KEY UPDATE
     biz_type = VALUES(biz_type), biz_id = VALUES(biz_id), biz_title = VALUES(biz_title), biz_payload = VALUES(biz_payload),
     status = VALUES(status), applicant_id = VALUES(applicant_id), applicant_name = VALUES(applicant_name),
@@ -265,11 +273,11 @@ VALUES
     (813, 803, 'SUBMIT', NULL, '孙小雨', 'APPLICANT', '芯火电子队获奖，提交成果', NULL, 'PENDING', '2026-10-12 10:20:00'),
     (814, 804, 'SUBMIT', 204, '王小明', 'APPLICANT', '报名蓝桥杯，申请建队', NULL, 'PENDING', '2026-10-09 19:30:00'),
     (815, 804, 'APPROVE', 202, '陈志远', 'APPROVER', '同意，注意报名截止时间', 'PENDING', 'APPROVED', '2026-10-09 20:05:00'),
-    (816, 805, 'SUBMIT', 204, '王小明', 'APPLICANT', '赵晓亮长期未确认，申请移除', NULL, 'PENDING', '2026-10-10 11:20:00'),
-    (817, 805, 'REJECT', 202, '陈志远', 'APPROVER', '先与本人沟通确认后再移除', 'PENDING', 'REJECTED', '2026-10-10 11:45:00'),
     (818, 806, 'SUBMIT', 205, '赵晓亮', 'APPLICANT', '嵌入式方向缺人，邀请入队', NULL, 'PENDING', '2026-10-10 14:50:00'),
     (819, 806, 'CANCEL', 205, '赵晓亮', 'APPLICANT', '改邀请其他同学，先取消', 'PENDING', 'CANCELLED', '2026-10-10 15:10:00'),
-    (820, 807, 'SUBMIT', NULL, '孙小雨', 'APPLICANT', '参考传感器方案，限时查看', NULL, 'PENDING', '2026-10-12 08:30:00')
+    (820, 807, 'SUBMIT', NULL, '孙小雨', 'APPLICANT', '参考传感器方案，限时查看', NULL, 'PENDING', '2026-10-12 08:30:00'),
+    (821, 801, 'APPROVE', 208, '吴建国', 'APPROVER', '同意组队，注意报名截止时间', 'PENDING', 'APPROVED', '2026-10-24 18:30:00'),
+    (822, 808, 'SUBMIT', 207, '李浩然', 'APPLICANT', '首战蓝桥杯拿省二，提交成果', NULL, 'PENDING', '2026-10-24 18:40:00')
 ON DUPLICATE KEY UPDATE
     approval_id = VALUES(approval_id), action = VALUES(action), operator_id = VALUES(operator_id),
     operator_name = VALUES(operator_name), operator_role = VALUES(operator_role),

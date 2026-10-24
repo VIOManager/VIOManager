@@ -7,6 +7,7 @@ import com.viomanager.common.result.PageResult;
 import com.viomanager.common.result.Result;
 import com.viomanager.person.dto.MemberOptionVO;
 import com.viomanager.person.dto.PersonAccountDTO;
+import com.viomanager.person.dto.PersonBatchDeleteDTO;
 import com.viomanager.person.dto.PersonCreateDTO;
 import com.viomanager.person.dto.PersonFileBindDTO;
 import com.viomanager.person.dto.PersonIdCardVO;
@@ -103,6 +104,17 @@ public class PersonController {
         return Result.ok();
     }
 
+    /** M05B 批量删除（管理员）：body 传 ids；整批拒绝——任一不可删全批不动，message 列名单与原因 */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
+    @Idempotent(bizType = "PERSON_BATCH_DELETE")
+    @AuditLog(bizType = "PERSON_BATCH_DELETE", label = "批量删除人员",
+            summary = "'批量删除人员：' + #dto.ids.size() + ' 人'")
+    @DeleteMapping
+    public Result<Void> deleteBatch(@Valid @RequestBody PersonBatchDeleteDTO dto) {
+        personService.deleteBatch(dto);
+        return Result.ok();
+    }
+
     /** M06 导入模板下载（管理员）：14 列 xlsx，与 M07 导入列一一对应 */
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
     @GetMapping("/import-template")
@@ -110,7 +122,8 @@ public class PersonController {
         personService.importTemplate(response);
     }
 
-    /** M07 Excel 批量导入（管理员）：组织按名称匹配；学号已存在的行跳过；逐行返回错误 */
+    /** M07 Excel 批量导入（管理员）：组织按名称匹配；建档同时自动建号（M13 规则），
+     *  已存在有账号跳过、无账号补建、建号失败整行回滚；逐行返回错误 */
     @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
     @Idempotent(bizType = "PERSON_IMPORT")
     @AuditLog(bizType = "PERSON_IMPORT", label = "人员导入", sensitive = true,

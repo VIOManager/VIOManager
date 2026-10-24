@@ -109,3 +109,14 @@ vio:
   # 插入点③④（outbox 通知 + 延迟消息）：false=不装配任何 MQ Bean，过期兜底轮询照跑，系统与现状行为一致；
   # true=需同时设 ROCKETMQ_NAME_SERVER（如 localhost:9876），starter 见到该配置才激活装配
   mq-enabled: ${VIO_MQ:false}
+  ai:
+    # AI 助手 GLM 接入（接口清单 §7，本地云端双兼容拍板 2026-10-24）：三件套全走环境变量，
+    # ⚠️ 红线：GLM_API_KEY 绝不写进本文件/代码/日志——未配置 = 零装配零 Bean，系统照常跑（RocketMQ 同款）
+    # 云端 = 智谱 open.bigmodel.cn（默认）；本地 = OpenAI 兼容自部署推理，如 http://localhost:11434/v1
+    base-url: ${GLM_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+    model: ${GLM_MODEL:glm-4-flash}
+    api-key: ${GLM_API_KEY:}
+    # 限流三数值（2026-10-24 拍板，不做环境变量口）：每人 6 次/分 · 全局并发 5 · 单次 2048 token
+    rate-limit-per-minute: 6
+    max-concurrent: 5
+    max-completion-tokens: 2048

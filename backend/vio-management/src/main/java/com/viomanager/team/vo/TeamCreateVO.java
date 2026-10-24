@@ -2,9 +2,9 @@ package com.viomanager.team.vo;
 
 import lombok.Data;
 
-/** TE03 组队申请返回：审批单 ID（前端据此跳审批详情/我的申请） */
+/** TE01 建队返回：新队 ID（队长直建即时生效，前端据此跳队伍详情） */
 @Data
 public class TeamCreateVO {
 
-    private Long approvalId;
+    private Long id;
 }

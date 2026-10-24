@@ -4,6 +4,7 @@ import com.viomanager.common.result.PageResult;
 import com.viomanager.common.result.Result;
 import com.viomanager.person.dto.MemberOptionVO;
 import com.viomanager.person.dto.PersonAccountDTO;
+import com.viomanager.person.dto.PersonBatchDeleteDTO;
 import com.viomanager.person.dto.PersonCreateDTO;
 import com.viomanager.person.dto.PersonFileBindDTO;
 import com.viomanager.person.dto.PersonIdCardVO;
@@ -41,6 +42,11 @@ public interface PersonService {
 
     /** M05 删除：队长 3003 / 本人账号 3004 / 清队伍关系 / 禁用其账号。 */
     void delete(Long id);
+
+    /** M05B 批量删除（DELETE /api/members，body 传 ids）：整批拒绝——任一 id 不可删
+     *  （队长 3003 / 本人 3004 / 越权 1003 / 不存在 1004）全批不动，message 列出名单与原因；
+     *  单次上限 200（3011）；重复 id 去重只删一次。 */
+    void deleteBatch(PersonBatchDeleteDTO dto);
 
     /** M06 导入模板下载：14 列 xlsx 写入响应。 */
     void importTemplate(HttpServletResponse response);
