@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
  * 我的赛队（/my/team，学生端）
- * 三块：组队申请入口（TE03）/ 我的队伍列表 / 待我确认的入队邀请（TE06 确认/拒绝）
+ * 三块：创建赛队入口（TE03 队长直建免审批，2026-10-24 lzh 拍板）/ 我的队伍列表 / 待我确认的入队邀请（TE06 确认/拒绝）
  * ⚠️ 学生数据范围由后端过滤（仅自己所在队伍）；非本队访问详情 4008
  */
 import { onMounted, ref } from 'vue'
 import { apiTeams } from '@/api/team'
 import type { TeamListItem } from '@/api/team'
 import TeamDetailDrawer from '@/views/team/TeamDetailDrawer.vue'
-import TeamApplyDialog from '@/views/team/TeamApplyDialog.vue'
+import TeamCreateDialog from '@/views/team/TeamCreateDialog.vue'
 
 const list = ref<TeamListItem[]>([])
 const loading = ref(false)
@@ -43,8 +43,8 @@ onMounted(load)
     </div>
 
     <div class="fbar">
-      <button class="btn-ink" @click="applyVisible = true">发起组队申请</button>
-      <span class="fs" style="font-size: 12px; color: var(--vio-ink-3)">申请提交后进审批中心，审批通过才建队；入队邀请在队伍详情里确认</span>
+      <button class="btn-ink" @click="applyVisible = true">创建赛队</button>
+      <span class="fs" style="font-size: 12px; color: var(--vio-ink-3)">创建即建队、你即队长，可直接拉人备赛；入队邀请在队伍详情里确认</span>
     </div>
 
     <div class="panel">
@@ -64,10 +64,10 @@ onMounted(load)
           </tr>
         </tbody>
       </table>
-      <p v-if="!loading && list.length === 0" class="empty-note">暂未加入任何赛队，点左上发起组队申请</p>
+      <p v-if="!loading && list.length === 0" class="empty-note">暂未加入任何赛队，点左上创建赛队</p>
     </div>
 
-    <TeamApplyDialog v-model="applyVisible" @submitted="load" />
+    <TeamCreateDialog v-model="applyVisible" @submitted="load" />
     <TeamDetailDrawer v-model="drawerVisible" :team-id="detailId" @changed="load" />
   </div>
 </template>

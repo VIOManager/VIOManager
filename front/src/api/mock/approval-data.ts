@@ -160,7 +160,8 @@ export function hasPendingApproval(bizType: string, bizId: string, memberId: str
   return false
 }
 
-/** 种子数据见下方：覆盖三视角与各终态（ap1/ap5 待办红点，ap4 结果红点，ap2 跨部门不可见，ap6 历史已通过） */
+/** 种子数据见下方：覆盖三视角与各终态（ap1/ap5 待办红点，ap4 结果红点，ap2 跨部门不可见，ap6 历史已通过）
+ *  TEAM_CREATE 种子已随队长直建免审批拍板（2026-10-24）转为成果提交演示，该类型不再有活单 */
 export const approvals: MockApproval[] = [
   {
     id: 'ap1', bizType: 'TEAM_ADD_MEMBER', bizId: 't1',
@@ -179,19 +180,19 @@ export const approvals: MockApproval[] = [
     ]
   },
   {
-    id: 'ap2', bizType: 'TEAM_CREATE', bizId: null,
-    bizTitle: '陈子昂 · 创建赛队「星链小队」',
+    id: 'ap2', bizType: 'ACHIEVEMENT_SUBMIT', bizId: 'a7',
+    bizTitle: '陈子昂 · 提交成果：基于 AIGC 的校园海报生成系统',
     status: 'PENDING',
     applicantMemberId: 'm4', applicantName: '陈子昂',
     targetMemberId: '', targetMemberName: '',
     approverOrgId: 'o13',
-    applyReason: '比赛：2026 全国大学生电子设计竞赛（校内选拔赛）；项目：基于 AIGC 的校园海报生成',
-    payloadJson: JSON.stringify({ contestId: 'c1', name: '星链小队', projectName: '基于 AIGC 的校园海报生成', prefillMemberIds: [] }),
+    applyReason: '评级成果 · 校级优秀 · 待管理员审批',
+    payloadJson: JSON.stringify({ achievementId: 'a7' }),
     handleComment: '', handledBy: '', handledAt: '',
     createdAt: '2026-10-07 15:02:00',
     readApplicant: true, readTarget: true, readApprover: false,
     records: [
-      { action: 'CREATE', operatorName: '陈子昂', operatorRole: 'APPLICANT', commentText: '申请创建赛队「星链小队」', createdAt: '2026-10-07 15:02:00' }
+      { action: 'CREATE', operatorName: '陈子昂', operatorRole: 'APPLICANT', commentText: '提交成果「基于 AIGC 的校园海报生成系统」待审批', createdAt: '2026-10-07 15:02:00' }
     ]
   },
   {
@@ -211,20 +212,20 @@ export const approvals: MockApproval[] = [
     ]
   },
   {
-    id: 'ap4', bizType: 'TEAM_CREATE', bizId: null,
-    bizTitle: '王雨桐 · 创建赛队「电波分队」',
+    id: 'ap4', bizType: 'ACHIEVEMENT_SUBMIT', bizId: 'a9',
+    bizTitle: '王雨桐 · 提交成果：校园二手书交易平台',
     status: 'REJECTED',
     applicantMemberId: 'm7', applicantName: '王雨桐',
     targetMemberId: '', targetMemberName: '',
     approverOrgId: 'o11',
-    applyReason: '想和同学组队参加电子设计赛硬件赛道',
-    payloadJson: JSON.stringify({ contestId: 'c1', name: '电波分队', projectName: '智能寻迹车', prefillMemberIds: [] }),
-    handleComment: '队名与已有队伍过于接近，请更名后重新提交', handledBy: '陈志远', handledAt: '2026-10-08 10:20:00',
+    applyReason: '评级成果 · 校级优秀 · 待管理员审批',
+    payloadJson: JSON.stringify({ achievementId: 'a9' }),
+    handleComment: '佐证材料不完整，缺获奖证书扫描件，补齐后重新提交', handledBy: '陈志远', handledAt: '2026-10-08 10:20:00',
     createdAt: '2026-10-07 20:05:00',
     readApplicant: false, readTarget: true, readApprover: true,
     records: [
-      { action: 'CREATE', operatorName: '王雨桐', operatorRole: 'APPLICANT', commentText: '申请创建赛队「电波分队」', createdAt: '2026-10-07 20:05:00' },
-      { action: 'REJECT', operatorName: '陈志远', operatorRole: 'APPROVER', commentText: '队名与已有队伍过于接近，请更名后重新提交', createdAt: '2026-10-08 10:20:00' }
+      { action: 'CREATE', operatorName: '王雨桐', operatorRole: 'APPLICANT', commentText: '提交成果「校园二手书交易平台」待审批', createdAt: '2026-10-07 20:05:00' },
+      { action: 'REJECT', operatorName: '陈志远', operatorRole: 'APPROVER', commentText: '佐证材料不完整，缺获奖证书扫描件，补齐后重新提交', createdAt: '2026-10-08 10:20:00' }
     ]
   },
   {
