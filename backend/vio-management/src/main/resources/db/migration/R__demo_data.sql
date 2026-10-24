@@ -87,6 +87,14 @@ INSERT INTO sys_dict_type (id, dict_code, dict_name, remark)
 VALUES (901, 'MATERIAL_TYPE', '材料类型', '比赛材料分类')
 ON DUPLICATE KEY UPDATE dict_name = VALUES(dict_name), remark = VALUES(remark);
 
+-- 预设类型补齐（2026-10-24）：SKILL 一直被业务用但类型行没进种子（条目不灌——字典测试用 SKILL 造数）；
+-- KB_CATEGORY 类型行先立住，条目由超管在系统配置页自建（演示 SY06 流程）
+INSERT INTO sys_dict_type (id, dict_code, dict_name, remark)
+VALUES
+    (905, 'SKILL',       '技能标签', '成员技能下拉（PRD 3.1），用户可补充待审核'),
+    (906, 'KB_CATEGORY', '知识库分类', '知识库文档分类（PRD 3.14），超管维护')
+ON DUPLICATE KEY UPDATE dict_name = VALUES(dict_name), remark = VALUES(remark);
+
 INSERT INTO sys_dict_item (id, dict_code, item_value, item_label, source, audit_status, sort_no, status)
 VALUES
     (902, 'MATERIAL_TYPE', 'photo',      '证件照',   'PRESET', 'APPROVED', 1, 1),
@@ -95,6 +103,19 @@ VALUES
 ON DUPLICATE KEY UPDATE
     item_label = VALUES(item_label), source = VALUES(source), audit_status = VALUES(audit_status),
     sort_no = VALUES(sort_no), status = VALUES(status);
+
+-- ---------------- 系统参数（CF 首批种子，2026-10-24） ----------------
+-- 初始清单为占位（清单 8 待确认项：正式键值清单待组长圈定后调整）；
+-- db.schema.version 的 editable=0 演示 CF02 只读参数的 1006 行为
+INSERT INTO sys_config (id, config_key, config_value, config_name, editable, remark)
+VALUES
+    (951, 'site.name',              '黑龙江科技大学科创协作管理平台', '平台名称',     1, '展示用占位参数，正式清单待组长圈定'),
+    (952, 'site.notice',            '演示环境：数据为种子数据，可随意操作', '站点公告', 1, '展示用占位参数'),
+    (953, 'dict.skill.user-submit', '1', '技能字典用户补充开关',             1, '1=允许学生补充技能词条'),
+    (954, 'db.schema.version',      '52', '库表结构版本',                    0, '只读示例：editable=0 演示不可改')
+ON DUPLICATE KEY UPDATE
+    config_value = VALUES(config_value), config_name = VALUES(config_name),
+    editable = VALUES(editable), remark = VALUES(remark);
 
 -- ---------------- 学期：当前学期 ----------------
 INSERT INTO semester (id, name, status, is_current, total_weeks)
