@@ -44,12 +44,7 @@ class AiChatToolCallTest {
 
     @BeforeAll
     static void startUpstream() throws Exception {
-        upstream = GlmFakeUpstream.start();
-    }
-
-    @AfterAll
-    static void stopUpstream() {
-        upstream.close();
+        upstream = GlmFakeUpstream.shared();
     }
 
     @DynamicPropertySource

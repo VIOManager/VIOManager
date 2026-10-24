@@ -1,0 +1,8 @@
+# 测试专属配置：只压 Hikari 池——全量 335 测约十几个缓存上下文各持一池，
+# 默认每池 10 连接会叠爆 MySQL max_connections=151（2026-10-24 全量实测
+# "Too many connections" 连坐 62 错）。测试负载单线程为主，3 连接绰绰有余。
+# ⚠️ 仅 test/resources 生效，不影响运行时配置。
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 3

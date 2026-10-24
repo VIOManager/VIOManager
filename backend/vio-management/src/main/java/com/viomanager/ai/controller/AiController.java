@@ -4,14 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.viomanager.ai.dto.ChatDTO;
 import com.viomanager.ai.service.AiChatService;
 import com.viomanager.ai.service.AiStatusService;
+import com.viomanager.common.audit.AuditLog;
 import com.viomanager.common.result.Result;
 import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,9 +21,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * AI 助手聊天核心接口（接口清单 §3）。
- * HTTP 层错误（未登录 1002 / 未启用 9100）不走 SSE，直接标准 Result JSON（清单 §5）：
- * ⚠️ 9100 不能走 BizException——produces=text/event-stream 会把异常响应的媒体类型锁死，
- * 全局处理器写不出 JSON（协商 406/500）。校验失败时手写 response 绕开 MVC 协商，行为确定。
+ * HTTP 层错误（未登录 1002 / 未启用 9100 / 限流 9102）不走 SSE，直接标准 Result JSON（清单 §5）：
+ * 预检拒绝走 AiChatRejectException → 本类局部 @ExceptionHandler 回 JSON（ResponseEntity 显式
+ * contentType 绕过 produces=text/event-stream 的协商锁死）——走异常是为了让 @AuditLog
+ * 切面把拒绝记成 success=false（清单 §6 成功失败都记）。
  * JWT 必须；三端共用不裁角色，数据范围在工具调用层按登录人裁剪。
  */
 @RestController
@@ -47,28 +48,28 @@ public class AiController {
     /**
      * AI01 发消息（SSE 流式）：事件序 meta → tool×N → delta×N → done｜error。
      * 不挂幂等键（清单 §3：生成型操作天然一次性，断流前端"重新生成"重发）。
-     * 预检失败（9100/9101/9102）手写标准 Result JSON 返回，不进流（见类注释）；
-     * 9102 附 Retry-After 头（秒），前端显示"问得太快了，稍等 N 秒"。
+     * 审计（清单 §6）：bizType=AI，摘要取首问前 50 字，受理成功失败都记。
      */
+    @AuditLog(bizType = "AI", label = "AI对话",
+            summary = "'AI对话：' + #dto.content.substring(0, "
+                    + "T(java.lang.Math).min(50, #dto.content.length()))")
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chat(@Valid @RequestBody ChatDTO dto, HttpServletResponse response) throws IOException {
+    public SseEmitter chat(@Valid @RequestBody ChatDTO dto) {
         AiChatService.ChatPrecheck check = aiChatService.preflight(dto);
         if (check.reject() != null) {
-            if (check.retryAfterSeconds() != null) {
-                response.setHeader("Retry-After", String.valueOf(check.retryAfterSeconds()));
-            }
-            writeJson(response, check.reject());
-            return null;
+            throw new AiChatRejectException(check.reject(), check.retryAfterSeconds());
         }
         return aiChatService.chat(dto);
     }
 
-    /** 手写标准 Result JSON（响应未交给 SSE 语义前的 HTTP 层错误出口） */
-    private void writeJson(HttpServletResponse response, Result<Void> result) throws IOException {
-        response.setStatus(HttpServletResponse.SC_OK);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.getWriter().write(MAPPER.writeValueAsString(result));
-        response.flushBuffer();
+    /** 预检拒绝的 JSON 出口（本类局部处理器，优先于全局）；显式 contentType 绕协商 */
+    @ExceptionHandler(AiChatRejectException.class)
+    public ResponseEntity<String> onReject(AiChatRejectException e) throws Exception {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON);
+        if (e.getRetryAfterSeconds() != null) {
+            builder.header("Retry-After", String.valueOf(e.getRetryAfterSeconds()));
+        }
+        return builder.body(MAPPER.writeValueAsString(e.getReject()));
     }
 }

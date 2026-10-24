@@ -18,11 +18,16 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "vio.ai")
 public class AiProperties {
 
+    /** 云端智谱默认口（compose 透传空串时的回退，见 getBaseUrl 注释） */
+    static final String DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
+
+    static final String DEFAULT_MODEL = "glm-4-flash";
+
     /** OpenAI 兼容口根地址（客户端拼 /chat/completions）；默认智谱云端 */
-    private String baseUrl = "https://open.bigmodel.cn/api/paas/v4";
+    private String baseUrl = DEFAULT_BASE_URL;
 
     /** 模型名；默认智谱免费档，部署时 GLM_MODEL 覆盖 */
-    private String model = "glm-4-flash";
+    private String model = DEFAULT_MODEL;
 
     /** API 密钥；空 = 零装配零 Bean（RocketMQ 同款口径），AI02 探针回 enabled:false */
     private String apiKey = "";
@@ -39,5 +44,18 @@ public class AiProperties {
     /** 装配条件：key 非空才建 GlmClient Bean */
     public boolean isEnabled() {
         return apiKey != null && !apiKey.isBlank();
+    }
+
+    /**
+     * 空串回退默认：compose 的 GLM_BASE_URL:- 透传在宿主未配置时给容器的是空字符串而非 unset，
+     * Spring 的 ${GLM_BASE_URL:默认} 只在变量不存在时生效——空串会穿透打坏请求地址。
+     */
+    public String getBaseUrl() {
+        return baseUrl == null || baseUrl.isBlank() ? DEFAULT_BASE_URL : baseUrl;
+    }
+
+    /** 同 getBaseUrl：GLM_MODEL 空串回退默认模型 */
+    public String getModel() {
+        return model == null || model.isBlank() ? DEFAULT_MODEL : model;
     }
 }
