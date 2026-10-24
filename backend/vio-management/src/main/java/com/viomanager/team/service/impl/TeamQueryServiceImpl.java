@@ -75,7 +75,9 @@ public class TeamQueryServiceImpl implements ITeamQueryService {
             params.add(contestId);
         }
         if (keyword != null && !keyword.isBlank()) {
-            sql.append(" AND t.name LIKE CONCAT('%', ?, '%')");
+            // 关键词同时匹配队名与项目名（2026-10-23 修复：此前仅队名，按项目名搜不到）
+            sql.append(" AND (t.name LIKE CONCAT('%', ?, '%') OR t.project_name LIKE CONCAT('%', ?, '%'))");
+            params.add(keyword);
             params.add(keyword);
         }
         sql.append(" ORDER BY t.created_at DESC");
