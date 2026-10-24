@@ -76,11 +76,11 @@
 |------|------|------|
 | TE01 | GET /api/teams | 列表。超管全部；部门管理员本部门；**学生仅自己所在的队伍**。含 materialStatus、materialCompleteRate；支持 contestId 与 keyword（队名模糊）过滤 |
 | TE02 | GET /api/teams/{id} | 详情。仅本队成员、管理端、指导教师可见；其他人 4008（封堵按 ID 枚举越权） |
-| TE03 | POST /api/teams | 发起组队申请。body：contestId trackId name projectName prefillMemberIds。校验：比赛处于 REGISTERING、队名同比赛唯一（4002）、allowRepeatJoin、crossTeamLeader、prefillMemberIds 不超 prefillLimit；通过校验后生成 TEAM_CREATE 审批单（走组长审批中心），**不直接建队** |
+| TE03 | POST /api/teams | **队长直建（2026-10-24 lzh 拍板，原 TE01 编号顺延）**。body：contestId trackId name projectName prefillMemberIds。校验：比赛处于 REGISTERING（4001）、队名同比赛唯一（4002）、prefillMemberIds 不超 prefillLimit（4003）、allowRepeatJoin / crossTeamLeader（4004）；校验通过**立即建队**，申请人即队长（CONFIRMED），预填成员 UNCONFIRMED 待本人两段式确认；返回 `{ id }`（新队 id，前端据此跳队伍详情）；**不再生成 TEAM_CREATE 审批单**（类型退役，审批中心不再出现） |
 | TE04 | POST /api/teams/{id}/members | 队长加人申请。body：memberId。校验人数上限（4003）、重复参赛（4004）、目标人身份、同队待审批（4005/4007）；生成 TEAM_ADD_MEMBER 审批；**审批时按最新成员关系复核**（封堵两队同时邀请同一人的时序漏洞）；通过后成员状态 UNCONFIRMED |
 | TE05 | GET /api/teams/{id}/members/search | 姓名模糊搜索可加队员（前端防抖 300ms）；返回 inTeam 标记供置灰 |
 | TE06 | POST /api/teams/{id}/members/{memberId}/confirm | 目标队员本人确认或拒绝。body：action 取 CONFIRM 或 REJECT |
-| TE07 | DELETE /api/teams/{id}/members/{memberId} | 移除成员（队长或管理端；软删保留历史）；队长不可被移除（4010）；**默认走 TEAM_REMOVE_MEMBER 审批** |
+| TE07 | DELETE /api/teams/{id}/members/{memberId} | 移除成员（队长或管理端）。**拍板A（2026-10-24）：队长直移免审批**，直接置 REMOVED + left_at/left_reason（软删保留历史）；队长不可被移除（4010）；成员不在队中或已移除报状态错误；不再生成 TEAM_REMOVE_MEMBER 审批单（类型退役） |
 | TE08 | POST /api/teams/{id}/exit | 非队长主动退出；队长在审批中心收红点通知 |
 | TE09 | POST /api/teams/{id}/advisors | 加指导教师申请。仅允许 member_type=TEACHER（4006）；TEAM_ADD_ADVISOR 审批；通过即生效（只读、权限不低于队长） |
 | TE10 | DELETE /api/teams/{id}/advisors/{advisorId} | 移除指导教师 |
@@ -92,17 +92,20 @@
 
 ```mermaid
 stateDiagram-v2
-    [*] --> UNCONFIRMED : 加人审批通过
+    [*] --> CONFIRMED : 直建入队即队长
+    [*] --> UNCONFIRMED : 加人审批通过或直建预填
     UNCONFIRMED --> CONFIRMED : 队员确认
     UNCONFIRMED --> REJECTED : 队员拒绝
     CONFIRMED --> EXITED : 主动退出
     CONFIRMED --> REMOVED : 被移除
+    UNCONFIRMED --> REMOVED : 被移除
 ```
 
 ## 6. 与组长审批中心对接
 
-- B 线产生审批单 biz_type：TEAM_CREATE、TEAM_ADD_MEMBER、TEAM_REMOVE_MEMBER、TEAM_ADD_ADVISOR（payload 为申请快照）
-- 组长审批通过后**进程内调用** B 线 Service 执行建队/加人/移除（不走 HTTP）；B 线按 biz_id 唯一约束保证幂等
+- B 线产生审批单 biz_type：TEAM_ADD_MEMBER、TEAM_ADD_ADVISOR（payload 为申请快照）；
+  **TEAM_CREATE / TEAM_REMOVE_MEMBER 已于 2026-10-24 随队长直建 / 直移拍板退役**，审批中心不再出现这两类新单（存量历史单仅作展示）
+- 组长审批通过后**进程内调用** B 线 Service 执行加人等动作（不走 HTTP）；B 线按 biz_id 唯一约束保证幂等
 - 审批被拒/取消时 B 线无需动作（正式数据从未创建）
 - C 线材料回写：team 包对外提供 `TeamMaterialStatusService`（`updateMaterialStatus(teamId, materialStatus, completeRate)`，只写 material_status / material_complete_rate 两列），C 线材料重算后进程内调用，不得绕过口子直接改 team 表
 
@@ -110,4 +113,4 @@ stateDiagram-v2
 
 - [x] (已确认 2026-10-10) **3 人队 prefillLimit = 2**——以 PRD §3.5 为准（队长可拉满），TE03 校验按 2 实现（推翻此前按 1 的预留）
 - [ ] (需用户确认) 队长变更/转让：PRD §2.2 提到"队长变更"但 §3.6 无流程，默认本期不做（需要则补 TE14 transfer-leader）
-- [ ] (需用户确认) TE07 移除队员的审批人与加人一致（本部门管理员）
+- [x] (已随拍板A失效 2026-10-24) ~~TE07 移除队员的审批人与加人一致~~——移除队员已改队长直移免审批，不再产生审批单

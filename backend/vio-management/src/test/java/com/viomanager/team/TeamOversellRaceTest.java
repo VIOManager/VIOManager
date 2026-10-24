@@ -4,6 +4,7 @@ import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
 import com.viomanager.common.enums.TeamErrorCode;
 import com.viomanager.common.exception.BizException;
+import com.viomanager.team.dto.TeamCreateDTO;
 import com.viomanager.team.dto.TeamMemberConfirmDTO;
 import com.viomanager.team.handler.TeamAddMemberHandler;
 import com.viomanager.team.service.ITeamCommandService;
@@ -87,11 +88,19 @@ class TeamOversellRaceTest {
     void tearDown() {
         jdbcTemplate.update("DELETE FROM team_member WHERE team_id IN (?, ?)", teamId, teamId + 1);
         jdbcTemplate.update("DELETE FROM team WHERE id IN (?, ?)", teamId, teamId + 1);
+        // 直建竞态用例的队伍是雪花 id，按比赛清（含其队员行）
+        jdbcTemplate.update(
+                "DELETE FROM team_member WHERE team_id IN (SELECT id FROM team WHERE contest_id = ?)", contestId);
+        jdbcTemplate.update("DELETE FROM team WHERE contest_id = ?", contestId);
         jdbcTemplate.update("DELETE FROM contest_track WHERE contest_id = ?", contestId);
         jdbcTemplate.update("DELETE FROM contest WHERE id = ?", contestId);
         jdbcTemplate.update("DELETE FROM contest_template WHERE id = ?", templateId);
         jdbcTemplate.update("DELETE FROM sys_user WHERE id = ?", 600_000_000_000L + seq);
+        jdbcTemplate.update("DELETE FROM sys_user WHERE id BETWEEN ? AND ?",
+                600_000_100_000L + seq * 10, 600_000_100_000L + seq * 10 + 9);
         jdbcTemplate.update("DELETE FROM member WHERE id = ?", 800_000_200_000L + seq);
+        jdbcTemplate.update("DELETE FROM member WHERE id BETWEEN ? AND ?",
+                800_000_300_000L + seq * 10, 800_000_300_000L + seq * 10 + 9);
         jdbcTemplate.update("DELETE FROM sys_org WHERE id = ?", orgId);
     }
 
@@ -199,6 +208,72 @@ class TeamOversellRaceTest {
                 Integer.class, memberId);
         assertEquals(1, confirmed, "allowRepeatJoin=false：两支队并发确认只成一个（修复前两个都成）");
         assertEquals(1, rejected, "另一个确认应被跨队限制拦下");
+    }
+
+    @Test
+    void 并发同名直建_只成一队() throws Exception {
+        // 2026-10-24 队长直建拍板后，K4 同名竞态从"审批回调"搬到"提交即建"路径，
+        // 锁比赛行 + 锁内当前读查重必须仍只放行一个（PR#51 加固逻辑平移的回归位）
+        int threads = 3;
+        String name = "竞态直建队" + seq;
+        for (int i = 0; i < threads; i++) {
+            long memberId = 800_000_300_000L + seq * 10 + i;
+            long userId = 600_000_100_000L + seq * 10 + i;
+            jdbcTemplate.update(
+                    "INSERT INTO member (id, name, org_id, member_type) VALUES (?, ?, ?, 'STUDENT')",
+                    memberId, "直建员" + i, orgId);
+            jdbcTemplate.update(
+                    "INSERT INTO sys_user (id, login_name, password, role, org_id, member_id, real_name, "
+                            + "default_password, status, deleted) VALUES (?, ?, 'x', 'STUDENT', ?, ?, '直建员', 0, 1, 0)",
+                    userId, "race_create" + seq + "_" + i, orgId, memberId);
+        }
+        CyclicBarrier barrier = new CyclicBarrier(threads);
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        List<Future<Throwable>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            final long userId = 600_000_100_000L + seq * 10 + i;
+            futures.add(pool.submit((Callable<Throwable>) () -> {
+                barrier.await();
+                CurrentUser u = new CurrentUser();
+                u.setUserId(userId);
+                u.setRole("STUDENT");
+                u.setLoginName("race_create");
+                u.setOrgId(orgId);
+                UserHolder.saveUser(u);
+                try {
+                    TeamCreateDTO dto = new TeamCreateDTO();
+                    dto.setContestId(contestId);
+                    dto.setTrackId(trackId);
+                    dto.setName(name);
+                    dto.setProjectName("竞态项目");
+                    commandService.createTeam(dto);
+                    return null;
+                } catch (Throwable e) {
+                    return e;
+                } finally {
+                    UserHolder.removeUser();
+                }
+            }));
+        }
+        int created = 0;
+        int rejected = 0;
+        for (Future<Throwable> f : futures) {
+            Throwable t = f.get(60, TimeUnit.SECONDS);
+            if (t == null) {
+                created++;
+            } else if (t instanceof BizException b && b.getCode() == TeamErrorCode.TEAM_NAME_EXISTS.getCode()) {
+                rejected++;
+            } else {
+                fail("并发直建出现预期外异常: " + t);
+            }
+        }
+        pool.shutdownNow();
+        Integer sameName = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM team WHERE contest_id = ? AND name = ? AND deleted = 0",
+                Integer.class, contestId, name);
+        assertEquals(1, sameName, "同名并发直建库里只应有一行（修复前会双双建队）");
+        assertEquals(1, created, "只允许一个请求建成");
+        assertEquals(threads - 1, rejected, "其余应被队名唯一 4002 拦下");
     }
 
     /** 并发直调 handler（每线程独立事务，模拟两个管理员同时批单的生产时序） */

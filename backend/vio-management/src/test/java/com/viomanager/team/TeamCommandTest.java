@@ -1,18 +1,21 @@
 package com.viomanager.team;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import com.viomanager.approval.ApprovalTestBase;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * 赛队写操作验证：TE03 组队申请→审批单 / TE06 队员确认 / TE08 退出 / TE12 解散(4009) / TE13 编辑。
+ * 赛队写操作验证：TE01 建队直建 / TE06 队员确认 / TE07 直移成员 / TE08 退出 / TE12 解散(4009) / TE13 编辑。
  */
 @TestPropertySource(properties = "vio.audit.async=false")
 class TeamCommandTest extends ApprovalTestBase {
@@ -55,12 +58,12 @@ class TeamCommandTest extends ApprovalTestBase {
     }
 
     @Test
-    void createTeamGeneratesApproval() throws Exception {
-        // 8813 是另一个学院的学生，未在任何队，可以建队
+    void createTeamDirect() throws Exception {
+        // 8813 是另一个学院的学生，未在任何队，可以建队；直建不生成审批单
         insertOrg(9302L, "机械学院", "/0/9302/");
         insertMember(8813L, "王五", "STUDENT", 9302L);
         String token = createUserAndLogin("tc_creator", "STUDENT", 9302L, 8813L);
-        mockMvc.perform(post("/api/teams")
+        String response = mockMvc.perform(post("/api/teams")
                         .header("Authorization", "Bearer " + token)
                         .header("X-Idempotency-Key", "tc-create-1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -68,12 +71,84 @@ class TeamCommandTest extends ApprovalTestBase {
                                 + "\"name\":\"航天队\",\"projectName\":\"火星车\",\"prefillMemberIds\":[]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.approvalId").exists());
-        // 验证审批单已生成
-        Integer count = jdbcTemplate.queryForObject(
+                .andExpect(jsonPath("$.data.id").exists())
+                .andReturn().getResponse().getContentAsString();
+        // Long 全仓序列化为字符串，读出后手动转回
+        Long teamId = Long.valueOf((String) JsonPath.read(response, "$.data.id"));
+        // 直建即时生效：队伍 ACTIVE、申请人即队长 CONFIRMED
+        Map<String, Object> team = jdbcTemplate.queryForMap(
+                "SELECT status, leader_member_id, material_status FROM team WHERE id = ?", teamId);
+        assert "ACTIVE".equals(team.get("status")) : "直建后队伍应立即 ACTIVE";
+        assert Long.valueOf(8813L).equals(((Number) team.get("leader_member_id")).longValue()) : "申请人应为队长";
+        assert "NOT_STARTED".equals(team.get("material_status")) : "新队材料齐全率应为 0";
+        Map<String, Object> leader = jdbcTemplate.queryForMap(
+                "SELECT is_leader, status FROM team_member WHERE team_id = ? AND member_id = 8813 AND deleted = 0",
+                teamId);
+        assert Integer.valueOf(1).equals(((Number) leader.get("is_leader")).intValue()) : "队长标记应为 1";
+        assert "CONFIRMED".equals(leader.get("status")) : "队长应立即 CONFIRMED";
+        // 不再产生 TEAM_CREATE 审批单（存量 801 已是终态，PENDING 数恒 0）
+        Integer pending = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM approval WHERE biz_type = 'TEAM_CREATE' AND status = 'PENDING' AND deleted = 0",
                 Integer.class);
-        assert count != null && count > 0 : "应生成 TEAM_CREATE 审批单";
+        assert pending != null && pending == 0 : "直建不应生成 TEAM_CREATE 审批单";
+    }
+
+    @Test
+    void createTeamPrefillUnconfirmed() throws Exception {
+        // 预填成员两段式：建队即入队但 UNCONFIRMED；队长本人出现在预填名单不重复入队
+        insertOrg(9302L, "机械学院", "/0/9302/");
+        insertMember(8813L, "王五", "STUDENT", 9302L);
+        insertMember(8814L, "赵六", "STUDENT", 9301L);
+        String token = createUserAndLogin("tc_prefill", "STUDENT", 9302L, 8813L);
+        String response = mockMvc.perform(post("/api/teams")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Idempotency-Key", "tc-create-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"contestId\":\"" + CONTEST_ID + "\",\"trackId\":\"" + TRACK_ID + "\","
+                                + "\"name\":\"远征队\",\"projectName\":\"月球车\","
+                                + "\"prefillMemberIds\":[\"" + 8814L + "\",\"" + 8813L + "\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andReturn().getResponse().getContentAsString();
+        Long teamId = Long.valueOf((String) JsonPath.read(response, "$.data.id"));
+        String prefillStatus = jdbcTemplate.queryForObject(
+                "SELECT status FROM team_member WHERE team_id = ? AND member_id = 8814 AND deleted = 0",
+                String.class, teamId);
+        assert "UNCONFIRMED".equals(prefillStatus) : "预填成员应为 UNCONFIRMED 待本人确认";
+        // 队长本人混在预填名单里：只有一条队长行（CONFIRMED/is_leader=1），不产生第二条
+        Integer creatorRows = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM team_member WHERE team_id = ? AND member_id = 8813 AND deleted = 0",
+                Integer.class, teamId);
+        assert creatorRows != null && creatorRows == 1 : "队长本人不应因预填重复入队";
+    }
+
+    @Test
+    void removeMemberDirect() throws Exception {
+        // 拍板A：队长直移免审批，直接置 REMOVED
+        mockMvc.perform(delete("/api/teams/" + TEAM_ID + "/members/8812")
+                        .header("Authorization", "Bearer " + leaderToken)
+                        .header("X-Idempotency-Key", "tc-remove-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                "SELECT status, left_reason FROM team_member WHERE team_id = ? AND member_id = 8812 AND deleted = 0",
+                TEAM_ID);
+        assert "REMOVED".equals(row.get("status")) : "直移后成员应为 REMOVED";
+        assert row.get("left_reason") != null : "直移应记录离开原因";
+        Integer pending = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM approval WHERE biz_type = 'TEAM_REMOVE_MEMBER' AND status = 'PENDING' AND deleted = 0",
+                Integer.class);
+        assert pending != null && pending == 0 : "直移不应生成 TEAM_REMOVE_MEMBER 审批单";
+    }
+
+    @Test
+    void removeMemberRejectsLeader() throws Exception {
+        // 4010：队长不可被移除（管理员也不行）
+        mockMvc.perform(delete("/api/teams/" + TEAM_ID + "/members/8811")
+                        .header("Authorization", "Bearer " + leaderToken)
+                        .header("X-Idempotency-Key", "tc-remove-2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(4010));
     }
 
     @Test

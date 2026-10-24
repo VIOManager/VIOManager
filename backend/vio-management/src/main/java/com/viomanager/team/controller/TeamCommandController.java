@@ -22,8 +22,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 赛队写接口（TE03–TE13）。
- * 审批类操作（TE03/04/07/09）只生成审批单不直接生效；直接类操作（TE06/08/10/12/13）即时变更。
+ * 赛队写接口（TE01–TE13）。
+ * 直接类操作（TE01 建队直建 / TE06/07/08/10/12/13）即时生效；审批类操作（TE04/09）只生成审批单。
  * 权限在 service 层按角色 + 人员档案 ID 判定（ensureLeaderOrAdmin），无 @RequireRole。
  * 写操作均加 @Idempotent 防重复提交 + @AuditLog 留痕。
  */
@@ -34,15 +34,15 @@ public class TeamCommandController {
     @Resource
     private ITeamCommandService commandService;
 
-    /** TE03 组队申请：校验后生成 TEAM_CREATE 审批单，返回 approvalId */
+    /** TE01 建队：队长直建免审批（2026-10-24 拍板），返回新队 id */
     @Idempotent(bizType = "TEAM_CREATE")
-    @AuditLog(bizType = "TEAM_CREATE", label = "组队申请", summary = "'组队申请：' + #dto.name")
+    @AuditLog(bizType = "TEAM_CREATE", label = "创建赛队", summary = "'创建赛队：' + #dto.name")
     @PostMapping
     public Result<TeamCreateVO> create(@Valid @RequestBody TeamCreateDTO dto) {
-        Long approvalId = commandService.createTeam(dto);
+        Long teamId = commandService.createTeam(dto);
         //1.单字段返回走 VO 不用 Map.of，与全仓风格一致
         TeamCreateVO vo = new TeamCreateVO();
-        vo.setApprovalId(approvalId);
+        vo.setId(teamId);
         return Result.ok(vo);
     }
 
@@ -68,7 +68,7 @@ public class TeamCommandController {
         return Result.ok();
     }
 
-    /** TE07 移除成员（队长或管理端；队长不可被移除 4010） */
+    /** TE07 移除成员：拍板A 队长直移免审批，直接置 REMOVED（队长不可被移除 4010） */
     @Idempotent(bizType = "TEAM_REMOVE_MEMBER")
     @AuditLog(bizType = "TEAM_REMOVE_MEMBER", label = "移除成员",
             summary = "'移除成员：赛队' + #teamId + '/成员' + #memberId")

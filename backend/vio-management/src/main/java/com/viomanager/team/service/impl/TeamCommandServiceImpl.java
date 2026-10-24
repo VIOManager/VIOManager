@@ -22,11 +22,11 @@ import com.viomanager.team.service.ITeamCommandService;
 import com.viomanager.team.support.ContestContext;
 import com.viomanager.team.support.ContestQueryService;
 import com.viomanager.team.support.TeamCommandSupport;
+import com.viomanager.team.support.TeamCreator;
 import com.viomanager.team.support.TeamLockSupport;
 import com.viomanager.team.support.TeamQuerySupport;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,8 +36,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 赛队写服务实现。审批类（TE03/04/07/09）校验通过后生成审批单不直接生效；
- * 直接类（TE06/08/10/12/13）即时变更状态。校验与 COUNT 查询委托 {@link TeamCommandSupport}。
+ * 赛队写服务实现。审批类（TE04/09）校验通过后生成审批单不直接生效；
+ * 直接类（TE01 建队直建 / TE06/07/08/10/12/13）即时变更状态。
+ * 校验与 COUNT 查询委托 {@link TeamCommandSupport}，直建收口在 {@link TeamCreator}。
  */
 @Slf4j
 @Service
@@ -57,6 +58,8 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
     private ContestQueryService contestQueryService;
     @Resource
     private TeamLockSupport lockSupport;
+    @Resource
+    private TeamCreator teamCreator;
 
     @Override
     @Transactional
@@ -66,53 +69,8 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
         if (leaderId == null) {
             throw new BizException(CommonErrorCode.FORBIDDEN, "当前账号未绑定人员档案");
         }
-        ContestContext ctx = contestQueryService.loadContext(dto.getContestId(), dto.getTrackId());
-        if (!"REGISTERING".equals(ctx.getStatus())) {
-            throw new BizException(TeamErrorCode.CONTEST_STATE_NOT_ALLOWED);
-        }
-        cmdSupport.lockContest(dto.getContestId()); // 先锁比赛行再做查重：并发同名申请串行化（K4）
-        cmdSupport.ensureNameUnique(dto.getContestId(), dto.getName(), null);
-        List<Long> prefill = new ArrayList<>();
-        if (dto.getPrefillMemberIds() != null) {
-            //1.空值与队长本人不算预填名单
-            for (Long id : dto.getPrefillMemberIds()) {
-                if (id != null && !id.equals(leaderId)) {
-                    prefill.add(id);
-                }
-            }
-        }
-        if (prefill.size() > ctx.ruleInt("prefillLimit", 2)) {
-            throw new BizException(TeamErrorCode.MEMBER_LIMIT_EXCEEDED);
-        }
-        if (!ctx.ruleBool("allowRepeatJoin", false)) {
-            for (Long mid : prefill) {
-                if (cmdSupport.isConfirmedInContest(mid, dto.getContestId())) {
-                    throw new BizException(TeamErrorCode.REPEAT_JOIN_LIMITED);
-                }
-            }
-        }
-        if (!ctx.ruleBool("crossTeamLeader", false) && cmdSupport.isLeaderInContest(leaderId, dto.getContestId())) {
-            throw new BizException(TeamErrorCode.REPEAT_JOIN_LIMITED);
-        }
-        Long orgId = user.getOrgId() != null ? user.getOrgId() : ctx.getOrgId();
-        if (orgId == null) {
-            throw new BizException(CommonErrorCode.FORBIDDEN, "无法确定审批责任组织");
-        }
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("contestId", dto.getContestId());
-        payload.put("contestName", ctx.getContestName());
-        payload.put("trackId", dto.getTrackId());
-        payload.put("trackName", ctx.getTrackName());
-        payload.put("name", dto.getName());
-        payload.put("projectName", dto.getProjectName());
-        payload.put("leaderMemberId", leaderId);
-        payload.put("leaderName", cmdSupport.memberName(leaderId));
-        payload.put("prefillMemberIds", prefill);
-        payload.put("semesterId", ctx.getSemesterId());
-        payload.put("orgId", orgId);
-        return cmdSupport.submitApproval("TEAM_CREATE", null, dto.getName() + "·" + ctx.getContestName(),
-                payload, leaderId, cmdSupport.memberName(leaderId), null, null, orgId,
-                null, dto.getContestId(), ctx.getSemesterId());
+        // 直建（2026-10-24 lzh 拍板）：锁比赛 + 四道复查 + 建队收口在 TeamCreator，返回新队 id
+        return teamCreator.create(dto, leaderId, cmdSupport.memberName(leaderId), user.getOrgId());
     }
 
     @Override
@@ -189,11 +147,17 @@ public class TeamCommandServiceImpl implements ITeamCommandService {
         if (memberId.equals(team.getLeaderMemberId())) {
             throw new BizException(TeamErrorCode.LEADER_NOT_REMOVABLE);
         }
-        Long applicantId = cmdSupport.approvalApplicantId(user, team);
-        Map<String, Object> payload = payloadOf(team, teamId, memberId);
-        cmdSupport.submitApproval("TEAM_REMOVE_MEMBER", teamId, "移除 " + cmdSupport.memberName(memberId),
-                payload, applicantId, cmdSupport.memberName(applicantId), memberId, cmdSupport.memberName(memberId),
-                team.getOrgId(), teamId, team.getContestId(), team.getSemesterId());
+        // 拍板A（2026-10-24）：队长直移免审批，直接置 REMOVED
+        UpdateWrapper<TeamMember> uw = new UpdateWrapper<>();
+        uw.eq("team_id", teamId).eq("member_id", memberId)
+                .in("status", "UNCONFIRMED", "CONFIRMED").eq("deleted", 0)
+                .set("status", "REMOVED")
+                .set("left_at", LocalDateTime.now())
+                .set("left_reason", "被队伍移除");
+        if (teamMemberMapper.update(null, uw) == 0) {
+            throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "该成员不在队中或已移除");
+        }
+        // TODO 通知中心就绪后给被移除成员发红点
     }
 
     @Override
