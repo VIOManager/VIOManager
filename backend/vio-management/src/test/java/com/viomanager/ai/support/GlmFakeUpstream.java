@@ -22,6 +22,9 @@ public final class GlmFakeUpstream implements AutoCloseable {
 
     public static final String FAIL_KEYWORD = "FAILUPSTREAM";
 
+    /** 慢速流：延迟 4 秒再回，测试全局并发闸门时用来占住槽位 */
+    public static final String SLOW_KEYWORD = "SLOWUPSTREAM";
+
     private final HttpServer server;
 
     private final AtomicReference<String> lastRequest = new AtomicReference<>();
@@ -54,6 +57,13 @@ public final class GlmFakeUpstream implements AutoCloseable {
         if (body.contains(FAIL_KEYWORD)) {
             respond(exchange, 500, "application/json", "{\"error\":\"upstream down\"}");
             return;
+        }
+        if (body.contains(SLOW_KEYWORD)) {
+            try {
+                Thread.sleep(4000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         String sse = body.contains(TRUNCATE_KEYWORD)
                 ? "data: {\"choices\":[{\"delta\":{\"content\":\"被截断的\"}}]}\n\n"

@@ -51,8 +51,24 @@ public class AiChatService {
     /** 生成总超时：超时后 emitter 自动 complete，已生成部分按中断处理 */
     private static final long CHAT_TIMEOUT_MILLIS = 180_000L;
 
+    /** 并发满的 Retry-After 建议秒数（比按人限流短：槽位几秒内就有人让出） */
+    private static final long CONGESTION_RETRY_AFTER_SECONDS = 2L;
+
     /** 送入模型的历史条数上限（user+assistant 各算一条）：防上下文无限膨胀，取最近 N 条 */
     private static final int HISTORY_LIMIT = 20;
+
+    /**
+     * 预检结论：reject 为 null = 通过；retryAfterSeconds 非 null 时 controller 设 Retry-After 头。
+     */
+    public record ChatPrecheck(Result<Void> reject, Long retryAfterSeconds) {
+        static ChatPrecheck pass() {
+            return new ChatPrecheck(null, null);
+        }
+
+        static ChatPrecheck reject(Result<Void> reject, Long retryAfterSeconds) {
+            return new ChatPrecheck(reject, retryAfterSeconds);
+        }
+    }
 
     /** 全服务共享一个 keep-alive 调度线程（daemon 不挡停机） */
     private static final ScheduledExecutorService KEEP_ALIVE =
@@ -72,16 +88,19 @@ public class AiChatService {
 
     private final AiChatRecorder recorder;
 
+    private final com.viomanager.ai.limit.AiRateLimiter rateLimiter;
+
     private final ExecutorService chatExecutor;
 
     public AiChatService(ObjectProvider<GlmClient> clientProvider, AiProperties properties,
                          AiConversationMapper conversationMapper, AiMessageMapper messageMapper,
-                         AiChatRecorder recorder) {
+                         AiChatRecorder recorder, com.viomanager.ai.limit.AiRateLimiter rateLimiter) {
         this.clientProvider = clientProvider;
         this.properties = properties;
         this.conversationMapper = conversationMapper;
         this.messageMapper = messageMapper;
         this.recorder = recorder;
+        this.rateLimiter = rateLimiter;
         //池大小 = 全局并发上限（拍板 5）：排队在池队列，超出并发的请求等前面的完成
         this.chatExecutor = Executors.newFixedThreadPool(properties.getMaxConcurrent(), r -> {
             Thread t = new Thread(r, "ai-chat-worker");
@@ -91,34 +110,53 @@ public class AiChatService {
     }
 
     /**
-     * 同步预检（controller 在回 SSE 前调用）：未装配 9100 / 他人会话 9101。
+     * 同步预检（controller 在回 SSE 前调用）：未装配 9100 / 他人会话 9101 /
+     * 按人限流 9102（Retry-After 头秒数见 retryAfterSeconds）/ 全局并发满 9102（短 Retry-After）。
      * 返回 null = 通过；非 null = HTTP 层错误，由 controller 手写标准 Result JSON。
+     * 顺序刻意：装配与归属校验不消耗限流配额，都过了才扣次数与并发槽。
      */
-    public Result<Void> preflight(ChatDTO dto) {
+    public ChatPrecheck preflight(ChatDTO dto) {
         if (clientProvider.getIfAvailable() == null) {
-            return Result.fail(AiErrorCode.AI_NOT_ENABLED);
+            return ChatPrecheck.reject(Result.fail(AiErrorCode.AI_NOT_ENABLED), null);
         }
+        Long userId = com.viomanager.common.auth.UserHolder.getUser().getUserId();
         if (dto.getConversationId() != null) {
-            Long userId = com.viomanager.common.auth.UserHolder.getUser().getUserId();
             boolean owned = conversationMapper.selectCount(new QueryWrapper<AiConversation>()
                     .eq("id", dto.getConversationId()).eq("user_id", userId)) > 0;
             if (!owned) {
-                return Result.fail(AiErrorCode.AI_CONVERSATION_NOT_FOUND);
+                return ChatPrecheck.reject(Result.fail(AiErrorCode.AI_CONVERSATION_NOT_FOUND), null);
             }
         }
-        return null;
+        if (!rateLimiter.tryAcquire(userId)) {
+            return ChatPrecheck.reject(Result.fail(AiErrorCode.AI_RATE_LIMITED),
+                    rateLimiter.retryAfterSeconds(userId));
+        }
+        if (!rateLimiter.tryAcquireGlobalSlot()) {
+            //并发槽已拿但本轮不再生成：立即还槽，只扣一次每分钟配额（用户重试时再按新请求计）
+            rateLimiter.releaseGlobalSlot();
+            return ChatPrecheck.reject(Result.fail(AiErrorCode.AI_RATE_LIMITED,
+                    "当前使用人数较多，请稍后再试"), CONGESTION_RETRY_AFTER_SECONDS);
+        }
+        return ChatPrecheck.pass();
     }
 
-    /** AI01 入口：预检已过，起异步编排，立即回 emitter */
+    /** AI01 入口：预检已过（并发槽已持有），起异步编排，立即回 emitter；槽在生成结束后释放 */
     public SseEmitter chat(ChatDTO dto) {
         GlmClient client = clientProvider.getIfAvailable();
         if (client == null) {
+            rateLimiter.releaseGlobalSlot();
             throw new BizException(AiErrorCode.AI_NOT_ENABLED);
         }
         //userId 必须在请求线程捕获：UserHolder 是 ThreadLocal，异步线程里取不到
         Long userId = com.viomanager.common.auth.UserHolder.getUser().getUserId();
         SseEmitter emitter = new SseEmitter(CHAT_TIMEOUT_MILLIS);
-        chatExecutor.execute(() -> runChat(client, dto, userId, emitter));
+        chatExecutor.execute(() -> {
+            try {
+                runChat(client, dto, userId, emitter);
+            } finally {
+                rateLimiter.releaseGlobalSlot();
+            }
+        });
         return emitter;
     }
 

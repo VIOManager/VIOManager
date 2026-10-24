@@ -47,13 +47,17 @@ public class AiController {
     /**
      * AI01 发消息（SSE 流式）：事件序 meta → tool×N → delta×N → done｜error。
      * 不挂幂等键（清单 §3：生成型操作天然一次性，断流前端"重新生成"重发）。
-     * 预检失败（9100/9101）手写标准 Result JSON 返回，不进流（见类注释）。
+     * 预检失败（9100/9101/9102）手写标准 Result JSON 返回，不进流（见类注释）；
+     * 9102 附 Retry-After 头（秒），前端显示"问得太快了，稍等 N 秒"。
      */
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chat(@Valid @RequestBody ChatDTO dto, HttpServletResponse response) throws IOException {
-        Result<Void> reject = aiChatService.preflight(dto);
-        if (reject != null) {
-            writeJson(response, reject);
+        AiChatService.ChatPrecheck check = aiChatService.preflight(dto);
+        if (check.reject() != null) {
+            if (check.retryAfterSeconds() != null) {
+                response.setHeader("Retry-After", String.valueOf(check.retryAfterSeconds()));
+            }
+            writeJson(response, check.reject());
             return null;
         }
         return aiChatService.chat(dto);
