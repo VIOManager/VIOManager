@@ -12,6 +12,7 @@ import com.viomanager.common.result.Result;
 import com.viomanager.file.service.IFileService;
 import com.viomanager.person.dto.MemberOptionVO;
 import com.viomanager.person.dto.PersonAccountDTO;
+import com.viomanager.person.dto.PersonBatchDeleteDTO;
 import com.viomanager.person.dto.PersonCreateDTO;
 import com.viomanager.person.dto.PersonFileBindDTO;
 import com.viomanager.person.dto.PersonIdCardVO;
@@ -21,6 +22,7 @@ import com.viomanager.person.dto.PersonUpdateDTO;
 import com.viomanager.person.dto.PersonVO;
 import com.viomanager.person.entity.Person;
 import com.viomanager.person.mapper.PersonMapper;
+import com.viomanager.person.support.PersonBatchDeleteSupport;
 import com.viomanager.person.support.PersonCommandSupport;
 import com.viomanager.person.support.PersonExportSupport;
 import com.viomanager.person.support.PersonImportSupport;
@@ -31,10 +33,7 @@ import com.viomanager.person.support.PersonViewerSupport;
 import com.viomanager.person.support.PersonViewerSupport.View;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -58,6 +57,9 @@ public class PersonServiceImpl implements PersonService {
 
     @Resource
     private PersonCommandSupport commandSupport;
+
+    @Resource
+    private PersonBatchDeleteSupport batchDeleteSupport;
 
     @Resource
     private PersonImportSupport importSupport;
@@ -170,6 +172,14 @@ public class PersonServiceImpl implements PersonService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteBatch(PersonBatchDeleteDTO dto) {
+        //M05B 整批同生共死：两阶段预检 + 级联在 PersonBatchDeleteSupport，
+        //任一环节抛错本事务整体回滚——不出现"删了一半"的中间态
+        batchDeleteSupport.deleteAll(dto);
+    }
+
+    @Override
     public void importTemplate(HttpServletResponse response) {
         //响应头、模板与导出的写出统一在 PersonExportSupport（与导入侧对称）
         exportSupport.writeTemplate(response);
@@ -177,10 +187,8 @@ public class PersonServiceImpl implements PersonService {
 
     @Override
     public Result<PersonImportVO> importExcel(MultipartFile file) {
-        //⚠️ 无 @Transactional：PersonImportSupport 内部逐行 try/catch DataIntegrityViolationException
-        //  转逐行错误。若外层加事务，Spring 声明式事务会在单行异常时标记 rollbackOnly，
-        //  即使 catch 了也会在 commit 时 UnexpectedRollbackException → 整批全部回滚，
-        //  把"逐行回滚防线"完全击穿。导入本来就是逐行独立，不需要外层事务。
+        //⚠️ 仍不放 @Transactional：行级事务（NESTED）在 PersonImportSupport 内自持——
+        //  生产=每行独立真事务，就算外层被包事务也只是退化为保存点；导入逐行独立，不需要外层事务
         return Result.ok(importSupport.importExcel(file));
     }
 

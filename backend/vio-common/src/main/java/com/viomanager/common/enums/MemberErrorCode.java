@@ -22,6 +22,9 @@ public enum MemberErrorCode implements ErrorCode {
     /** Excel 导入存在错误行（M07，message 配合逐行 errors 明细） */
     IMPORT_ROW_ERROR(3005, "Excel 导入存在错误行，请查看逐行错误明细"),
 
+    /** 批量删除单次超上限（M05B；3011 起——3006-3009 已被组织/学期模块占用） */
+    MEMBER_BATCH_LIMIT(3011, "批量删除人数超过单次上限"),
+
     /** 无权查看该人员的敏感信息（M02 深档 / M10 身份证 / M11 证件照签名） */
     MEMBER_SENSITIVE_DENIED(3010, "无权查看该人员的敏感信息");
 

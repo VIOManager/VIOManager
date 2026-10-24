@@ -4,7 +4,8 @@ import java.util.List;
 
 /**
  * M07 导入出参：successCount + failCount + 逐行错误（row 为 Excel 实际行号，表头是第 1 行）。
- * 注意：契约约定"学号已存在的行跳过"——跳过的行既不计成功也不计失败（可重复导入幂等）。
+ * 口径：跳过行（已存在且有账号 / 文件内重复学号）不计成功也不计失败；
+ * "已存在但无账号"的补建行与新建行同口径计成功（2026-10-24 拍板：导入自动建号）。
  */
 public record PersonImportVO(int successCount, int failCount, List<RowError> errors) {
 
