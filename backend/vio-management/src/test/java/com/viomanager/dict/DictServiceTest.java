@@ -11,6 +11,8 @@ import com.viomanager.auth.mapper.SysUserMapper;
 import com.viomanager.dict.entity.SysDictItem;
 import com.viomanager.dict.mapper.SysDictItemMapper;
 import jakarta.annotation.Resource;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,39 +70,62 @@ class DictServiceTest {
                         .content("{\"loginName\":\"dict_probe_student\",\"password\":\"pass123456\"}"))
                 .andReturn();
         studentToken = JsonPath.read(loginResult.getResponse().getContentAsString(), "$.data.token");
-        //2.SKILL 字典：预设 2 条（已入库）、用户补充 2 条（1 已入库 + 1 待审核）
-        insertItem("SKILL", "java", "Java 开发", "PRESET", "APPROVED", 1);
-        insertItem("SKILL", "python", "Python 开发", "PRESET", "APPROVED", 2);
-        insertItem("SKILL", "miniapp", "小程序开发", "USER", "APPROVED", 3);
-        insertItem("SKILL", "vue3", "Vue3 前端", "USER", "PENDING", 4);
-        //3.不该出现的：停用项、已删项、别的字典（值避开演示数据的 MATERIAL_TYPE 预设项，防撞唯一键）
-        insertItem("SKILL", "stopped", "停用项", "PRESET", "APPROVED", 5);
+        //2.SKILL 字典：预设 2 条（已入库）、用户补充 2 条（1 已入库 + 1 待审核）。
+        //值统一 dst_ 前缀：活库演示数据（超管在系统配置页自建技能/用户补充）与测试互不干扰
+        insertItem("SKILL", "dst_java", "Java 开发", "PRESET", "APPROVED", 1);
+        insertItem("SKILL", "dst_python", "Python 开发", "PRESET", "APPROVED", 2);
+        insertItem("SKILL", "dst_miniapp", "小程序开发", "USER", "APPROVED", 3);
+        insertItem("SKILL", "dst_vue3", "Vue3 前端", "USER", "PENDING", 4);
+        //3.不该出现的：停用项、已删项、别的字典（值同样带前缀，防撞活库唯一键）
+        insertItem("SKILL", "dst_stopped", "停用项", "PRESET", "APPROVED", 5);
         jdbcTemplate.update(
-                "UPDATE sys_dict_item SET status = 0 WHERE dict_code = 'SKILL' AND item_value = 'stopped'");
-        insertItem("SKILL", "removed", "已删项", "PRESET", "APPROVED", 6);
+                "UPDATE sys_dict_item SET status = 0 WHERE dict_code = 'SKILL' AND item_value = 'dst_stopped'");
+        insertItem("SKILL", "dst_removed", "已删项", "PRESET", "APPROVED", 6);
         jdbcTemplate.update(
-                "UPDATE sys_dict_item SET deleted = 1 WHERE dict_code = 'SKILL' AND item_value = 'removed'");
-        insertItem("MATERIAL_TYPE", "plan", "计划书", "PRESET", "APPROVED", 9);
+                "UPDATE sys_dict_item SET deleted = 1 WHERE dict_code = 'SKILL' AND item_value = 'dst_removed'");
+        insertItem("MATERIAL_TYPE", "dst_plan", "计划书", "PRESET", "APPROVED", 9);
     }
 
     @Test
     void skillDictReturnsPresetAndUserItems() throws Exception {
-        // 学生读 SKILL 字典：预设 + 用户补充共 4 条，停用/已删/其他字典的都不混进来
-        mockMvc.perform(get("/api/dicts/SKILL")
+        // 学生读 SKILL 字典：探针四条齐全、字段口径对、排序正确，停用/已删/其他字典的不混进来。
+        // 断言收窄到 dst_ 值域（活库演示技能可自由增减，互不影响）
+        MvcResult result = mockMvc.perform(get("/api/dicts/SKILL")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.length()").value(4))
-                // 排序号小的在前
-                .andExpect(jsonPath("$.data[0].itemValue").value("java"))
-                .andExpect(jsonPath("$.data[0].itemLabel").value("Java 开发"))
-                .andExpect(jsonPath("$.data[0].source").value("PRESET"))
-                .andExpect(jsonPath("$.data[0].auditStatus").value("APPROVED"))
-                .andExpect(jsonPath("$.data[0].sortNo").value(1))
-                // 用户补充项带审核状态返回（方案验证栏）
-                .andExpect(jsonPath("$.data[3].itemValue").value("vue3"))
-                .andExpect(jsonPath("$.data[3].source").value("USER"))
-                .andExpect(jsonPath("$.data[3].auditStatus").value("PENDING"));
+                .andReturn();
+        List<Map<String, Object>> items = JsonPath.read(result.getResponse().getContentAsString(), "$.data[*]");
+        Map<String, Map<String, Object>> byValue = new java.util.HashMap<>();
+        for (Map<String, Object> item : items) {
+            byValue.put(String.valueOf(item.get("itemValue")), item);
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(byValue.containsKey("dst_java"), "预设项应在列");
+        org.junit.jupiter.api.Assertions.assertEquals("PRESET", byValue.get("dst_java").get("source"));
+        org.junit.jupiter.api.Assertions.assertEquals("APPROVED", byValue.get("dst_java").get("auditStatus"));
+        // 用户补充项带审核状态返回（方案验证栏）
+        org.junit.jupiter.api.Assertions.assertEquals("USER", byValue.get("dst_vue3").get("source"));
+        org.junit.jupiter.api.Assertions.assertEquals("PENDING", byValue.get("dst_vue3").get("auditStatus"));
+        // 停用项、已删项、其他字典的条目不混进来
+        org.junit.jupiter.api.Assertions.assertFalse(byValue.containsKey("dst_stopped"), "停用项不应出现");
+        org.junit.jupiter.api.Assertions.assertFalse(byValue.containsKey("dst_removed"), "已删项不应出现");
+        org.junit.jupiter.api.Assertions.assertFalse(byValue.containsKey("dst_plan"), "其他字典的条目不应出现");
+        // 探针值恰好四条（防重复返回），排序号小的在前
+        long probeCount = items.stream().filter(i -> String.valueOf(i.get("itemValue")).startsWith("dst_")).count();
+        org.junit.jupiter.api.Assertions.assertEquals(4, probeCount, "探针值应恰好四条");
+        int javaIdx = indexOfValue(items, "dst_java");
+        int vueIdx = indexOfValue(items, "dst_vue3");
+        org.junit.jupiter.api.Assertions.assertTrue(javaIdx < vueIdx, "排序号小的在前");
+    }
+
+    /** 在响应列表里找指定值的下标 */
+    private int indexOfValue(List<Map<String, Object>> items, String value) {
+        for (int i = 0; i < items.size(); i++) {
+            if (value.equals(items.get(i).get("itemValue"))) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     @Test

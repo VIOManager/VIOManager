@@ -104,8 +104,9 @@ class SwitchTaskTest {
     @Test
     void createCapturesSnapshotAndWindow() throws Exception {
         // S05：正确密码 → PENDING_EXECUTE + 30 分钟窗口 + 影响快照三计数
-        //（上界放宽 1 秒：DATETIME(0) 会四舍五入小数秒，严格界会偶发越线）
-        LocalDateTime before = LocalDateTime.now().plusMinutes(30);
+        //（两侧各放宽 1 秒：DATETIME(0) 对小数秒是四舍五入——亚秒 < 0.5 被舍到整秒时，
+        // 会落进带毫秒的严格下界之前。原注释只放宽了上界，下界漏了，约五五开偶发红——2026-10-24 根治）
+        LocalDateTime before = LocalDateTime.now().plusMinutes(30).minusSeconds(1);
         long taskId = createTaskOk(TO_SEMESTER);
         LocalDateTime after = LocalDateTime.now().plusMinutes(30).plusSeconds(1);
         SemesterSwitchTask task = switchTaskMapper.selectById(taskId);
