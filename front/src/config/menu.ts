@@ -34,6 +34,7 @@ export const ADMIN_MENU: MenuEntry[] = [
   { path: '/achievement', title: '成果管理', group: G.BIZ, roles: ADMIN },
   { path: '/approval', title: '审批中心', group: G.COOP, roles: ALL },
   { path: '/kb', title: '知识库', group: G.COOP, roles: ALL },
+  { path: '/ai', title: 'AI 助手', group: G.COOP, roles: ALL },
   { path: '/project', title: '项目管理', group: G.COOP, roles: ADMIN },
   { path: '/schedule', title: '排班管理', group: G.COOP, roles: ADMIN },
   { path: '/performance', title: '绩效统计', group: G.COOP, roles: ADMIN },
@@ -50,7 +51,8 @@ export const STUDENT_MENU: MenuEntry[] = [
   { path: '/my/schedule', title: '我的排班', group: '我的', roles: ['STUDENT'] },
   { path: '/my/performance', title: '我的绩效', group: '我的', roles: ['STUDENT'] },
   { path: '/approval', title: '审批中心', group: '协同', roles: ALL },
-  { path: '/kb', title: '知识库', group: '协同', roles: ALL }
+  { path: '/kb', title: '知识库', group: '协同', roles: ALL },
+  { path: '/ai', title: 'AI 助手', group: '协同', roles: ALL }
 ]
 
 /** 按角色取菜单：过滤 + 保持分组顺序 */

@@ -20,6 +20,8 @@ import { mockAdapter } from './mock'
 // 刷新保留、关标签页即登出；2 小时时效短 token 与此存储策略匹配
 const TOKEN_KEY = 'vio_token'
 const useMock = import.meta.env.VITE_USE_MOCK === 'true'
+/** mock 开关只读导出：AI 聊天是流式接口走不了 axios 适配器，api 层需显式分支（api/ai.ts） */
+export const mockMode = useMock
 
 /** 业务错误：code + message 随 reject 传出，页面可按 code 做差异化提示 */
 export class BizError extends Error {
@@ -180,6 +182,84 @@ export async function upload<T>(url: string, file: File, idempotencyKey: string,
     for (const k of Object.keys(fields)) fd.append(k, fields[k])
   }
   return (await http.post(url, fd, { headers: { 'X-Idempotency-Key': idempotencyKey }, timeout: timeoutMs })) as unknown as T
+}
+
+/** SSE 事件（postSse 解析后回调）：event 为 meta/tool/delta/done/error，data 为 JSON 载荷 */
+export interface SseEvent {
+  event: string
+  data: Record<string, unknown>
+}
+
+/**
+ * SSE 流式 POST（AI01 /api/ai/chat 专用）：axios 浏览器端不便逐帧读流，走原生 fetch
+ * ⚠️ 红线不破：Authorization 头仍只在本文件拼（规范 §5.3），基地址复用 axios 实例同源配置
+ * 契约（docs/api/AI助手-接口清单.md §5）：HTTP 层错误不走 SSE，后端直接回统一 Result JSON——
+ *   与拦截器同口径分流（1002 清 token 踢登录，其余 ElMessage + reject），不进入流
+ * 中断语义：调用方传 AbortSignal，用户点停止 → fetch 抛 AbortError → 静默返回（中断标记由调用方落）
+ */
+export async function postSse(url: string, body: unknown, onEvent: (e: SseEvent) => void, signal?: AbortSignal): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'text/event-stream' }
+  const token = sessionStorage.getItem(TOKEN_KEY)
+  if (token) headers.Authorization = `Bearer ${token}`
+  let resp: Response
+  try {
+    resp = await fetch((http.defaults.baseURL ?? '') + url, { method: 'POST', headers, body: JSON.stringify(body), signal })
+  } catch (err) {
+    if (signal?.aborted) return // 用户主动停止：静默收场
+    ElMessage.error('网络异常，请稍后重试')
+    throw err
+  }
+  // 非流式应答 = HTTP 层错误（见函数头）：content-type 不是 event-stream 就按 Result JSON 分流
+  const ct = String(resp.headers.get('content-type') ?? '')
+  if (!resp.ok || !ct.includes('text/event-stream')) {
+    let r: Result | null = null
+    try {
+      r = (await resp.json()) as Result
+    } catch {
+      // 无响应体（网关 502 等）走兜底提示
+    }
+    if (r && typeof r.code === 'number') {
+      if (r.code === 1002) {
+        sessionStorage.removeItem(TOKEN_KEY)
+        ElMessage.error(r.message || '登录已失效，请重新登录')
+        window.location.assign('/login')
+      } else {
+        ElMessage.error(r.message || '操作失败')
+      }
+      throw new BizError(r.code, r.message ?? '')
+    }
+    ElMessage.error('网络异常，请稍后重试')
+    throw new BizError(-1, '网络异常')
+  }
+  // 逐帧解析：事件块以空行分隔，event:/data: 各占一行，冒号开头是注释（keep-alive）
+  const reader = resp.body?.getReader()
+  if (!reader) return
+  const decoder = new TextDecoder()
+  let buf = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    let sep = buf.indexOf('\n\n')
+    while (sep >= 0) {
+      const block = buf.slice(0, sep)
+      buf = buf.slice(sep + 2)
+      sep = buf.indexOf('\n\n')
+      let event = 'message'
+      let data = ''
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim()
+        else if (line.startsWith('data:')) data += line.slice(5).trim()
+      }
+      if (data) {
+        try {
+          onEvent({ event, data: JSON.parse(data) as Record<string, unknown> })
+        } catch {
+          // 坏帧丢弃不断流（半包 JSON 等）
+        }
+      }
+    }
+  }
 }
 
 // ⚠️ 开发自验件：浏览器控制台 __http.get('/api/_probe/1002') 可验证三种拦截分支；

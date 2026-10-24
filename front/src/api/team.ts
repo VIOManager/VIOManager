@@ -77,8 +77,9 @@ export function apiTeams(q?: { contestId?: string; keyword?: string }): Promise<
 export function apiTeamDetail(id: string): Promise<TeamDetail> {
   return get('/api/teams/' + id)
 }
-/** 组队申请（TE03）：校验通过后生成 TEAM_CREATE 审批单，不直接建队 */
-export function apiCreateTeam(body: { contestId: string; trackId: string; name: string; projectName: string; prefillMemberIds: string[] }): Promise<{ approvalId: string }> {
+/** 创建赛队（TE03 队长直建免审批，2026-10-24 lzh 拍板）：提交即建队，申请人即队长；返回新队 id
+ *  TODO(联调)：后端 POST /api/teams 改直建后对齐返回结构（原为 { approvalId }） */
+export function apiCreateTeam(body: { contestId: string; trackId: string; name: string; projectName: string; prefillMemberIds: string[] }): Promise<{ id: string }> {
   return postIdem('/api/teams', body, crypto.randomUUID())
 }
 /** 队长编辑队名/项目名（同比赛队名唯一 4002） */
@@ -98,7 +99,7 @@ export function apiAddTeamMember(teamId: string, memberId: string): Promise<null
 export function apiConfirmTeamMember(teamId: string, memberId: string, action: 'CONFIRM' | 'REJECT'): Promise<null> {
   return postIdem('/api/teams/' + teamId + '/members/' + memberId + '/confirm', { action }, crypto.randomUUID())
 }
-/** 移除成员（TE07，默认走审批；队长不可被移除 4010） */
+/** 移除成员（TE07 队长直移免审批，2026-10-24 lzh 拍板A）：直接生效挂审计；队长不可被移除 4010 */
 export function apiRemoveTeamMember(teamId: string, memberId: string): Promise<null> {
   return delIdem('/api/teams/' + teamId + '/members/' + memberId, crypto.randomUUID())
 }

@@ -16,7 +16,8 @@ import ScrollLoader from '@/components/ScrollLoader.vue'
 import KbDetailDrawer from './KbDetailDrawer.vue'
 
 const user = useUserStore()
-const isAdmin = user.role !== 'STUDENT'
+/** 角色判定用 computed：身份异步恢复后模板能跟着翻——普通常量会冻在默认 SUPER_ADMIN（存量 bug 2026-10-24 修） */
+const isAdmin = computed(() => user.role !== 'STUDENT')
 
 const all = ref<KbItem[]>([])
 /** 本地滚动分页：后端 KB01 返回全量数组，前端切片显示（每批 20 条） */

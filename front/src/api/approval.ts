@@ -14,6 +14,35 @@ import type { PageResult } from './types'
 /** 三视角（P01 必填参数） */
 export type ApprovalView = 'TODO' | 'MINE' | 'TARGET'
 
+/**
+ * 队长自治审批类型（2026-10-24 lzh 拍板）：队伍自治类单子不进管理员审批中心。
+ * 口径明细：组队申请直建免审批（类型退役，留此兜存量）；加人/指导教师走"队长发起+目标人同意"；
+ * 移除队员拍板A 队长直移免审批（类型退役，留此兜存量）；解散赛队归队伍侧。
+ * ⚠️ 项目查看（PROJECT_VIEW）2026-10-24 lzh 明确：队长/成员发起、管理员定夺——**不在此列**，管理员照常审批；
+ * 节点审核（MILESTONE_APPROVE）属管理侧项目模块，同归管理员。
+ * 管理员审批中心实际可见：成果提交、项目查看、节点审核、学期切换。
+ */
+export const APPROVAL_CAPTAIN_TYPES: string[] = [
+  'TEAM_CREATE',
+  'TEAM_ADD_MEMBER',
+  'TEAM_REMOVE_MEMBER',
+  'TEAM_ADD_ADVISOR',
+  'TEAM_DISSOLVE'
+]
+
+/**
+ * 各角色类型下拉可选项（2026-10-24 lzh 拍板"按权能整"）：
+ *   超管：成果、项目查看、节点、学期切换；部门管理员：成果、项目查看、节点（学期切换超管专属）；
+ *   学生（含队长）：本人可发起（加人/指导教师/解散/成果/项目查看）或可被指向（加人/指导教师）的类型——
+ *   组队申请与移除队员已随直建/直移拍板退役，不提供
+ * ⚠️ 只约束筛选下拉不产噪音：列表内容仍以后端返回为准（存量退役类型单靠 labels 兜底翻译）
+ */
+export const APPROVAL_ROLE_TYPES: Record<string, string[]> = {
+  SUPER_ADMIN: ['ACHIEVEMENT_SUBMIT', 'PROJECT_VIEW', 'MILESTONE_APPROVE', 'SEMESTER_SWITCH'],
+  DEPT_ADMIN: ['ACHIEVEMENT_SUBMIT', 'PROJECT_VIEW', 'MILESTONE_APPROVE'],
+  STUDENT: ['TEAM_ADD_MEMBER', 'TEAM_ADD_ADVISOR', 'TEAM_DISSOLVE', 'ACHIEVEMENT_SUBMIT', 'PROJECT_VIEW']
+}
+
 /** 审批单状态（PENDING 为唯一活动态） */
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED'
 

@@ -10,13 +10,17 @@ import { fail, ok, registerMock } from './registry'
 import { findMockUserByToken } from './auth'
 import { meAsMember } from './member'
 import { contests } from './contest-data'
-import { hasPendingApproval, pushApproval } from './approval-data'
+import { hasPendingApproval, nowText, pushApproval } from './approval-data'
 import { orgIdOfMember } from './scope'
 import { teams } from './team-data'
+import type { MockTeamMember } from './team-data'
 import { contestRuleBool, contestRuleNumber, findTeam, toDetail, toListItem, viewerRoleOf, violatesRepeatJoin } from './team-util'
 import { teamVisible } from './scope'
 import type { TeamListItem, TeamMemberSearchItem } from '@/api/team'
 import { members } from './member-data'
+
+/** 直建队伍 id 序列（原审批回调建队逻辑移此，2026-10-24 免审批拍板） */
+let teamSeq = 100
 
 registerMock({
   method: 'get',
@@ -90,17 +94,29 @@ registerMock({
     const prefill = Array.isArray(ctx.body.prefillMemberIds) ? (ctx.body.prefillMemberIds as string[]) : []
     const prefillLimit = contestRuleNumber(contestId, 'prefillLimit', 2)
     if (prefill.length > prefillLimit) return fail(4003, '预填成员数超过上限（' + prefillLimit + '）')
-    // 创建型单据：bizId 提交时为 null，批准回调建队后回填（清单 §5 契约 3）
-    const ap = pushApproval({
-      bizType: 'TEAM_CREATE', bizId: null,
-      bizTitle: (me ? me.name : '未知') + ' · 创建赛队「' + name + '」',
-      applyReason: '比赛：' + contest.name + '；项目：' + String(ctx.body.projectName ?? ''),
-      payload: { contestId, name, projectName: String(ctx.body.projectName ?? ''), prefillMemberIds: prefill },
-      applicantMemberId: me ? me.id : '',
-      applicantName: me ? me.name : '未知',
-      approverOrgId: me ? me.orgId : ''
+    // 队长直建免审批（2026-10-24 lzh 拍板）：不生成 TEAM_CREATE 审批单，直接建队；
+    // 申请人即队长（CONFIRMED），预填成员以 UNCONFIRMED 入队由本人确认（两段式语义保留）
+    if (!me) return fail(1003, '当前账号未绑定人员档案，无法创建赛队')
+    const list: MockTeamMember[] = [
+      { memberId: me.id, name: me.name, role: 'LEADER', status: 'CONFIRMED', college: me.college, className: me.className, phone: me.phone, idCardLast4: me.idCardLast4 }
+    ]
+    for (const pid of prefill) {
+      let pm = null
+      for (const m of members) {
+        if (m.id === String(pid)) pm = m
+      }
+      if (pm && pm.id !== me.id) {
+        list.push({ memberId: pm.id, name: pm.name, role: 'MEMBER', status: 'UNCONFIRMED', college: pm.college, className: pm.className, phone: pm.phone, idCardLast4: pm.idCardLast4 })
+      }
+    }
+    const id = 't' + teamSeq++
+    teams.push({
+      id, name, projectName: String(ctx.body.projectName ?? ''), contestId, contestName: contest.name,
+      trackId: '', trackName: '', leaderId: me.id, leaderName: me.name,
+      status: 'ACTIVE', materialStatus: '待完善', materialCompleteRate: 0,
+      members: list, advisors: [], createdAt: nowText()
     })
-    return ok({ approvalId: ap.id })
+    return ok({ id })
   }
 })
 
@@ -208,15 +224,8 @@ registerMock({
     for (const m of t.members) {
       if (m.memberId !== ctx.params.memberId) continue
       if (m.role === 'LEADER') return fail(4010, '队长不可自我移除或退出')
-      pushApproval({
-        bizType: 'TEAM_REMOVE_MEMBER', bizId: t.id,
-        bizTitle: t.leaderName + ' · ' + t.name + '申请移除队员：' + m.name,
-        applyReason: '申请将' + m.name + '移出「' + t.name + '」',
-        payload: { teamId: t.id, memberId: m.memberId, memberName: m.name },
-        applicantMemberId: t.leaderId,
-        applicantName: t.leaderName,
-        approverOrgId: orgIdOfMember(t.leaderId)
-      })
+      // 队长直移免审批（2026-10-24 lzh 拍板A）：移除即生效；审计由真后端 @AuditLog 承载
+      m.status = 'REMOVED'
       return ok(null)
     }
     return fail(1004, '成员不存在')

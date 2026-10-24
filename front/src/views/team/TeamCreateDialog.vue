@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
- * 组队申请弹窗（TE03）：选比赛（仅报名中）→ 选赛道 → 队名/项目名 → 预填成员
+ * 创建赛队弹窗（TE03）：选比赛（仅报名中）→ 选赛道 → 队名/项目名 → 预填成员
  * ⚠️ 预填成员数上限取比赛生效规则 prefillLimit（清单 §7 三人队取值未拍板，mock 模板默认 1）
- * 提交后生成 TEAM_CREATE 审批单，不直接建队（审批中心可见待办）
+ * 队长直建免审批（2026-10-24 lzh 拍板）：提交即建队，申请人即队长；预填成员以未确认入队，
+ *    由本人在队伍详情确认——不再生成 TEAM_CREATE 审批单
+ * TODO(联调)：后端 POST /api/teams 改直建后联调（交接说明见后端 .agentdocs/plans/2026-10-24/）
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -86,7 +88,7 @@ async function onSubmit() {
       projectName: form.projectName.trim(),
       prefillMemberIds: [...form.prefillMemberIds]
     })
-    ElMessage.success('组队申请已提交，等待管理员审批（审批中心可见）')
+    ElMessage.success('队伍已创建，你已是队长；预填成员待其本人确认入队')
     visible.value = false
     emit('submitted')
   } catch {
@@ -98,7 +100,7 @@ async function onSubmit() {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="发起组队申请" width="560px">
+  <el-dialog v-model="visible" title="创建赛队" width="560px">
     <el-form label-width="92px" @submit.prevent>
       <el-form-item label="比赛" required>
         <el-select v-model="form.contestId" style="width: 100%" placeholder="仅报名中的比赛可选" @change="onContestChange">
@@ -118,12 +120,12 @@ async function onSubmit() {
         </el-select>
       </el-form-item>
       <p v-if="form.contestId" class="fs" style="font-size: 12px; color: var(--vio-ink-3); margin-left: 92px">
-        该比赛规则：{{ RULE_KEY_LABEL.prefillLimit }} {{ ruleValueText(prefillLimit) }}；提交后生成审批单，审批通过才建队
+        该比赛规则：{{ RULE_KEY_LABEL.prefillLimit }} {{ ruleValueText(prefillLimit) }}；创建即建队，你即为队长
       </p>
     </el-form>
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="onSubmit">提交申请</el-button>
+      <el-button type="primary" :loading="submitting" @click="onSubmit">创建队伍</el-button>
     </template>
   </el-dialog>
 </template>

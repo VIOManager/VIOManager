@@ -6,7 +6,7 @@
  * 收藏切换 + 评论区（本人/管理员可删）+ 管理员操作（编辑/置顶/删除）
  * ⚠️ 编辑暂只改标题/摘要/链接；换文件请删除后重新发布（简化期不整细）
  */
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiAddKbComment, apiDeleteKbComment, apiDeleteKbItem, apiDownloadKbFile, apiKbComments, apiKbDetail, apiPinKbItem, apiToggleKbFavorite, apiUpdateKbItem } from '@/api/kb'
 import type { KbComment, KbDetail } from '@/api/kb'
@@ -17,7 +17,8 @@ const props = defineProps<{ modelValue: boolean; kbId: string }>()
 const emit = defineEmits<{ 'update:modelValue': [v: boolean]; changed: [] }>()
 
 const user = useUserStore()
-const isAdmin = user.role !== 'STUDENT'
+/** 角色判定用 computed：身份异步恢复后模板能跟着翻——普通常量会冻在默认 SUPER_ADMIN（存量 bug 2026-10-24 修） */
+const isAdmin = computed(() => user.role !== 'STUDENT')
 
 const visible = ref(props.modelValue)
 watch(() => props.modelValue, (v) => {
