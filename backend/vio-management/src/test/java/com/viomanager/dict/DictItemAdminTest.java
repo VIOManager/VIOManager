@@ -126,13 +126,13 @@ class DictItemAdminTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].itemValue").value("dia_list1"))
                 .andExpect(jsonPath("$.data[1].status").value("ENABLED"));
-        //停用项在管理视角可见（D01 才排除）
+        //停用项在管理视角可见（D01 才排除）——包含式断言，活库演示数据（如待审的机器人开发）可自由共存
         mockMvc.perform(get("/api/dicts/DIA_PROBE/items").param("keyword", "停用")
                         .header("Authorization", "Bearer " + adminToken))
-                .andExpect(jsonPath("$.data[0].id").value(String.valueOf(disabled.getId())));
+                .andExpect(jsonPath("$.data[?(@.id == '" + disabled.getId() + "')]").isNotEmpty());
         mockMvc.perform(get("/api/dicts/SKILL/items").param("auditStatus", "PENDING")
                         .header("Authorization", "Bearer " + adminToken))
-                .andExpect(jsonPath("$.data[0].id").value(String.valueOf(pending.getId())));
+                .andExpect(jsonPath("$.data[?(@.id == '" + pending.getId() + "')]").isNotEmpty());
     }
 
     @Test
