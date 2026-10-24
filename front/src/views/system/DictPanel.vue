@@ -9,6 +9,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiAuditDictItemAdmin, apiCreateDictItem, apiCreateDictType, apiDeleteDictItem, apiDeleteDictType, apiDictAdminItems, apiDictTypes, apiToggleDictItem, apiUpdateDictItem } from '@/api/system'
 import type { DictItemAdmin, DictType } from '@/api/system'
 import { AUDIT_STATUS_LABEL, DICT_SOURCE_LABEL } from '@/config/labels'
+import { useDict } from '@/composables/useDict'
+
+/** 字典条目有任何变动后调用：刷新全站下拉缓存
+ *  （useDict 是模块级缓存、跨页面导航不重拉——不刷的话人员页等处的下拉要 F5 才见新词条） */
+function refreshSiteDict() {
+  if (currentCode.value) void useDict(currentCode.value).refresh()
+}
 
 const types = ref<DictType[]>([])
 const currentCode = ref('')
@@ -88,6 +95,7 @@ async function onCreateItem() {
   }
   await apiCreateDictItem(currentCode.value, { itemValue: value, itemLabel: label })
   ElMessage.success('条目已新增（直接生效）')
+  refreshSiteDict()
   await loadTypes()
   await loadItems()
 }
@@ -101,12 +109,14 @@ async function onRename(it: DictItemAdmin) {
     return
   }
   await apiUpdateDictItem(it.id, { itemLabel: label })
+  refreshSiteDict()
   await loadItems()
 }
 
 async function onToggle(it: DictItemAdmin) {
   await apiToggleDictItem(it.id, it.status !== 'ENABLED')
   ElMessage.success(it.status === 'ENABLED' ? '已停用（业务下拉不再出现）' : '已启用')
+  refreshSiteDict()
   await loadItems()
 }
 
@@ -117,6 +127,7 @@ async function onDeleteItem(it: DictItemAdmin) {
     return
   }
   await apiDeleteDictItem(it.id)
+  refreshSiteDict()
   await loadTypes()
   await loadItems()
 }
@@ -129,6 +140,7 @@ async function onAudit(it: DictItemAdmin, pass: boolean) {
   }
   await apiAuditDictItemAdmin(it.id, pass ? 'APPROVED' : 'REJECTED')
   ElMessage.success(pass ? '已通过（进入业务下拉）' : '已驳回')
+  refreshSiteDict()
   await loadTypes()
   await loadItems()
 }
