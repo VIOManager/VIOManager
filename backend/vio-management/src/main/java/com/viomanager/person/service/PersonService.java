@@ -69,7 +69,7 @@ public interface PersonService {
     /** M11b 电子签名下载：口径同 M11a。 */
     void downloadSignature(Long id, HttpServletResponse response);
 
-    /** M12 技能整组替换：本人或管理员，值必须来自 SKILL 字典。 */
+    /** M12 技能整组替换：本人或管理员，提交项必须是 SKILL 字典可用项的显示名 itemLabel（2026-10-24 拍板全链路 label 语系）。 */
     void updateSkills(Long id, List<String> skills);
 
     /** M13 绑定账号：登录名缺省取学工号再退学号；初始密码 abc123。 */

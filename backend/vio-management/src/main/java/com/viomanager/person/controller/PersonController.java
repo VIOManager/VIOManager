@@ -184,7 +184,7 @@ public class PersonController {
         personService.downloadSignature(id, response);
     }
 
-    /** M12 技能标签整组替换：本人或管理员（服务层判定），值必须来自 SKILL 字典 */
+    /** M12 技能标签整组替换：本人或管理员（服务层判定），提交项须为 SKILL 字典可用项的显示名 */
     @AuditLog(bizType = "MEMBER_SKILLS", label = "更新技能标签",
             summary = "'更新技能：人员' + #id")
     @PutMapping("/{id}/skills")

@@ -56,7 +56,7 @@
 | M09 | POST /api/members/{id}/signature | 电子签名上传，覆盖式单图 |
 | M10 | GET /api/members/{id}/id-card | 完整身份证号。仅超管/本部门管理员/本队队长/本人；**写审计日志（操作人、时间、IP）** |
 | M11 | GET /api/members/{id}/photo 与 /signature | 下载，权限同 M10，写审计 |
-| M12 | PUT /api/members/{id}/skills | 更新技能标签；本人或管理员；值来自 SKILL 字典 |
+| M12 | PUT /api/members/{id}/skills | 更新技能标签；本人或管理员；**提交项须为 SKILL 字典可用项的显示名 itemLabel**（2026-10-24 拍板：下拉/提交/回显/筛选全链路 label 语系，存量"值=名"条目自动兼容；词条改名后已存技能串不跟随，重新保存才更新） |
 | M13 | POST/PUT /api/members/{id}/account | 管理员绑定账号（登录名默认=学工号、初始密码 abc123、default_password=1）；PUT 改登录名/重置密码（重置后 default_password 回 1）。底层调组长账号服务 |
 | M14 | GET /api/members/options | 受限候选搜索（队长流程用，2026-10-23 增）：keyword 模糊（姓名/学号/学工号）、memberType 精确、page/size（size 上限 50，默认 20）；**任意登录角色可用**（B 线队长端原先直调 M01 必 403）；仅返回 id name memberType studentNo jobNo orgId orgName college 八字段，无任何敏感列，只含启用状态成员，按姓名排序 |
 

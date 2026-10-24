@@ -170,14 +170,16 @@ public class PersonCommandSupport {
     }
 
     /**
-     * 技能标签整组替换（M03/M04/M12 共用）：值校验（必须是 SKILL 字典可用项）→物理删旧→带 label 插入。
+     * 技能标签整组替换（M03/M04/M12 共用）：显示名校验（必须是 SKILL 字典可用项的 itemLabel）
+     * →物理删旧→插入（skill_value 与 skill_label 同存显示名）。
      */
     public void saveSkills(Long memberId, List<String> skills) {
-        //0.去重保序：重复值会在 uk_member_skill(member_id, skill_value, deleted) 上撞 1062 变 500
+        //0.去重保序：重复项会在 uk_member_skill(member_id, skill_value, deleted) 上撞 1062 变 500
         if (skills != null) {
             skills = skills.stream().distinct().toList();
         }
-        //1.校验值全部来自字典（PRESET 或已审核通过的用户补充）
+        //1.校验提交项全部是字典可用项的显示名（PRESET 或已审核通过的用户补充）——
+        //  前端下拉/提交/回显/筛选全链路 label 语系（2026-10-24 拍板，见修复说明）
         Map<String, String> labelMap = availableSkillLabels();
         if (skills != null) {
             for (String value : skills) {
@@ -188,7 +190,7 @@ public class PersonCommandSupport {
         }
         //2.物理删旧（唯一键 uk_member_skill 决定了不能走逻辑删除，见 mapper 注释）
         memberSkillMapper.deleteByMemberId(memberId);
-        //3.逐条插入（label 冗余避免列表联表）
+        //3.逐条插入（skill_value 与 skill_label 同为显示名——M01/M02 回显与 skill 筛选都走 skill_value）
         if (skills != null) {
             for (String value : skills) {
                 MemberSkill skill = new MemberSkill()
@@ -293,7 +295,8 @@ public class PersonCommandSupport {
         }
     }
 
-    /** SKILL 字典可用项 value → label（PRESET 或审核通过） */
+    /** SKILL 字典可用项的显示名集合（键=值=label；PRESET 或审核通过）——校验键用 itemLabel 而非
+     *  itemValue：前端全链路提交显示名，旧口径按 value 收键在"值≠名"条目上必炸（2026-10-24 修复） */
     private Map<String, String> availableSkillLabels() {
         List<DictItemVO> items = dictService.listItems("SKILL").getData();
         if (items == null) {
@@ -302,7 +305,7 @@ public class PersonCommandSupport {
         return items.stream()
                 .filter(item -> "PRESET".equals(item.getSource())
                         || "APPROVED".equals(item.getAuditStatus()))
-                .collect(Collectors.toMap(DictItemVO::getItemValue, DictItemVO::getItemLabel,
+                .collect(Collectors.toMap(DictItemVO::getItemLabel, DictItemVO::getItemLabel,
                         (first, second) -> first));
     }
 }
