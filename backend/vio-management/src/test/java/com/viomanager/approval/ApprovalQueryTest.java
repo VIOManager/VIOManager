@@ -167,6 +167,23 @@ class ApprovalQueryTest extends ApprovalTestBase {
     }
 
     @Test
+    void detailPayloadSanitizesSnowflakeIds() throws Exception {
+        //B/C 线联调 #4：快照里雪花 ID 超过 JS 安全整数（2^53-1），前端 JSON.parse 会
+        //静默舍入失真——详情出口应把它转字符串，安全范围内的整数保持数字
+        Long approvalId = createApproval("TEAM_ADD_MEMBER", 8811L, "张三", 8812L, "李四", 9301L,
+                "{\"teamId\":1934123456789012345,\"memberId\":8812}");
+        MvcResult result = mockMvc.perform(get("/api/approvals/" + approvalId)
+                        .header("Authorization", "Bearer " + applicantToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        String payload = JsonPath.read(result.getResponse().getContentAsString(), "$.data.bizPayload");
+        assertTrue(payload.contains("\"teamId\":\"1934123456789012345\""),
+                "雪花 ID 应转字符串防前端失真：" + payload);
+        assertTrue(payload.contains("\"memberId\":8812"),
+                "安全范围内的整数应保持数字：" + payload);
+    }
+
+    @Test
     void markReadByRole() throws Exception {
         //1.目标人视角：待处理红点 1 → 标记已读 → 归零
         mockMvc.perform(get("/api/approvals/unread-count")
@@ -224,10 +241,18 @@ class ApprovalQueryTest extends ApprovalTestBase {
     /** 调进程内契约造一张审批单 */
     private Long createApproval(String bizType, Long applicantId, String applicantName,
                                 Long targetId, String targetName, Long approverOrgId) {
+        return createApproval(bizType, applicantId, applicantName, targetId, targetName,
+                approverOrgId, "{\"teamName\":\"测试队\"}");
+    }
+
+    /** 同上，可指定快照 payload（净化断言用） */
+    private Long createApproval(String bizType, Long applicantId, String applicantName,
+                                Long targetId, String targetName, Long approverOrgId,
+                                String payloadJson) {
         ApprovalCreateDTO dto = new ApprovalCreateDTO();
         dto.setBizType(bizType);
         dto.setBizTitle(applicantName + "的" + bizType + "申请");
-        dto.setPayloadJson("{\"teamName\":\"测试队\"}");
+        dto.setPayloadJson(payloadJson);
         dto.setApplicantMemberId(applicantId);
         dto.setApplicantName(applicantName);
         dto.setTargetMemberId(targetId);

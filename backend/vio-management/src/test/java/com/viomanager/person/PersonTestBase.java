@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 人员模块测试公共基类：容器装配 + 造人 / 建组织 / 建队伍 / 登录的通用辅助。
  * person 接口几乎都挂 @AuditLog（含 M10/M11 敏感查看），统一 vio.audit.async=false
  * 让审计同步落库，@Transactional 测试结束一起回滚，不污染演示数据。
- * 造数 ID 统一用 94xxx 段，避开演示数据（member 101-105 / 审批 801-807）。
+ * 造数 ID 统一用 94xxx 段，避开演示数据（member 101-107 / 审批 801-807）。
  */
 @SpringBootTest
 @AutoConfigureMockMvc

@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Step 10 验证：演示数据完整性（R__demo_data.sql）。
  * 前提：全新库由 Flyway 自动建表 + 灌演示数据（本测试跑在已迁移的库上）。
- * 覆盖：5 账号可登录且口径正确（admin 首登提示改密）、组织树含 2 分子组织、
+ * 覆盖：8 账号可登录且口径正确（admin 首登提示改密）、组织树含 3 分子组织、
  * 学期/模板/比赛/赛队/队员/获奖记录齐全、材料类型字典可从真实接口读出。
  */
 @SpringBootTest
@@ -66,23 +66,45 @@ class DemoDataTest {
         mockMvc.perform(get("/api/dicts/MATERIAL_TYPE").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
+        //4.2026-10-24 新增三账号：孙小雨补号（原无账号成待办孤儿）+ 联调沙盒班底李浩然/吴建国
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"loginName\":\"stu_sun\",\"password\":\"Stu@123456\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("STUDENT"))
+                .andExpect(jsonPath("$.data.realName").value("孙小雨"));
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"loginName\":\"stu_li\",\"password\":\"Stu@123456\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("STUDENT"))
+                .andExpect(jsonPath("$.data.realName").value("李浩然"));
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"loginName\":\"dept_wu\",\"password\":\"Dept@123456\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.role").value("DEPT_ADMIN"))
+                .andExpect(jsonPath("$.data.realName").value("吴建国"));
     }
 
     @Test
     void orgTreeContainsTwoSubOrgs() {
-        // 组织树 3 个节点：中心 → 2 个协会直挂（2026-10-23 改回 PRD §3.3 原意形状，
-        // 学院/专业/班级回归人员档案文本字段，不再是树节点）
+        // 组织树 4 个节点：中心 → 3 个协会直挂（2026-10-23 改回 PRD §3.3 原意形状，
+        // 学院/专业/班级回归人员档案文本字段；2026-10-24 加机械创新协会联调沙盒部门）
         Long orgCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM sys_org WHERE id IN (1, 2, 3) AND deleted = 0", Long.class);
+                "SELECT COUNT(*) FROM sys_org WHERE id IN (1, 2, 3, 4) AND deleted = 0", Long.class);
         orgCount = orgCount == null ? 0 : orgCount;
-        org.junit.jupiter.api.Assertions.assertEquals(3, orgCount);
+        org.junit.jupiter.api.Assertions.assertEquals(4, orgCount);
         Long subOrgCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM sys_org WHERE is_sub_org = 1 AND deleted = 0", Long.class);
-        org.junit.jupiter.api.Assertions.assertEquals(2, subOrgCount == null ? 0 : subOrgCount);
-        // 协会直挂中心（数据范围子树演示的根基）
+        org.junit.jupiter.api.Assertions.assertEquals(3, subOrgCount == null ? 0 : subOrgCount);
+        // 协会直挂中心（数据范围子树演示的根基），机械创新协会同构
         String path = jdbcTemplate.queryForObject(
                 "SELECT path FROM sys_org WHERE id = 2", String.class);
         org.junit.jupiter.api.Assertions.assertEquals("/0/1/2/", path);
+        String mechPath = jdbcTemplate.queryForObject(
+                "SELECT path FROM sys_org WHERE id = 4", String.class);
+        org.junit.jupiter.api.Assertions.assertEquals("/0/1/4/", mechPath);
     }
 
     @Test
@@ -103,10 +125,10 @@ class DemoDataTest {
         Long memberRows = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM team_member WHERE team_id IN (501, 502) AND deleted = 0", Long.class);
         org.junit.jupiter.api.Assertions.assertEquals(3, memberRows == null ? 0 : memberRows);
-        // 成员 105 故意没绑账号（演示"有档案无账号"的边界）
-        Long noAccount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM member WHERE id = 105 AND has_account = 0", Long.class);
-        org.junit.jupiter.api.Assertions.assertEquals(1, noAccount == null ? 0 : noAccount);
+        // 成员 105 已补账号（2026-10-24：原"无账号边界"演示让 802/803/807 成待办孤儿，弃用）
+        Long withAccount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM member WHERE id = 105 AND has_account = 1", Long.class);
+        org.junit.jupiter.api.Assertions.assertEquals(1, withAccount == null ? 0 : withAccount);
     }
 
     @Test
