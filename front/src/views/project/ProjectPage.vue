@@ -3,7 +3,8 @@
  * 项目管理页（/project，管理端，PR01–PR31）
  * 两 tab：项目列表（筛选+新建+详情抽屉）/ 比赛节点（DRAFT→提交审核→通过后自动同步任务）
  * 可见性八条由后端判定（清单 §2）；管理权显隐以 viewerCanManage 驱动（所有人 or 管理员，2026-10-16 拍板）
- * 新建支持管理员代建（ownerMemberId 帮成员创建）；节点时间出参转契约格式（MilestonePanel）
+ * 新建支持管理员代建（ownerMemberId 帮成员创建）；关联比赛（contestId 选填，挂载池按此过滤）
+ * 节点时间出参转契约格式（MilestonePanel）
  */
 import { onMounted, computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -11,6 +12,8 @@ import { apiCreateProject, apiProjects } from '@/api/project'
 import type { ProjectItem } from '@/api/project'
 import { apiMembers } from '@/api/member'
 import type { MemberListItem } from '@/api/member'
+import { apiContests } from '@/api/contest'
+import type { ContestListItem } from '@/api/contest'
 import { useUserStore } from '@/stores/user'
 import { PROJECT_STATUS_LABEL, PROJECT_VISIBILITY_LABEL } from '@/config/labels'
 import ScrollLoader from '@/components/ScrollLoader.vue'
@@ -58,8 +61,11 @@ const userStore = useUserStore()
 const isAdmin = computed(() => userStore.role === 'SUPER_ADMIN' || userStore.role === 'DEPT_ADMIN')
 
 const formVisible = ref(false)
-const form = ref({ name: '', description: '', visibility: 'ORG', startDate: '', endDate: '' })
+const form = ref({ name: '', description: '', visibility: 'ORG', startDate: '', endDate: '', contestId: '' })
 const submitting = ref(false)
+
+/** 关联比赛候选（当前学期全部，选填）：挂载池按 contest_id 过滤，不关联的项目进不了对应比赛的池 */
+const contests = ref<ContestListItem[]>([])
 
 // 代建（仅管理员）：null=为自己建；选中成员后帮其创建（搜索走 A 线人员档案）
 const owner = ref<MemberListItem | null>(null)
@@ -79,7 +85,7 @@ function pickOwner(m: MemberListItem) {
 }
 
 function resetCreateForm() {
-  form.value = { name: '', description: '', visibility: 'ORG', startDate: '', endDate: '' }
+  form.value = { name: '', description: '', visibility: 'ORG', startDate: '', endDate: '', contestId: '' }
   owner.value = null
   ownerOptions.value = []
   ownerKw.value = ''
@@ -99,6 +105,7 @@ async function submit() {
       visibility: form.value.visibility,
       startDate: form.value.startDate,
       endDate: form.value.endDate,
+      ...(form.value.contestId ? { contestId: form.value.contestId } : {}),
       ...(owner.value ? { ownerMemberId: owner.value.id } : {})
     })
     ElMessage.success(owner.value
@@ -118,7 +125,14 @@ function stampClass(status: string): string {
   return 'dim'
 }
 
-onMounted(load)
+onMounted(async () => {
+  load()
+  try {
+    contests.value = await apiContests({})
+  } catch {
+    contests.value = [] // 比赛加载失败不阻断建项，仅无可选项
+  }
+})
 </script>
 
 <template>
@@ -177,6 +191,11 @@ onMounted(load)
         <input v-model="form.name" class="input-line" placeholder="如 智能循迹小车" />
         <label>项目简介</label>
         <textarea v-model="form.description" class="input-line" rows="3" placeholder="做什么、用什么技术"></textarea>
+        <label>关联比赛（选填：关联后才能被该比赛的赛队挂载）</label>
+        <select v-model="form.contestId" class="input-line">
+          <option value="">不关联（通用项目）</option>
+          <option v-for="c in contests" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
         <template v-if="isAdmin">
           <label>所有人（管理员代建，选填：不选=为自己创建）</label>
           <template v-if="owner">
