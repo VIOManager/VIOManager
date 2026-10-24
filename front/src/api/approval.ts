@@ -15,10 +15,13 @@ import type { PageResult } from './types'
 export type ApprovalView = 'TODO' | 'MINE' | 'TARGET'
 
 /**
- * 队长自治审批类型（2026-10-24 lzh 拍板）：队伍类与项目类单子归队长在队伍侧管理，
- * 管理员审批中心（TODO/已通过/已驳回）不展示、类型下拉不提供——管理员只管成果提交与学期切换。
+ * 队长自治审批类型（2026-10-24 lzh 拍板）：队伍类与项目查看授权归队长在队伍侧管理，
+ * 管理员审批中心（TODO/已通过/已驳回）不展示、类型下拉不提供——管理员只管成果提交、节点审核与学期切换。
+ * ⚠️ 节点审核（MILESTONE_APPROVE）属管理侧项目模块，2026-10-24 复查后从队长集合移回管理员。
  * ⚠️ 后端仍按原口径产出这些单子：MINE/TARGET 视角与队伍详情页照常处理不受影响；
- *    组队申请（TEAM_CREATE）已拍板队长直建免审批——后端改路由后该类型整体退役（交接说明已排给后端会话）
+ *    组队申请（TEAM_CREATE）已拍板队长直建免审批——后端改路由后该类型整体退役（交接说明已排给后端会话）；
+ *    移除队员（TEAM_REMOVE_MEMBER）与项目查看（PROJECT_VIEW）当前无目标人、原仅管理员可终结——
+ *    过滤后会挂起，路由处置（队长直接生效 / 改目标人终结）已列入后端交接说明待拍板
  */
 export const APPROVAL_CAPTAIN_TYPES: string[] = [
   'TEAM_CREATE',
@@ -26,20 +29,20 @@ export const APPROVAL_CAPTAIN_TYPES: string[] = [
   'TEAM_REMOVE_MEMBER',
   'TEAM_ADD_ADVISOR',
   'TEAM_DISSOLVE',
-  'PROJECT_VIEW',
-  'MILESTONE_APPROVE'
+  'PROJECT_VIEW'
 ]
 
 /**
  * 各角色类型下拉可选项（2026-10-24 lzh 拍板"按权能整"）：
- *   超管审成果与学期切换；部门管理员只审成果（学期切换超管专属）；
- *   学生（含队长）只列本人可发起/可被指向的类型——组队申请已随直建拍板退役、学期切换与学生无关，均不提供
+ *   超管审成果、节点与学期切换；部门管理员审成果与节点（学期切换超管专属）；
+ *   学生（含队长）只列本人可发起/可被指向的类型——组队申请已随直建拍板退役、
+ *   学期切换与节点审核跟学生无关，均不提供
  * ⚠️ 只约束筛选下拉不产噪音：列表内容仍以后端返回为准（如存量 TEAM_CREATE 单在学生"我发起的"里照常展示，靠 labels 兜底翻译）
  */
 export const APPROVAL_ROLE_TYPES: Record<string, string[]> = {
-  SUPER_ADMIN: ['ACHIEVEMENT_SUBMIT', 'SEMESTER_SWITCH'],
-  DEPT_ADMIN: ['ACHIEVEMENT_SUBMIT'],
-  STUDENT: ['TEAM_ADD_MEMBER', 'TEAM_REMOVE_MEMBER', 'TEAM_ADD_ADVISOR', 'TEAM_DISSOLVE', 'ACHIEVEMENT_SUBMIT', 'PROJECT_VIEW', 'MILESTONE_APPROVE']
+  SUPER_ADMIN: ['ACHIEVEMENT_SUBMIT', 'MILESTONE_APPROVE', 'SEMESTER_SWITCH'],
+  DEPT_ADMIN: ['ACHIEVEMENT_SUBMIT', 'MILESTONE_APPROVE'],
+  STUDENT: ['TEAM_ADD_MEMBER', 'TEAM_REMOVE_MEMBER', 'TEAM_ADD_ADVISOR', 'TEAM_DISSOLVE', 'ACHIEVEMENT_SUBMIT', 'PROJECT_VIEW']
 }
 
 /** 审批单状态（PENDING 为唯一活动态） */
