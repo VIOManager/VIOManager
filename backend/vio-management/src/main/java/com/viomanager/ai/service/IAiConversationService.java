@@ -27,4 +27,7 @@ public interface IAiConversationService {
 
     /** AI07 删除会话（逻辑删除连带消息按会话隔离自然不可见）：仅本人 */
     Result<Void> delete(Long conversationId);
+
+    /** 会话是否属于当前登录人（AI01 chat 预检用，不抛异常） */
+    boolean owned(Long conversationId);
 }

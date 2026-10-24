@@ -135,4 +135,12 @@ public class AiConversationServiceImpl implements IAiConversationService {
         }
         return conversation;
     }
+
+    @Override
+    public boolean owned(Long conversationId) {
+        return conversationMapper.selectCount(
+                new QueryWrapper<AiConversation>()
+                        .eq("id", conversationId)
+                        .eq("user_id", UserHolder.getUser().getUserId())) > 0;
+    }
 }

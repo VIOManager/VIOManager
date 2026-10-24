@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.viomanager.ai.dto.ChatDTO;
 import com.viomanager.ai.service.AiChatService;
 import com.viomanager.ai.service.AiStatusService;
-import com.viomanager.common.enums.AiErrorCode;
 import com.viomanager.common.result.Result;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
@@ -48,11 +47,13 @@ public class AiController {
     /**
      * AI01 发消息（SSE 流式）：事件序 meta → tool×N → delta×N → done｜error。
      * 不挂幂等键（清单 §3：生成型操作天然一次性，断流前端"重新生成"重发）。
+     * 预检失败（9100/9101）手写标准 Result JSON 返回，不进流（见类注释）。
      */
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chat(@Valid @RequestBody ChatDTO dto, HttpServletResponse response) throws IOException {
-        if (!aiStatusService.isEnabled()) {
-            writeJson(response, Result.fail(AiErrorCode.AI_NOT_ENABLED));
+        Result<Void> reject = aiChatService.preflight(dto);
+        if (reject != null) {
+            writeJson(response, reject);
             return null;
         }
         return aiChatService.chat(dto);
