@@ -14,6 +14,22 @@ import type { PageResult } from './types'
 /** 三视角（P01 必填参数） */
 export type ApprovalView = 'TODO' | 'MINE' | 'TARGET'
 
+/**
+ * 队长自治审批类型（2026-10-24 lzh 拍板）：队伍类与项目类单子归队长在队伍侧管理，
+ * 管理员审批中心（TODO/已通过/已驳回）不展示、类型下拉不提供——管理员只管成果提交与学期切换。
+ * ⚠️ 后端仍按原口径产出这些单子：MINE/TARGET 视角与队伍详情页照常处理不受影响；
+ *    其中组队申请（TEAM_CREATE）目前唯一审批路径是管理员，若要改为队长直建免审批需后端调路由（另行排期）
+ */
+export const APPROVAL_CAPTAIN_TYPES: string[] = [
+  'TEAM_CREATE',
+  'TEAM_ADD_MEMBER',
+  'TEAM_REMOVE_MEMBER',
+  'TEAM_ADD_ADVISOR',
+  'TEAM_DISSOLVE',
+  'PROJECT_VIEW',
+  'MILESTONE_APPROVE'
+]
+
 /** 审批单状态（PENDING 为唯一活动态） */
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED'
 

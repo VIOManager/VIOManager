@@ -4,12 +4,14 @@
  * 管理员页签：待办（只看待审——批准/驳回后单子离开本栏）/ 已通过 / 已驳回（已办记录，2026-10-19
  *   lzh 需求"批准的得有记录"；后端 TODO 视角本就返回全状态单子，这里按状态分栏呈现）
  * 参与人页签：我发起的 / 我是目标人——对超管隐藏（无发起/被指向场景且种子超管未绑档案，后端回 1003）
+ * 队长自治过滤（2026-10-24 lzh 拍板）：管理员三栏不展示队伍类/项目类单子（归队长管），
+ *   见 api/approval.ts APPROVAL_CAPTAIN_TYPES；学生/参与人视角不受影响
  * 操作入口全部在详情抽屉（按当前视角显隐按钮，已处理单子无操作钮；最终权限以后端判定为准——规范 §5.3）
  * 红点联动：打开详情即按当前视角标记已读（P07 置位幂等），处理操作后刷新 P08 红点
  */
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { apiApprovalList, apiMarkRead } from '@/api/approval'
+import { APPROVAL_CAPTAIN_TYPES, apiApprovalList, apiMarkRead } from '@/api/approval'
 import type { ApprovalItem, ApprovalRole, ApprovalView } from '@/api/approval'
 import { APPROVAL_STATUS_LABEL, APPROVAL_TYPE_LABEL } from '@/config/labels'
 import { useUserStore } from '@/stores/user'
@@ -20,15 +22,17 @@ import ApprovalDetailDrawer from './ApprovalDetailDrawer.vue'
 const user = useUserStore()
 const approval = useApprovalStore()
 
-const isAdmin = user.role !== 'STUDENT'
+/** 角色判定必须用 computed：身份是登录后/mock 刷新后异步恢复的，
+ *  普通常量在 setup 时取默认值（SUPER_ADMIN）就再也不变——学生 F5 会看到管理员页签（存量 bug 2026-10-24 修） */
+const isAdmin = computed(() => user.role !== 'STUDENT')
 
 /** 超管判定：MINE/TARGET 两个参与人视角对其隐藏（页面头注释里的口径） */
-const isSuperAdmin = user.role === 'SUPER_ADMIN'
+const isSuperAdmin = computed(() => user.role === 'SUPER_ADMIN')
 
 // ── 页签与筛选 ──
 /** 页签 key：TODO/MINE/TARGET 直连契约视角；DONE_OK/DONE_NO 是管理员已办记录页签（TODO 视角 + 固定状态） */
 type TabKey = ApprovalView | 'DONE_OK' | 'DONE_NO'
-const view = ref<TabKey>(isAdmin ? 'TODO' : 'MINE')
+const view = ref<TabKey>(isAdmin.value ? 'TODO' : 'MINE')
 const statusFilter = ref('')
 const typeFilter = ref('')
 const keyword = ref('')
@@ -44,16 +48,26 @@ const detailId = ref('')
 /** tab 配置：待办/已办无红点（管理员工作职责不进 P08）；MINE/TARGET 挂 P08 红点 */
 const tabs = computed(() => {
   const out: Array<{ key: TabKey; label: string; badge: number }> = []
-  if (isAdmin) {
+  if (isAdmin.value) {
     out.push({ key: 'TODO', label: '待办', badge: 0 })
     // 已办记录：批准/驳回过的单子按状态分栏留档（后端 TODO 视角全状态返回，前端按状态分栏）
     out.push({ key: 'DONE_OK', label: '已通过', badge: 0 })
     out.push({ key: 'DONE_NO', label: '已驳回', badge: 0 })
   }
   // 参与人视角对超管隐藏：部门管理员与学生的成果提审/授权申请/邀请通知照常汇总在这两栏
-  if (!isSuperAdmin) {
+  if (!isSuperAdmin.value) {
     out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
     out.push({ key: 'TARGET', label: '我是目标人', badge: approval.todoCount })
+  }
+  return out
+})
+
+/** 类型下拉可选项：管理员剔除队长自治类型（列表侧同步过滤，双保险） */
+const typeOptions = computed(() => {
+  const out: Array<{ value: string; label: string }> = []
+  for (const v of Object.keys(APPROVAL_TYPE_LABEL)) {
+    if (isAdmin.value && APPROVAL_CAPTAIN_TYPES.indexOf(v) >= 0) continue
+    out.push({ value: v, label: APPROVAL_TYPE_LABEL[v] })
   }
   return out
 })
@@ -66,11 +80,34 @@ function queryOf(): { view: ApprovalView; status?: string } {
   return { view: view.value, status: statusFilter.value || undefined }
 }
 
+/** 管理员视角滤掉队长自治类型（后端照常返回，这里按角色剔除） */
+function visibleForRole(items: ApprovalItem[]): ApprovalItem[] {
+  if (!isAdmin.value) return items
+  const out: ApprovalItem[] = []
+  for (const a of items) {
+    if (APPROVAL_CAPTAIN_TYPES.indexOf(a.bizType) < 0) out.push(a)
+  }
+  return out
+}
+
+/** 累计被隐藏的单数：管理员"共 N 单"与滚动加载终点都按可见口径算，分页游标不乱 */
+const hiddenTotal = ref(0)
+
+/** 落列表：过滤 + 总数扣减（load 清零后调用；loadMore 追加） */
+function applyResult(r: { list: ApprovalItem[]; total: number }): void {
+  const shown = visibleForRole(r.list)
+  hiddenTotal.value += r.list.length - shown.length
+  total.value = r.total - hiddenTotal.value
+  list.value = list.value.concat(shown)
+}
+
 /** 首次加载 / 切视角 / 筛选 / 处理完成刷新：清空回第 1 批 */
 async function load() {
   loading.value = true
   try {
     page.value = 1
+    list.value = []
+    hiddenTotal.value = 0
     const r = await apiApprovalList({
       ...queryOf(),
       bizType: typeFilter.value || undefined,
@@ -78,8 +115,7 @@ async function load() {
       page: 1,
       size
     })
-    list.value = r.list
-    total.value = r.total
+    applyResult(r)
   } catch {
     // 加载失败（网络/业务拒绝如 1003）：清掉旧列表，避免残留上一个视角的数据造成误读；
     // 错误提示已由 http.ts 统一弹出，这里只兜住不外抛
@@ -103,8 +139,7 @@ async function loadMore() {
       page: page.value,
       size
     })
-    list.value = list.value.concat(r.list)
-    total.value = r.total
+    applyResult(r)
   } catch {
     // 追加失败：保住已加载的行，仅结束本次加载；提示由 http.ts 统一弹
   } finally {
@@ -197,7 +232,7 @@ onMounted(load)
       </select>
       <select v-model="typeFilter" class="input-line" @change="onSearch">
         <option value="">全部类型</option>
-        <option v-for="(label, v) in APPROVAL_TYPE_LABEL" :key="v" :value="v">{{ label }}</option>
+        <option v-for="o in typeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
       </select>
       <button class="btn-line" @click="onSearch">查询</button>
     </div>
