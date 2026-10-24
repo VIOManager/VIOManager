@@ -41,10 +41,11 @@ export const ADMIN_MENU: MenuEntry[] = [
   { path: '/system', title: '系统配置', group: G.SYSTEM, roles: SUPER }
 ]
 
-/** 学生端菜单（PRD §4：显示"我的排班"，隐藏全部管理模块） */
+/** 学生端菜单（PRD §4：显示"我的排班"，隐藏全部管理模块；"我的项目"补 2026-10-24，学生可自主建项目挂赛队） */
 export const STUDENT_MENU: MenuEntry[] = [
   { path: '/my/overview', title: '我的概览', group: '我的', roles: ['STUDENT'] },
   { path: '/my/team', title: '我的赛队', group: '我的', roles: ['STUDENT'] },
+  { path: '/my/project', title: '我的项目', group: '我的', roles: ['STUDENT'] },
   { path: '/my/material', title: '我的材料', group: '我的', roles: ['STUDENT'] },
   { path: '/my/achievement', title: '我的成果', group: '我的', roles: ['STUDENT'] },
   { path: '/my/schedule', title: '我的排班', group: '我的', roles: ['STUDENT'] },
