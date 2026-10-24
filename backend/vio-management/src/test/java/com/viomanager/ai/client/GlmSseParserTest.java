@@ -57,4 +57,24 @@ class GlmSseParserTest {
         assertNull(parser.accept("data: {broken json"));
         assertNull(parser.accept("data: {\"choices\":[{\"delta\":{}}]}"), "无内容 chunk 忽略");
     }
+
+    @Test
+    void aggregatesToolCallsAcrossChunks() {
+        GlmSseParser parser = new GlmSseParser();
+        assertNull(parser.accept("data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                + "\"id\":\"call_abc\",\"type\":\"function\","
+                + "\"function\":{\"name\":\"queryMySchedule\",\"arguments\":\"\"}}]}}]}"));
+        assertNull(parser.accept("data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                + "\"function\":{\"arguments\":\"{\\\"semesterId\\\":\"}}]}}]}"));
+        assertNull(parser.accept("data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                + "\"function\":{\"arguments\":\"1}\"}}]}}]}"));
+        assertNull(parser.accept("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}"));
+        assertTrue(parser.accept("data: [DONE]").end());
+        assertEquals("tool_calls", parser.getFinishReason());
+        var calls = parser.toolCalls();
+        assertEquals(1, calls.size());
+        assertEquals("call_abc", calls.get(0).id());
+        assertEquals("queryMySchedule", calls.get(0).name());
+        assertEquals("{\"semesterId\":1}", calls.get(0).arguments(), "arguments 分片应拼接完整");
+    }
 }

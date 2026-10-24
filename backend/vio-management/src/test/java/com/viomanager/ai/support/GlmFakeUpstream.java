@@ -25,9 +25,15 @@ public final class GlmFakeUpstream implements AutoCloseable {
     /** 慢速流：延迟 4 秒再回，测试全局并发闸门时用来占住槽位 */
     public static final String SLOW_KEYWORD = "SLOWUPSTREAM";
 
+    /** 工具调用演练：该关键字的第 1 次请求回 tool_calls 流，第 2 次（带工具结果）回正常流 */
+    public static final String TOOLCALL_KEYWORD = "TOOLCALL";
+
     private final HttpServer server;
 
     private final AtomicReference<String> lastRequest = new AtomicReference<>();
+
+    private final java.util.concurrent.atomic.AtomicInteger requestCount =
+            new java.util.concurrent.atomic.AtomicInteger();
 
     private GlmFakeUpstream(HttpServer server) {
         this.server = server;
@@ -46,7 +52,7 @@ public final class GlmFakeUpstream implements AutoCloseable {
         return "http://127.0.0.1:" + server.getAddress().getPort() + "/api/paas/v4";
     }
 
-    /** 最近一次打到假上游的请求体（断言系统提示词/历史拼接/max_tokens） */
+    /** 最近一次打到假上游的请求体（断言系统提示词/历史拼接/max_tokens/工具结果） */
     public String lastRequestBody() {
         return lastRequest.get();
     }
@@ -54,6 +60,7 @@ public final class GlmFakeUpstream implements AutoCloseable {
     private void handle(HttpExchange exchange) throws IOException {
         String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
         lastRequest.set(body);
+        int sequence = requestCount.incrementAndGet();
         if (body.contains(FAIL_KEYWORD)) {
             respond(exchange, 500, "application/json", "{\"error\":\"upstream down\"}");
             return;
@@ -64,6 +71,17 @@ public final class GlmFakeUpstream implements AutoCloseable {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+        }
+        if (body.contains(TOOLCALL_KEYWORD) && sequence == 1) {
+            respond(exchange, 200, "text/event-stream",
+                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                            + "\"id\":\"call_test_1\",\"type\":\"function\","
+                            + "\"function\":{\"name\":\"queryMyAchievements\",\"arguments\":\"\"}}]}}]}\n\n"
+                            + "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                            + "\"function\":{\"arguments\":\"{}\"}}]}}]}\n\n"
+                            + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"
+                            + "data: [DONE]\n\n");
+            return;
         }
         String sse = body.contains(TRUNCATE_KEYWORD)
                 ? "data: {\"choices\":[{\"delta\":{\"content\":\"被截断的\"}}]}\n\n"
