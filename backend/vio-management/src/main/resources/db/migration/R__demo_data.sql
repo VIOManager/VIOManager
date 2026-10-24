@@ -20,7 +20,9 @@
 --
 -- 固定 ID 段位（测试与后续脚本勿占）：组织 1-4、成员 101-107、账号 201-208、
 -- 字典 901-904、学期 301、模板 401、比赛 402、赛队 501-502、队员 601-603、
--- 成果 701-702、项目 1001、查看授权 1002、审批单 801-807、审批流水 811-820
+-- 成果 701-702、项目 1001、查看授权 1002、审批单 801-807、审批流水 811-820、
+-- 班级映射 1111-1113、排班规则 1161-1190、排班 1201-1204
+-- （1121 与 1131-1150 曾用于假课表导入，2026-10-24 让位真数据已弃用，勿复用）
 -- =====================================================================
 
 -- ---------------- 组织树：1 中心 → 2/3/4 三协会直挂（PRD §3.3 泓海口径） ----------------
@@ -252,3 +254,83 @@ ON DUPLICATE KEY UPDATE
     operator_name = VALUES(operator_name), operator_role = VALUES(operator_role),
     comment_text = VALUES(comment_text), from_status = VALUES(from_status),
     to_status = VALUES(to_status), created_at = VALUES(created_at);
+
+-- ---------------- 排班演示：班级映射确认 + 排班规则 + 在排班次（2026-10-24 补） ----------------
+-- 背景：前端 mock 默认 2026-10-19 起关闭（d5bdce0），排班页切真实接口而排班四表全空，页面一度"没数据"。
+-- 课表数据不造假：组长 2026-10-24 已从前端导入真全校课表（87499 行教务 CSV），本节只补三样——
+-- ① 确认演示三班的班级映射：教务键 23-1 带杠 ↔ 档案 2301 不带杠，靠确认后的映射搭桥（PRD 铁规则：
+--   未确认班级不参与空课统计）。uk_class_mapping(semester_id, class_key) 唯一键让本 INSERT 与真导入
+--   自动生成的映射行幂等合并（走 UPDATE 分支置 confirmed=1），全新库则直接落地；ON DUP 刻意不碰
+--   import_id/class_key，真导入行的批次关联原样保留。
+-- ② 三协会排班规则：工作日第 1-2 节启用，每格 1-2 人。
+-- ③ 第 6 周（页面默认周，ScheduleGridPanel weekNo 初值 6）在排班次 4 条，槽位按真课表对齐：
+--   自动化23-1班第 10 周才开课、电信23-2班仅 1-4 周有形势与政策——第 6 周王小明/赵晓亮/孙小雨真无课；
+--   机械23-1班满课，冲突演示位落李浩然周一第 2 节撞「机械专业英语」（SC02 force 强排后果）。
+-- 历史包袱清理：本节当日早先版本曾造假导入批次 1121 与 20 行假课表（班级键用档案写法 2301 班，
+-- 与真导入的 23-1 班两套键并存会让宽容匹配撞歧义、反而把人挤出空闲名单），DELETE 让位真数据。
+DELETE FROM class_mapping WHERE id IN (1111, 1112, 1113)
+    AND class_key IN ('自动化2301班', '电信2302班', '机械2301班');
+DELETE FROM course_timetable WHERE import_id = 1121;
+DELETE FROM timetable_import WHERE id = 1121;
+INSERT INTO class_mapping (id, semester_id, import_id, class_key, class_name_raw, member_class_name,
+                           grade, grade_source, confirmed, confirmed_by, confirmed_at, org_id)
+VALUES
+    (1111, 301, NULL, '自动化23-1班', '自动化23-1班', '自动化2301班', '2023', 'CLASS_NAME', 1, 201, '2026-10-24 15:30:00', NULL),
+    (1112, 301, NULL, '电信23-2班',   '电信23-2班',   '电信2302班',   '2023', 'CLASS_NAME', 1, 201, '2026-10-24 15:30:00', NULL),
+    (1113, 301, NULL, '机械23-1班',   '机械23-1班',   '机械2301班',   '2023', 'CLASS_NAME', 1, 201, '2026-10-24 15:30:00', NULL)
+ON DUPLICATE KEY UPDATE
+    class_name_raw = VALUES(class_name_raw), member_class_name = VALUES(member_class_name),
+    grade = VALUES(grade), grade_source = VALUES(grade_source), confirmed = VALUES(confirmed),
+    confirmed_by = VALUES(confirmed_by), confirmed_at = VALUES(confirmed_at), org_id = VALUES(org_id);
+
+-- 三协会同款默认规则：工作日第 1-2 节启用，每格 1-2 人（对齐 mock 的 o11 故事；semester_id 留空=默认规则）
+INSERT INTO schedule_rule (id, sub_org_id, semester_id, weekday, slot_index, min_person, max_person, enabled, remark)
+VALUES
+    (1161, 2, NULL, 1, 1, 1, 2, 1, NULL),
+    (1162, 2, NULL, 1, 2, 1, 2, 1, NULL),
+    (1163, 2, NULL, 2, 1, 1, 2, 1, NULL),
+    (1164, 2, NULL, 2, 2, 1, 2, 1, NULL),
+    (1165, 2, NULL, 3, 1, 1, 2, 1, NULL),
+    (1166, 2, NULL, 3, 2, 1, 2, 1, NULL),
+    (1167, 2, NULL, 4, 1, 1, 2, 1, NULL),
+    (1168, 2, NULL, 4, 2, 1, 2, 1, NULL),
+    (1169, 2, NULL, 5, 1, 1, 2, 1, NULL),
+    (1170, 2, NULL, 5, 2, 1, 2, 1, NULL),
+    (1171, 3, NULL, 1, 1, 1, 2, 1, NULL),
+    (1172, 3, NULL, 1, 2, 1, 2, 1, NULL),
+    (1173, 3, NULL, 2, 1, 1, 2, 1, NULL),
+    (1174, 3, NULL, 2, 2, 1, 2, 1, NULL),
+    (1175, 3, NULL, 3, 1, 1, 2, 1, NULL),
+    (1176, 3, NULL, 3, 2, 1, 2, 1, NULL),
+    (1177, 3, NULL, 4, 1, 1, 2, 1, NULL),
+    (1178, 3, NULL, 4, 2, 1, 2, 1, NULL),
+    (1179, 3, NULL, 5, 1, 1, 2, 1, NULL),
+    (1180, 3, NULL, 5, 2, 1, 2, 1, NULL),
+    (1181, 4, NULL, 1, 1, 1, 2, 1, NULL),
+    (1182, 4, NULL, 1, 2, 1, 2, 1, NULL),
+    (1183, 4, NULL, 2, 1, 1, 2, 1, NULL),
+    (1184, 4, NULL, 2, 2, 1, 2, 1, NULL),
+    (1185, 4, NULL, 3, 1, 1, 2, 1, NULL),
+    (1186, 4, NULL, 3, 2, 1, 2, 1, NULL),
+    (1187, 4, NULL, 4, 1, 1, 2, 1, NULL),
+    (1188, 4, NULL, 4, 2, 1, 2, 1, NULL),
+    (1189, 4, NULL, 5, 1, 1, 2, 1, NULL),
+    (1190, 4, NULL, 5, 2, 1, 2, 1, NULL)
+ON DUPLICATE KEY UPDATE
+    sub_org_id = VALUES(sub_org_id), semester_id = VALUES(semester_id), weekday = VALUES(weekday),
+    slot_index = VALUES(slot_index), min_person = VALUES(min_person), max_person = VALUES(max_person),
+    enabled = VALUES(enabled), remark = VALUES(remark);
+
+INSERT INTO schedule (id, semester_id, week_no, sub_org_id, member_id, member_name, member_class_name,
+                      weekday, slot_index, slot_name, duty_name, course_conflict, conflict_note, status, org_id, remark)
+VALUES
+    (1201, 301, 6, 2, 103, '王小明', '自动化2301班', 1, 1, '第1-2节', '机房值守',     0, NULL, 'PLANNED', 2, NULL),
+    (1202, 301, 6, 3, 104, '赵晓亮', '电信2302班',   3, 2, '第3-4节', '设备巡检',     0, NULL, 'PLANNED', 3, NULL),
+    (1203, 301, 6, 3, 105, '孙小雨', '电信2302班',   2, 1, '第1-2节', '实验室值班',   0, NULL, 'PLANNED', 3, NULL),
+    (1204, 301, 6, 4, 106, '李浩然', '机械2301班',   1, 2, '第3-4节', '创客空间值守', 1, '第3-4节有课：机械专业英语（强制排入）', 'PLANNED', 4, NULL)
+ON DUPLICATE KEY UPDATE
+    semester_id = VALUES(semester_id), week_no = VALUES(week_no), sub_org_id = VALUES(sub_org_id),
+    member_id = VALUES(member_id), member_name = VALUES(member_name), member_class_name = VALUES(member_class_name),
+    weekday = VALUES(weekday), slot_index = VALUES(slot_index), slot_name = VALUES(slot_name),
+    duty_name = VALUES(duty_name), course_conflict = VALUES(course_conflict), conflict_note = VALUES(conflict_note),
+    status = VALUES(status), org_id = VALUES(org_id), remark = VALUES(remark);

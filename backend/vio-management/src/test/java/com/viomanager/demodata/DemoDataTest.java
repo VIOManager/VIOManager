@@ -142,4 +142,35 @@ class DemoDataTest {
                 Long.class);
         org.junit.jupiter.api.Assertions.assertEquals(3, dictItems == null ? 0 : dictItems);
     }
+
+    @Test
+    void scheduleDemoDataPresent() {
+        // 排班演示（2026-10-24 补）：课表走真导入（组长导的全校教务 CSV），种子只管映射确认/规则/班次。
+        // 断言一律收窄到种子固定 ID 段或固定键——演示库是活库，用户随时会经 UI 导数据/取消班次，
+        // 全表计数会被真数据打爆（曾因真导入 87499 行课表红过一次）
+        // 班级映射：演示三班确认（教务键 23-1 带杠 ↔ 档案 2301 不带杠靠映射搭桥；
+        // 真导入自动生成的映射行经 uk_class_mapping 幂等合并走 UPDATE 置位）
+        Long confirmed = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM class_mapping WHERE semester_id = 301 AND confirmed = 1 AND deleted = 0"
+                        + " AND class_key IN ('自动化23-1班', '电信23-2班', '机械23-1班')", Long.class);
+        org.junit.jupiter.api.Assertions.assertEquals(3, confirmed == null ? 0 : confirmed);
+        // 假课表历史包袱已清（当日早先版本曾造 20 行假课表，班级键与真导入两套写法撞宽容匹配歧义）
+        Long fakeCourses = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM course_timetable WHERE import_id = 1121", Long.class);
+        org.junit.jupiter.api.Assertions.assertEquals(0, fakeCourses == null ? 0 : fakeCourses);
+        // 排班规则：3 个协会各 10 格（工作日 1-2 节），种子固定 ID 段
+        Long rules = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM schedule_rule WHERE id BETWEEN 1161 AND 1190 AND deleted = 0", Long.class);
+        org.junit.jupiter.api.Assertions.assertEquals(30, rules == null ? 0 : rules);
+        // 在排班次：第 6 周（页面默认周）4 条 PLANNED（状态值对齐 ScheduleServiceImpl 真实口径，非 mock 的 ACTIVE）
+        Long duties = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM schedule WHERE id BETWEEN 1201 AND 1204 AND week_no = 6"
+                        + " AND status = 'PLANNED' AND deleted = 0", Long.class);
+        org.junit.jupiter.api.Assertions.assertEquals(4, duties == null ? 0 : duties);
+        // 冲突演示位 1 条：李浩然周一第 2 节（真课表机械23-1班该格有机械专业英语）
+        Long conflicts = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM schedule WHERE id BETWEEN 1201 AND 1204 AND course_conflict = 1"
+                        + " AND deleted = 0", Long.class);
+        org.junit.jupiter.api.Assertions.assertEquals(1, conflicts == null ? 0 : conflicts);
+    }
 }
