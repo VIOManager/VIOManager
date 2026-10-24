@@ -5,7 +5,7 @@
  * 写操作按规范 §6 带 X-Idempotency-Key（postIdem/putIdem/delIdem，键随每次点击生成，
  * 同审批/材料线的联调口径）；M12 技能替换后端未挂幂等，普通 PUT。
  */
-import { delIdem, download, get, postIdem, put, putIdem, upload } from './http'
+import { delIdem, delIdemBody, download, get, postIdem, put, putIdem, upload } from './http'
 import type { PageResult } from './types'
 
 export type MemberType = 'STUDENT' | 'TEACHER' | 'OTHER'
@@ -131,6 +131,11 @@ export function apiUpdateMember(id: string, body: MemberForm): Promise<MemberDet
 /** 队长拒删（3003）；当前登录账号拒删（3004） */
 export function apiDeleteMember(id: string): Promise<null> {
   return delIdem('/api/members/' + id, crypto.randomUUID())
+}
+/** 批量删除（M05B，2026-10-24 增）：整批拒绝——任一不可删（队长 3003 / 当前登录 3004）全批不动；
+ *  ids 走 DELETE body，单次上限 200。TODO(联调)：后端 M05B 落地前走 mock 演示 */
+export function apiBatchDeleteMembers(ids: string[]): Promise<null> {
+  return delIdemBody('/api/members', { ids }, crypto.randomUUID())
 }
 /** 完整身份证号（M10，写审计日志；仅超管/本部门管理员/本队队长/本人） */
 export function apiMemberIdCard(id: string): Promise<{ idCard: string }> {
