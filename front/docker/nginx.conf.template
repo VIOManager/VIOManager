@@ -26,6 +26,21 @@ server {
         client_max_body_size 210m;
     }
 
+    # AI 助手 SSE 流式（AI01 /api/ai/chat）：nginx 默认缓冲会把流攒住不吐（打字机变成一次性倾泻），
+    # 必须独立 location 关缓冲 + HTTP/1.1 长连接 + 放宽读超时（契约 keep-alive 注释行 15s 一发，120s 足够宽裕）
+    location /api/ai/ {
+        proxy_pass ${BACKEND_ORIGIN};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 120s;
+        client_max_body_size 30m;
+    }
+
     # 接口同源反代到后端（默认宿主机 8088；全容器化部署时改成 compose 服务名）
     location /api/ {
         proxy_pass ${BACKEND_ORIGIN};

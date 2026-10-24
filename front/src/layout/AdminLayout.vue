@@ -6,6 +6,7 @@
  */
 import SideMenu from './SideMenu.vue'
 import TopBar from './TopBar.vue'
+import AiFab from '@/components/ai/AiFab.vue'
 </script>
 
 <template>
@@ -17,6 +18,7 @@ import TopBar from './TopBar.vue'
         <router-view />
       </main>
     </div>
+    <AiFab />
   </div>
 </template>
 
