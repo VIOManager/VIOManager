@@ -57,6 +57,13 @@ function isSelf(m: TeamMemberItem): boolean {
   return m.name === user.realName
 }
 
+/** TE11 字段可见性（仅展示口径，安全边界仍以后端裁剪为准）：管理视角/队长/指导教师看全队，队员只看本人行。
+ *  字段为空时按此区分文案：有权看但没填 →「未填写」，无权看（后端裁成 null）→「无权查看」（2026-10-24 修复） */
+function canSeeField(m: TeamMemberItem): boolean {
+  const vr = detail.value?.viewerRole
+  return vr === 'LEADER' || vr === 'ADVISOR' || vr === 'ADMIN' || isSelf(m)
+}
+
 async function onRemove(m: TeamMemberItem) {
   try {
     await ElMessageBox.confirm('确认移除队员「' + m.name + '」？移除立即生效（队长管理权，已挂审计）。', '移除队员', {
@@ -197,9 +204,9 @@ async function onRemoveAdvisor(id: string) {
               <td><span class="stamp" :class="m.status === 'CONFIRMED' ? 'ok' : m.status === 'UNCONFIRMED' ? 'warn' : 'bad'">{{ TEAM_MEMBER_STATUS_LABEL[m.status] }}</span></td>
               <td class="fs" style="font-size: 12px">
                 <template v-if="m.college">{{ m.college }}<template v-if="m.className"> · {{ m.className }}</template></template>
-                <span v-else style="color: var(--vio-ink-3)">无权查看</span>
+                <span v-else style="color: var(--vio-ink-3)">{{ canSeeField(m) ? '未填写' : '无权查看' }}</span>
               </td>
-              <td><MaskField v-if="m.phone" :text="m.phone" kind="phone" /><span v-else class="fs" style="color: var(--vio-ink-3); font-size: 12px">无权查看</span></td>
+              <td><MaskField v-if="m.phone" :text="m.phone" kind="phone" /><span v-else class="fs" style="color: var(--vio-ink-3); font-size: 12px">{{ canSeeField(m) ? '未填写' : '无权查看' }}</span></td>
               <td class="nw">
                 <template v-if="m.status === 'UNCONFIRMED' && isSelf(m)">
                   <button class="btn-act" @click="onConfirm(m, 'CONFIRM')">确认加入</button>

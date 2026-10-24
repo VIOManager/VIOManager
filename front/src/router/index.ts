@@ -23,6 +23,7 @@ const REAL_PAGES: Record<string, () => Promise<unknown>> = {
   '/competition': () => import('@/views/competition/CompetitionPage.vue'),
   '/team': () => import('@/views/team/TeamPage.vue'),
   '/my/team': () => import('@/views/my/MyTeamPage.vue'),
+  '/my/project': () => import('@/views/my/MyProjectPage.vue'),
   '/material': () => import('@/views/material/MaterialPage.vue'),
   '/my/material': () => import('@/views/my/MyMaterialPage.vue'),
   '/achievement': () => import('@/views/achievement/AchievementPage.vue'),
