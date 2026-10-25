@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class QueryMyAchievementsTool implements AiTool {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    @Resource
+    private ObjectMapper objectMapper;
 
     @Resource
     private AchievementService achievementService;
@@ -36,6 +37,6 @@ public class QueryMyAchievementsTool implements AiTool {
 
     @Override
     public String execute(JsonNode args, CurrentUser user) throws Exception {
-        return MAPPER.writeValueAsString(achievementService.myContributions());
+        return objectMapper.writeValueAsString(achievementService.myContributions());
     }
 }

@@ -64,6 +64,7 @@ public class AiChatFlow {
         String finishReason = null;
         try {
             for (int round = 0; round < MAX_ROUNDS; round++) {
+                int roundReplyMark = reply.length();
                 GlmSseParser parser = new GlmSseParser();
                 GlmClient.StreamHandle handle = client.prepareStream(
                         buildRequestBody(client, messages),
@@ -75,6 +76,8 @@ public class AiChatFlow {
                 if (!"tool_calls".equals(finishReason) || parser.toolCalls().isEmpty()) {
                     break;  //终轮：done 事件已在 consumeLine 发出
                 }
+                //工具轮的过程自语（模型在 content 里吐的工具名/伪代码）不进落库正文
+                reply.setLength(roundReplyMark);
                 for (GlmSseParser.ToolCall call : parser.toolCalls()) {
                     sendToolEvent(emitter, call.name(), "start");
                     String result = executeToolSafe(call, user);
@@ -90,13 +93,20 @@ public class AiChatFlow {
         }
     }
 
-    /** 上游每一行：文本增量发 delta；[DONE] 发 done（工具轮不发——还有下一轮） */
+    /**
+     * 上游每一行：文本增量发 delta；[DONE] 发 done（工具轮不发——还有下一轮）。
+     * 工具轮抑制：本轮出现过 tool_calls 增量后，同轮的 content 是模型过程自语
+     * （如"queryMySchedule()"伪代码），不再下发也不进 reply。
+     */
     private void consumeLine(SseEmitter emitter, GlmSseParser parser, StringBuilder reply, String line) {
         GlmStreamEvent event = parser.accept(line);
         if (event == null) {
             return;
         }
         if (event.text() != null) {
+            if (parser.hasToolCalls()) {
+                return;
+            }
             reply.append(event.text());
             ObjectNode delta = MAPPER.createObjectNode();
             delta.put("text", event.text());

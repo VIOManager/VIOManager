@@ -96,6 +96,11 @@ public class GlmSseParser {
         return calls;
     }
 
+    /** 本轮流里是否已出现过 tool_calls 增量（过程自语抑制用：出现后同轮 content 不再下发） */
+    public boolean hasToolCalls() {
+        return !toolCallAggs.isEmpty();
+    }
+
     private void aggregateToolCalls(JsonNode toolCalls) {
         if (!toolCalls.isArray()) {
             return;

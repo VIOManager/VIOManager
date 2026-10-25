@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class QueryMyWeeklyPerformanceTool implements AiTool {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    @Resource
+    private ObjectMapper objectMapper;
 
     @Resource
     private PerformanceWeeklyService weeklyService;
@@ -43,6 +44,6 @@ public class QueryMyWeeklyPerformanceTool implements AiTool {
     public String execute(JsonNode args, CurrentUser user) throws Exception {
         Long semesterId = args.path("semesterId").isNumber() ? args.path("semesterId").asLong() : null;
         String status = args.path("status").isTextual() ? args.path("status").asText() : null;
-        return MAPPER.writeValueAsString(weeklyService.myWeeklies(semesterId, status));
+        return objectMapper.writeValueAsString(weeklyService.myWeeklies(semesterId, status));
     }
 }

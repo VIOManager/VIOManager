@@ -90,6 +90,8 @@ class AiChatToolCallTest {
                 "工具应以当前用户身份真实执行并回传结果：" + toolMessage.path("content").asText());
 
         Assertions.assertTrue(body.contains("\"finishReason\":\"stop\""), "工具往返后应正常 done：" + body);
+        Assertions.assertFalse(body.contains("defaultManager"),
+                "工具轮的过程自语（伪代码）不得发给用户：" + body);
     }
 
     // ---------- 支撑 ----------
