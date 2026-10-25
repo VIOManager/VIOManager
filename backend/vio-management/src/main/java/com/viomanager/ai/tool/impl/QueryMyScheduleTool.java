@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class QueryMyScheduleTool implements AiTool {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    @Resource
+    private ObjectMapper objectMapper;
 
     @Resource
     private ScheduleService scheduleService;
@@ -43,6 +44,6 @@ public class QueryMyScheduleTool implements AiTool {
     public String execute(JsonNode args, CurrentUser user) throws Exception {
         Long semesterId = args.path("semesterId").isNumber() ? args.path("semesterId").asLong() : null;
         Integer weekNo = args.path("weekNo").isNumber() ? args.path("weekNo").asInt() : null;
-        return MAPPER.writeValueAsString(scheduleService.my(semesterId, weekNo));
+        return objectMapper.writeValueAsString(scheduleService.my(semesterId, weekNo));
     }
 }
