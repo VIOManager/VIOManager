@@ -5,10 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.viomanager.ai.tool.AiTool;
 import com.viomanager.common.auth.CurrentUser;
+import com.viomanager.common.result.Result;
 import com.viomanager.team.service.ITeamQueryService;
+import com.viomanager.team.vo.TeamListItemVO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,7 +36,8 @@ public class QueryTeamTool implements AiTool {
     @Override
     public String description() {
         return "查询赛队信息：传 teamId 返回该队详情与队员名单；"
-                + "不传 teamId 时按 contestId 或 keyword（队名/项目名）列出可见的赛队列表";
+                + "不传 teamId 时按 contestId 或 keyword 列出可见的赛队列表"
+                + "（keyword 只传纯队名或项目名，不带其他字）";
     }
 
     @Override
@@ -57,7 +61,12 @@ public class QueryTeamTool implements AiTool {
         }
         Long contestId = args.path("contestId").isNumber() ? args.path("contestId").asLong() : null;
         String keyword = args.path("keyword").isTextual() ? args.path("keyword").asText() : null;
-        return objectMapper.writeValueAsString(
-                Map.of("teams", teamQueryService.listTeams(contestId, keyword)));
+        Result<List<TeamListItemVO>> teams = teamQueryService.listTeams(contestId, keyword);
+        //qwen2.5 会把"星辰算法队的管理"整句塞进 keyword，LIKE 全串匹配不到；
+        //关键词没中就退化为全量列表（数据范围不变），模型自己对名找队
+        if (keyword != null && (teams.getData() == null || teams.getData().isEmpty())) {
+            teams = teamQueryService.listTeams(contestId, null);
+        }
+        return objectMapper.writeValueAsString(Map.of("teams", teams));
     }
 }

@@ -106,6 +106,17 @@ class AiAdminToolTest {
     }
 
     @Test
+    void sloppyKeywordShouldFallBackToFullList() throws Exception {
+        //qwen2.5 实测会把整句塞进 keyword：LIKE 匹配不到时应回退全量列表（数据范围不变），
+        //而不是把空列表交给模型让它答"没有找到"
+        JsonNode args = MAPPER.createObjectNode().put("keyword", "星辰算法队的管理完成了吗");
+        String result = toolsByName.get("queryTeam").execute(args, superAdmin);
+        JsonNode node = MAPPER.readTree(result);
+        Assertions.assertEquals(0, node.path("teams").path("code").asInt(),
+                "回退后仍应是 code=0 的列表查询：" + result);
+    }
+
+    @Test
     void superAdminShouldQueryMissingMaterials() throws Exception {
         String result = toolsByName.get("queryTeamsMissingMaterials").execute(emptyArgs(), superAdmin);
         JsonNode node = MAPPER.readTree(result);
