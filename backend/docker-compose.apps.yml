@@ -104,6 +104,11 @@ services:
     image: vio-backend-app:dev
     container_name: vio-app
     profiles: ["app"]
+    # AI 助手连宿主 Ollama 用 host.docker.internal（不随校园网 DHCP 漂移）：
+    # 2026-10-23 教训是裸用它会被 DNS 解析成 IPv6 且不通，extra_hosts 落 /etc/hosts
+    # 显式 IPv4（host-gateway 指向宿主网关）绕开 DNS；2026-10-25 起治本口径
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       # 容器网络内用服务名 + 容器原端口直连（MySQL 是 3306，不是宿主映射的 3307）
       MYSQL_HOST: mysql
