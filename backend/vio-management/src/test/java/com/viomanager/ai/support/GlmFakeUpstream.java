@@ -98,6 +98,9 @@ public final class GlmFakeUpstream implements AutoCloseable {
                     "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
                             + "\"id\":\"call_test_1\",\"type\":\"function\","
                             + "\"function\":{\"name\":\"queryMyAchievements\",\"arguments\":\"\"}}]}}]}\n\n"
+                            //模型过程自语（工具调用之后的伪代码）：编排层必须抑制，不得发给用户
+                            + "data: {\"choices\":[{\"delta\":{\"content\":"
+                            + "\"defaultManager.queryMyAchievements()\"}}]}\n\n"
                             + "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
                             + "\"function\":{\"arguments\":\"{}\"}}]}}]}\n\n"
                             + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"
