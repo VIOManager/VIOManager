@@ -52,7 +52,8 @@ public class QueryMemberTeamsTool implements AiTool {
     @Override
     public String description() {
         return "按姓名或学号查询某个成员参加的赛队与比赛（含队长身份与队伍状态）；"
-                + "问\"他/她/某人参加过什么比赛、在哪个队\"时用本工具，仅管理角色可用";
+                + "凡是问及具体某个成员——\"某某是谁\"\"有没有某某这个人\"\"他参加过什么比赛\""
+                + "\"他在哪个队\"——都用本工具，姓名学号就在用户消息里时直接作参数传入；仅管理角色可用";
     }
 
     @Override

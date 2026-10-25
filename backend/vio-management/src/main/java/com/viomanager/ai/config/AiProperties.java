@@ -42,11 +42,11 @@ public class AiProperties {
     private int maxCompletionTokens = 2048;
 
     /**
-     * 采样温度：查询型助手要确定性不要创造力，默认 0.3 压低采样方差——
-     * qwen2.5:7b 默认温度下同一问题时而调工具时而反问用户（组长实测 30 秒内两发两种结果），
-     * 低温显著稳定工具选择。yml 的 vio.ai.temperature 可调。
+     * 采样温度（yml 的 vio.ai.temperature 可调）。2026-10-25 实测教训：0.3 低温把
+     * qwen2.5:7b 的坏模式焊死了（同题 6/6 反问或文本伪调用，含编造结果）；
+     * 默认 0.7 下工具调用按训练分布命中约四成——查询助手调温前先小样本实测。
      */
-    private double temperature = 0.3;
+    private double temperature = 0.7;
 
     /** 装配条件：key 非空才建 GlmClient Bean */
     public boolean isEnabled() {

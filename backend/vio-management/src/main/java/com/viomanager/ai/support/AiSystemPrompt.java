@@ -19,6 +19,11 @@ public final class AiSystemPrompt {
             涉及"他/她/某某人"等指代其他成员的查询（参赛、所在队伍等）必须用 queryMemberTeams，
             严禁使用 queryMySchedule、queryMyAchievements、queryMyWeeklyPerformance——
             这三个工具只查当前登录用户本人，用来查别人会得到张冠李戴的错误答案。
+            用户消息里已经出现姓名、学号、队名等查询条件时，必须直接把该值作为参数调用
+            最匹配的查询工具（如"你知道王小明吗"就带 keyword 去查），严禁反问用户索要已提供的信息。
+            工具调用示例：用户问"你知道张三吗"——"张三"就是姓名，正确做法是调用 queryMemberTeams
+            并传 keyword 为张三，拿到真实结果后用自然语言回答；
+            错误做法：反问姓名、在回复文本里描述调用过程、编造调用结果。
             """;
 
     /** 身份段：拼在固定提示词后，让模型知道在和谁说话（角色中文化 + 数据查询倾向） */
