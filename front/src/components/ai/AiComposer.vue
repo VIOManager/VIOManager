@@ -4,12 +4,19 @@
  * 交互口径：ENTER 发送 / SHIFT+ENTER 换行；上限 500 字（契约 AI01 body.content 1-500）
  * 不可用态：服务未启用/未部署（禁输入并提示）或生成中（等流收完再问）
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { AI_QUICK_QUESTIONS } from '@/api/ai'
 import { useAiStore } from '@/stores/ai'
+import { useUserStore } from '@/stores/user'
 
 const ai = useAiStore()
+const user = useUserStore()
 const text = ref('')
+
+/** 快捷问题按角色出题：学生自查类，管理员管理类（role 异步恢复，必须 computed 防冻结默认值） */
+const quickQuestions = computed(() =>
+  user.role === 'STUDENT' ? AI_QUICK_QUESTIONS.STUDENT : AI_QUICK_QUESTIONS.ADMIN
+)
 
 function send(): void {
   if (text.value.trim() === '' || !ai.canSend) return
@@ -28,9 +35,9 @@ function onKeydown(e: KeyboardEvent): void {
 
 <template>
   <div>
-    <!-- 快捷提问：点即发送（学生自查类高频问题） -->
+    <!-- 快捷提问：点即发送（按角色出题——学生自查类 / 管理员管理类） -->
     <div class="chips">
-      <button v-for="q in AI_QUICK_QUESTIONS" :key="q" class="qchip" :disabled="!ai.canSend" @click="ai.send(q)">{{ q }}</button>
+      <button v-for="q in quickQuestions" :key="q" class="qchip" :disabled="!ai.canSend" @click="ai.send(q)">{{ q }}</button>
     </div>
 
     <div class="inputbar">
