@@ -100,4 +100,31 @@ class AiRateLimiterTest {
         }
         assertEquals(3, limiter.remaining(1L), "探针查余量本身不消耗配额");
     }
+
+    @Test
+    void retryAfterSecondsCountsDownWithWindow() {
+        AiRateLimiter limiter = limiter();
+        assertEquals(1, limiter.retryAfterSeconds(1L), "无记录至少建议 1 秒");
+        for (int i = 0; i < 6; i++) {
+            limiter.tryAcquire(1L);
+        }
+        long immediately = limiter.retryAfterSeconds(1L);
+        assertTrue(immediately >= 1 && immediately <= 60, "建议值应在 1-60 秒内，实际 " + immediately);
+        clock.advanceMillis(30_000L);
+        long later = limiter.retryAfterSeconds(1L);
+        assertTrue(later < immediately, "窗口推进后建议重试秒数应缩短");
+        clock.advanceMillis(31_000L);
+        assertTrue(limiter.tryAcquire(1L), "窗口滑出后应重新放行");
+    }
+
+    @Test
+    void globalSlotLimitsAndReleases() {
+        AiRateLimiter limiter = limiter();
+        for (int i = 0; i < 5; i++) {
+            assertTrue(limiter.tryAcquireGlobalSlot(), "前 5 个全局并发槽应可拿");
+        }
+        assertFalse(limiter.tryAcquireGlobalSlot(), "第 6 个全局并发槽应拿不到");
+        limiter.releaseGlobalSlot();
+        assertTrue(limiter.tryAcquireGlobalSlot(), "释放后应可再拿");
+    }
 }

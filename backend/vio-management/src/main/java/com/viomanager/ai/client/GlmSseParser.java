@@ -2,27 +2,44 @@ package com.viomanager.ai.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.Getter;
 
 /**
  * OpenAI 兼容 SSE 流解析器（云端智谱 / 本地 Ollama 同一口子）。
  * 逐行喂上游原始行（含 "data:" 前缀），返回 GlmStreamEvent；
- * finish_reason 与 usage 可能分落在不同 chunk，parser 内部聚合，
- * [DONE] 行触发流终止事件，之后由调用方读 getFinishReason / token 数。
+ * finish_reason / usage / tool_calls 均为跨 chunk 聚合态，[DONE] 行触发流终止事件后读取。
+ * tool_calls 按 index 聚合：id 与 function.name 首个 chunk 给全，arguments 分片到达逐段拼接。
  * 非线程安全：一条上游流一个实例。
- * 解析失败的行静默忽略（上游加字段/心跳行不炸流），只记不了日志——技术层兜底口径。
+ * 解析失败的行静默忽略（上游加字段/心跳行不炸流）——技术层兜底口径。
  */
 @Getter
 public class GlmSseParser {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** 聚合的结束原因：stop 正常 / length 截断 / tool_calls 要工具（Step6） */
+    /** 聚合的结束原因：stop / length 截断 / tool_calls 要工具 */
     private String finishReason;
 
     /** 聚合的 usage（stream_options.include_usage 的收尾 chunk 才带，可能始终没有） */
     private Long promptTokens;
     private Long completionTokens;
+
+    /** 按上游 index 聚合的工具调用 */
+    private final Map<Integer, ToolCallAgg> toolCallAggs = new LinkedHashMap<>();
+
+    /** 一次模型点名的工具调用（聚合完成后读取） */
+    public record ToolCall(String id, String name, String arguments) {
+    }
+
+    static final class ToolCallAgg {
+        String id;
+        String name;
+        final StringBuilder arguments = new StringBuilder();
+    }
 
     /**
      * 消费一行上游 SSE 输出；返回 null 表示忽略（空行/注释/无内容的 chunk）。
@@ -51,10 +68,12 @@ public class GlmSseParser {
         JsonNode choice = choices.isArray() && !choices.isEmpty() ? choices.get(0) : null;
         String text = null;
         if (choice != null) {
-            String content = choice.path("delta").path("content").asText(null);
+            JsonNode delta = choice.path("delta");
+            String content = delta.path("content").asText(null);
             if (content != null && !content.isEmpty()) {
                 text = content;
             }
+            aggregateToolCalls(delta.path("tool_calls"));
             String finish = choice.path("finish_reason").asText(null);
             if (finish != null && !finish.isEmpty()) {
                 this.finishReason = finish;
@@ -66,5 +85,36 @@ public class GlmSseParser {
             this.completionTokens = usage.path("completion_tokens").asLong(0);
         }
         return text != null ? GlmStreamEvent.ofText(text) : null;
+    }
+
+    /** 流终止后的工具调用清单（未聚合到任何调用返回空列表） */
+    public List<ToolCall> toolCalls() {
+        List<ToolCall> calls = new ArrayList<>();
+        for (ToolCallAgg agg : toolCallAggs.values()) {
+            calls.add(new ToolCall(agg.id, agg.name, agg.arguments.toString()));
+        }
+        return calls;
+    }
+
+    private void aggregateToolCalls(JsonNode toolCalls) {
+        if (!toolCalls.isArray()) {
+            return;
+        }
+        for (JsonNode item : toolCalls) {
+            int index = item.path("index").asInt(0);
+            ToolCallAgg agg = toolCallAggs.computeIfAbsent(index, k -> new ToolCallAgg());
+            String id = item.path("id").asText(null);
+            if (id != null && !id.isEmpty()) {
+                agg.id = id;
+            }
+            String name = item.path("function").path("name").asText(null);
+            if (name != null && !name.isEmpty()) {
+                agg.name = name;
+            }
+            String argsPart = item.path("function").path("arguments").asText(null);
+            if (argsPart != null && !argsPart.isEmpty()) {
+                agg.arguments.append(argsPart);
+            }
+        }
     }
 }

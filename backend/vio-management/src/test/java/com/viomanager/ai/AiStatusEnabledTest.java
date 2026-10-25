@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.viomanager.ai.client.GlmClient;
+import com.viomanager.ai.support.GlmFakeUpstream;
 import com.viomanager.auth.entity.SysUser;
 import com.viomanager.auth.mapper.SysUserMapper;
 import org.junit.jupiter.api.Assertions;
@@ -17,18 +18,28 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * AI02 探针（装配态）：properties 注入占位假 key 起独立上下文——只验证 Bean 装配与探针回显，
- * 不发任何真实请求。⚠️ 该值是测试占位串，不是真实密钥（红线：真 key 绝不进代码）。
+ * AI02 探针（装配态）：占位假 key（测试串非真实密钥，红线：真 key 绝不进代码）。
+ * DynamicPropertySource 与其余 AI 流式测试类完全同值——共享同一个上下文，
+ * 不再多起连接池（全量 Too many connections 的教训，见 GlmFakeUpstream 注释）。
  */
-@SpringBootTest(properties = "vio.ai.api-key=test-dummy-key-not-real")
+@SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
 class AiStatusEnabledTest {
+
+    @DynamicPropertySource
+    static void glmProperties(DynamicPropertyRegistry registry) throws Exception {
+        GlmFakeUpstream upstream = GlmFakeUpstream.shared();
+        registry.add("vio.ai.api-key", () -> "test-dummy-key-not-real");
+        registry.add("vio.ai.base-url", upstream::baseUrl);
+    }
 
     @Autowired
     private MockMvc mockMvc;

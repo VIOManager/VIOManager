@@ -110,21 +110,30 @@ class PersonCommandTest extends PersonTestBase {
     @Test
     void skillsEditableBySelfWithDictValidation() throws Exception {
         String selfToken = createUserAndLogin("cmd_self_skill", "STUDENT", ORG_CS, PERSON_BIND);
-        //1.本人改技能 → 成功且落库带 label
+        //1.本人改技能 → 成功且落库（提交项=字典显示名；字典条目值 BACKEND≠名 后端开发，
+        //  2026-10-24 label 语系拍板后只有显示名是合法提交项）
         mockMvc.perform(put("/api/members/" + PERSON_BIND + "/skills")
                         .header("Authorization", "Bearer " + selfToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"skills\":[\"BACKEND\"]}"))
+                        .content("{\"skills\":[\"后端开发\"]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
         org.junit.jupiter.api.Assertions.assertEquals(1, count(
-                "SELECT COUNT(*) FROM member_skill WHERE member_id = ? AND skill_value = 'BACKEND'",
+                "SELECT COUNT(*) FROM member_skill WHERE member_id = ? AND skill_value = '后端开发' "
+                        + "AND skill_label = '后端开发'",
                 PERSON_BIND));
-        //2.字典外的值 → 1001
+        //2.字典外的显示名 → 1001
         mockMvc.perform(put("/api/members/" + PERSON_BIND + "/skills")
                         .header("Authorization", "Bearer " + selfToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"skills\":[\"HACKING\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(1001));
+        //3.旧口径的条目值（BACKEND）不再是合法提交项 → 1001（label 语系的行为翻转锁定）
+        mockMvc.perform(put("/api/members/" + PERSON_BIND + "/skills")
+                        .header("Authorization", "Bearer " + selfToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"skills\":[\"BACKEND\"]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(1001));
     }

@@ -92,7 +92,9 @@ class AiConversationTest {
         Long first = createConversation(ownerToken, "ai_conv_b1", "第一个会话");
         Long second = createConversation(ownerToken, "ai_conv_b2", "第二个会话");
         createConversation(strangerToken, "ai_conv_b3", "陌生人的会话");
-        //改第一个会话标题推高其 updated_at，断言倒序感知更新而非创建顺序
+        //updated_at 是 DATETIME(0) 秒级精度：同秒内改标题与建会话无法区分先后（SwitchTaskTest 同款坑），
+        //跨秒再改标题，倒序断言才确定
+        Thread.sleep(1100);
         mockMvc.perform(patch("/api/ai/conversations/" + first)
                         .header("Authorization", "Bearer " + ownerToken)
                         .contentType(MediaType.APPLICATION_JSON)

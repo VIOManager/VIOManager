@@ -1,8 +1,11 @@
 package com.viomanager.ai.support;
 
+import com.viomanager.common.auth.CurrentUser;
+
 /**
  * 固定在服务端的系统提示词（接口清单 §6：不接受前端传入——提示注入防护的第一道墙）。
- * 内容原则：只交代身份与边界，不承诺工具（工具清单随 Step6 白名单注册后由编排层动态追加）。
+ * 用户身份段来自 JWT 验签后的 CurrentUser（服务端注入，非请求参数，不可伪造）——
+ * 没有它模型不知道"我是谁"，会把已登录用户答成未登录。
  */
 public final class AiSystemPrompt {
 
@@ -13,6 +16,24 @@ public final class AiSystemPrompt {
             你没有任何写操作的权限，不要声称可以代替用户提交、审批或修改数据。
             """;
 
+    /** 身份段：拼在固定提示词后，让模型知道在和谁说话（角色中文化 + 数据查询倾向） */
+    public static String forUser(CurrentUser user) {
+        String name = user.getRealName() != null && !user.getRealName().isBlank()
+                ? user.getRealName() : user.getLoginName();
+        return TEXT + "当前登录用户是：" + name + "（" + roleCn(user.getRole()) + "）。"
+                + "用户已通过平台登录，询问本人相关信息时优先调用查询工具获取后回答。\n";
+    }
+
+    private static String roleCn(String role) {
+        return switch (role == null ? "" : role) {
+            case "SUPER_ADMIN" -> "超级管理员";
+            case "DEPT_ADMIN" -> "部门管理员";
+            case "STUDENT" -> "学生";
+            default -> "用户";
+        };
+    }
+
     private AiSystemPrompt() {
     }
 }
+
