@@ -176,13 +176,15 @@ public class AiChatFlow {
         sendEvent(emitter, "tool", tool);
     }
 
-    /** OpenAI 兼容请求体：系统提示词服务端固定；白名单 tools；max_tokens 拍板 2048 */
+    /** OpenAI 兼容请求体：系统提示词服务端固定；白名单 tools；max_tokens 拍板 2048；
+     *  温度 0.3（AiProperties）压采样方差——查询助手要稳定的工具选择，不要发散 */
     private String buildRequestBody(GlmClient client, ArrayNode messages) {
         ObjectNode root = MAPPER.createObjectNode();
         root.put("model", client.getModel());
         root.set("messages", messages);
         root.put("stream", true);
         root.put("max_tokens", properties.getMaxCompletionTokens());
+        root.put("temperature", properties.getTemperature());
         root.putObject("stream_options").put("include_usage", true);
         root.set("tools", toolRegistry.toolsDefinition());
         return root.toString();

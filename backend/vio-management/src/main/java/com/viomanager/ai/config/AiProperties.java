@@ -41,6 +41,13 @@ public class AiProperties {
     /** 单次回复 token 上限，超限截断记 interrupted（2026-10-24 拍板 2048） */
     private int maxCompletionTokens = 2048;
 
+    /**
+     * 采样温度（yml 的 vio.ai.temperature 可调）。2026-10-25 实测教训：0.3 低温把
+     * qwen2.5:7b 的坏模式焊死了（同题 6/6 反问或文本伪调用，含编造结果）；
+     * 默认 0.7 下工具调用按训练分布命中约四成——查询助手调温前先小样本实测。
+     */
+    private double temperature = 0.7;
+
     /** 装配条件：key 非空才建 GlmClient Bean */
     public boolean isEnabled() {
         return apiKey != null && !apiKey.isBlank();
