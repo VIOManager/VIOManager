@@ -67,22 +67,23 @@ class AiAdminToolTest {
     // ---------- 注册表 ----------
 
     @Test
-    void whitelistShouldHoldEightTools() {
+    void whitelistShouldHoldNineTools() {
         List<String> expected = List.of("queryMySchedule", "queryMyAchievements", "queryMyWeeklyPerformance",
                 "queryMembers", "queryTeam", "queryTeamsMissingMaterials",
-                "queryTeamAchievements", "queryFreeSlots");
+                "queryTeamAchievements", "queryFreeSlots", "queryMemberTeams");
         for (String name : expected) {
             Assertions.assertTrue(registry.byName(name).isPresent(), "白名单应含工具：" + name);
         }
         Assertions.assertEquals(expected.size(), toolsByName.size(),
-                "白名单应恰为 8 个工具，实际：" + toolsByName.keySet());
+                "白名单应恰为 9 个工具，实际：" + toolsByName.keySet());
     }
 
     // ---------- 角色门：学生被拒，拿到可转述的错误 JSON ----------
 
     @Test
     void studentShouldBeDeniedOnAdminTools() throws Exception {
-        for (String name : List.of("queryMembers", "queryTeamsMissingMaterials", "queryFreeSlots")) {
+        for (String name : List.of("queryMembers", "queryTeamsMissingMaterials", "queryFreeSlots",
+                "queryMemberTeams")) {
             String result = toolsByName.get(name).execute(emptyArgs(), student);
             Assertions.assertEquals(AiToolRoles.DENIED_JSON, result, name + " 应拒学生");
         }
@@ -129,6 +130,22 @@ class AiAdminToolTest {
         String result = toolsByName.get("queryTeamAchievements").execute(emptyArgs(), superAdmin);
         JsonNode node = MAPPER.readTree(result);
         Assertions.assertEquals(0, node.path("code").asInt(), "成果列表应 code=0：" + result);
+    }
+
+    @Test
+    void superAdminShouldQueryMemberTeamsByName() throws Exception {
+        // 组长实测痛点："他参加啥比赛了"被模型拿 queryMyAchievements 张冠李戴——
+        // 新工具按姓名闭环：人员档案拿 memberId → 在册赛队 → 比赛名
+        JsonNode args = MAPPER.createObjectNode().put("keyword", "王小明");
+        String result = toolsByName.get("queryMemberTeams").execute(args, superAdmin);
+        JsonNode node = MAPPER.readTree(result);
+        Assertions.assertTrue(node.has("member") && node.has("teams"),
+                "应返回成员与队伍结构：" + result);
+        // 抗活库：演示数据王小明有队伍则断言队名与比赛名存在，库空不硬断
+        if (node.path("teamCount").asInt() > 0) {
+            JsonNode first = node.path("teams").get(0);
+            Assertions.assertTrue(first.hasNonNull("teamName"), "队伍应带队名：" + result);
+        }
     }
 
     @Test

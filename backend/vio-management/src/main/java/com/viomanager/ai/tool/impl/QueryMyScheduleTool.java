@@ -28,7 +28,7 @@ public class QueryMyScheduleTool implements AiTool {
     @Override
     public String description() {
         return "查询当前登录用户本人的排班（值班/值日）列表，可按学期 ID 与周次过滤；"
-                + "不传参数则返回全部学期的排班";
+                + "不传参数则返回全部学期的排班；仅限本人，不能用于查其他人";
     }
 
     @Override
