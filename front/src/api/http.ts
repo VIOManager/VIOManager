@@ -134,6 +134,11 @@ export async function delIdem<T>(url: string, idempotencyKey: string): Promise<T
   return (await http.delete(url, { headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
 }
 
+/** DELETE 带请求体（批量删除类接口：ids 走 body 而不是超长 URL；幂等键同规范 §6） */
+export async function delIdemBody<T>(url: string, body: unknown, idempotencyKey: string): Promise<T> {
+  return (await http.delete(url, { data: body, headers: { 'X-Idempotency-Key': idempotencyKey } })) as unknown as T
+}
+
 /** 文件流下载（导出/打包）：blob 拉取后触发浏览器保存，文件名优先取响应头。
  *  ⚠️ 后端业务失败统一返回 HTTP 200 + {code,message} JSON（骨架 GlobalExceptionHandler 约定），
  *  而 axios 只认状态码不会抛错 —— 若不判定，错误 JSON 会被当文件存成 xlsx/zip，用户打开即损坏文件。

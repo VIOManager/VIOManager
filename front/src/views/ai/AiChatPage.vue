@@ -21,7 +21,15 @@ onMounted(() => {
   ai.ensureConversation(user.realName || '')
 })
 
-/** 流式打字时消息高度持续变化：监听消息数 + 末条文本长度驱动滚动 */
+/** 贴底跟随：仅当用户本就在底部附近才滚（阅读历史时被打断很难受） */
+async function followBottom(): Promise<void> {
+  await nextTick()
+  const el = msgsRef.value
+  if (!el) return
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 140) el.scrollTop = el.scrollHeight
+}
+
+/** store 侧变化（新消息/新段落）驱动一次跟随 */
 watch(
   () => {
     const conv = ai.active
@@ -35,12 +43,8 @@ watch(
     }
     return n
   },
-  async () => {
-    await nextTick()
-    const el = msgsRef.value
-    if (!el) return
-    // 用户已滚离底部（在读上文）就不打扰
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 140) el.scrollTop = el.scrollHeight
+  () => {
+    void followBottom()
   }
 )
 </script>
@@ -76,7 +80,8 @@ watch(
         </div>
 
         <div ref="msgsRef" class="msgs">
-          <AiBubble v-for="(m, i) in ai.active?.messages ?? []" :key="m.id || i" :msg="m" :user-name="user.realName || '我'" />
+          <!-- @grow：气泡打字机每放出一批字通知贴底跟随（store 文本没变时 DOM 也在长） -->
+          <AiBubble v-for="(m, i) in ai.active?.messages ?? []" :key="m.id || i" :msg="m" :user-name="user.realName || '我'" @grow="followBottom" />
         </div>
 
         <AiComposer />

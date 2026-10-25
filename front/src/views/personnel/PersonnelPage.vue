@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * 人员档案列表页（/personnel，A 线 M01）
+ * 人员档案列表页（/personnel，A 线 M01 + M05B 批量删除）
  * 对应方案：《前端ABC模块页面开发-优化方案》PA2；《列表分页-优化方案》ST2 改滚动分页
  * 筛选：关键词（300ms 防抖）/组织/类型/技能（useDict）/账号绑定状态；滚动加载每批 20 条（追加模式）
  * ⚠️ 隐私：列表只展示裁剪后字段（身份证只显后 4 位）；邮箱/证件照等进详情（M02/M10）
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { apiMembers } from '@/api/member'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { apiBatchDeleteMembers, apiMembers } from '@/api/member'
 import type { MemberListItem } from '@/api/member'
 import { apiOrgTreeSafe } from '@/api/org'
 import type { OrgNode } from '@/api/org'
@@ -34,6 +35,20 @@ const detailId = ref('')
 const formVisible = ref(false)
 const editingId = ref('')
 
+/** 行勾选（M05B 批量删除基础）：选中集合只含当前已加载行，刷新/筛选后清空 */
+const selectedIds = ref<string[]>([])
+const allPicked = computed(() => rows.value.length > 0 && selectedIds.value.length === rows.value.length)
+
+function toggle(id: string) {
+  const i = selectedIds.value.indexOf(id)
+  if (i >= 0) selectedIds.value.splice(i, 1)
+  else selectedIds.value.push(id)
+}
+
+function toggleAll() {
+  selectedIds.value = allPicked.value ? [] : rows.value.map((m) => m.id)
+}
+
 /** 已加载条数达到总数即到底（total 可能随筛选变化，动态算不存变量） */
 const noMore = computed(() => rows.value.length >= total.value)
 
@@ -53,6 +68,7 @@ async function load() {
     })
     rows.value = r.list
     total.value = r.total
+    selectedIds.value = []
   } finally {
     loading.value = false
   }
@@ -113,6 +129,27 @@ function openEdit(id: string) {
   formVisible.value = true
 }
 
+/** 批量删除（M05B）：整批拒绝——任一不可删（队长 / 当前登录账号）全批不动，
+ *  不可删名单由后端 message 带回、拦截器统一弹错，列表保持原样 */
+async function onBatchDelete() {
+  if (selectedIds.value.length === 0) return
+  const count = selectedIds.value.length
+  try {
+    await ElMessageBox.confirm('确认删除选中的 ' + count + ' 名人员？任一不可删（队长 / 当前登录账号）则整批不执行。', '批量删除', {
+      confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await apiBatchDeleteMembers(selectedIds.value.slice())
+    ElMessage.success('已删除 ' + count + ' 名人员')
+    await load()
+  } catch {
+    // 3003 / 3004 / 3006 等提示已由拦截器弹出
+  }
+}
+
 onMounted(async () => {
   void load()
   // 组织树降级：O 线组织模块未交付前接口 1004，catch 掉避免未处理拒绝——
@@ -158,6 +195,7 @@ onMounted(async () => {
         <option value="false">未绑定</option>
       </select>
       <span style="flex: 1"></span>
+      <button class="btn-line" :disabled="selectedIds.length === 0" @click="onBatchDelete">批量删除{{ selectedIds.length > 0 ? '（' + selectedIds.length + ' 人）' : '' }}</button>
       <button class="btn-line" @click="importVisible = true">Excel 导入</button>
       <button class="btn-ink" @click="openCreate">新建人员</button>
     </div>
@@ -166,12 +204,20 @@ onMounted(async () => {
       <table class="ledger">
         <thead>
           <tr>
+            <th style="width: 36px">
+              <input id="pk-all" type="checkbox" class="pk" :checked="allPicked" @change="toggleAll" />
+              <label for="pk-all" class="pick" title="全选 / 清空"></label>
+            </th>
             <th class="nw">姓名</th><th class="nw">学号/工号</th><th class="nw">类型</th><th>学院 / 专业</th><th class="nw">班级</th>
             <th class="nw">手机号</th><th class="nw">所属组织</th><th>技能</th><th class="nw">身份证号</th><th class="nw">账号</th><th style="width: 60px">操作</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="m in rows" :key="m.id" class="linkrow" @click="openDetail(m.id)">
+            <td class="pickcell" @click.stop>
+              <input :id="'pk-' + m.id" type="checkbox" class="pk" :checked="selectedIds.indexOf(m.id) >= 0" @change="toggle(m.id)" />
+              <label :for="'pk-' + m.id" class="pick"></label>
+            </td>
             <td class="nw" style="color: var(--vio-ink); font-weight: 600">{{ m.name }}</td>
             <td class="mono nw">{{ m.studentNo || '—' }}</td>
             <td class="nw">{{ MEMBER_TYPE_LABEL[m.memberType] }}</td>
@@ -198,3 +244,13 @@ onMounted(async () => {
     <ImportDialog v-model="importVisible" @done="load" />
   </div>
 </template>
+
+<style scoped>
+/* 行勾选圆圈（与成果页同一套图纸档案风：input 隐藏 + label 绘制） */
+.pk { display: none; }
+.pick { display: inline-block; position: relative; width: 16px; height: 16px; border: 1.5px solid var(--vio-rule); border-radius: 50%; cursor: pointer; vertical-align: middle; box-sizing: border-box; }
+.pick:hover { border-color: var(--vio-blue-ink); }
+.pk:checked + .pick { border-color: var(--vio-blue-ink); background: var(--vio-blue-ink); }
+.pk:checked + .pick::after { content: ''; position: absolute; left: 4px; top: 1.5px; width: 4px; height: 8px; border: solid #FFF; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+.pickcell { text-align: center; }
+</style>

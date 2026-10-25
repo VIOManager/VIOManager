@@ -56,6 +56,17 @@ function pickScript(content: string, role: string, name: string): AnswerScript {
     }
   }
   if (/排班|值班|班次|我的班/.test(content)) {
+    if (isAdmin) {
+      return {
+        tool: 'queryScheduleOverview',
+        paras: [
+          '本周（第 8 周）值班已排 6 个班次，全部在数媒二楼值班室，无空岗：',
+          '· 10-26 周三 18:00-21:00 王雨桐（设备值班）\n\n· 10-27 周四 14:00-18:00 李添（耗材盘点）\n\n· 10-28 周五 18:00-21:00 周子墨（设备值班）',
+          '还有 3 个班次排在下周，明细在排班管理页。'
+        ],
+        src: { label: '值班总览', link: '/schedule', linkText: '去排班管理核对' }
+      }
+    }
     return {
       tool: 'queryMySchedule',
       paras: [
@@ -74,6 +85,17 @@ function pickScript(content: string, role: string, name: string): AnswerScript {
     }
   }
   if (/材料|没交|待交|交什么/.test(content)) {
+    if (isAdmin) {
+      return {
+        tool: 'queryMaterialProgress',
+        paras: [
+          '蓝桥杯（省赛）报名队伍 12 支，材料交齐 8 支（67%）：',
+          '未交齐的 4 支：星辰算法队（缺报名表）、芯火电子队（缺团队合照）、极客小队（缺报名表）、灵犀设计队（缺指导教师确认书）。',
+          '报名表截止 10-28，建议先催两支缺必交件的队伍。'
+        ],
+        src: { label: '材料进度', link: '/material', linkText: '去材料管理核对' }
+      }
+    }
     return {
       tool: 'queryMyMaterials',
       paras: [
@@ -85,6 +107,25 @@ function pickScript(content: string, role: string, name: string): AnswerScript {
     }
   }
   if (/队伍|赛队|我的队/.test(content)) {
+    if (isAdmin) {
+      return {
+        tool: 'queryTeamStats',
+        paras: [
+          '本学期共 4 场比赛，2 场报名中：蓝桥杯（省赛）12 支队伍、电子设计竞赛 7 支。',
+          '已截止的 2 场：智能制造挑战赛 5 支、大创项目 9 支。'
+        ],
+        table: {
+          head: ['比赛', '状态', '队伍数'],
+          rows: [
+            ['蓝桥杯 省赛', '报名中', '12'],
+            ['电子设计竞赛', '报名中', '7'],
+            ['智能制造挑战赛', '已截止', '5'],
+            ['大创项目', '已截止', '9']
+          ]
+        },
+        src: { label: '队伍统计', link: '/team', linkText: '去赛队管理核对' }
+      }
+    }
     return {
       tool: 'queryMyTeam',
       paras: [
@@ -95,6 +136,16 @@ function pickScript(content: string, role: string, name: string): AnswerScript {
     }
   }
   if (/绩效|周报|分数|得分/.test(content)) {
+    if (isAdmin) {
+      return {
+        tool: 'queryReportStats',
+        paras: [
+          '本周应交周报 42 份，已交 35 份，提交率 83%。',
+          '未交 7 人：李添、周子墨、王一诺、赵天宇、陈子昂、孙嘉仪、张志豪——其中 3 人已连续两周未交，按规则各扣 2 分。'
+        ],
+        src: { label: '周报统计', link: '/performance', linkText: '去绩效统计核对' }
+      }
+    }
     return {
       tool: 'queryMyPerformance',
       paras: [
@@ -115,10 +166,29 @@ function pickScript(content: string, role: string, name: string): AnswerScript {
       src: { label: '比赛管理', link: isAdmin ? '/competition' : '/my/team', linkText: '去比赛页看看' }
     }
   }
-  if (/待办|要做什么|还有什么/.test(content)) {
+  if (/待办|审批|要做什么|还有什么/.test(content)) {
+    if (isAdmin) {
+      return {
+        tool: 'queryApprovalTodos',
+        paras: [
+          '你的审批待办共 3 条：成果提交 2 条（星辰算法队·蓝桥杯、灵犀设计队·电赛）、项目查看 1 条（智慧校园项目）。',
+          '加人、指导教师类申请由队长发起、本人确认即生效，不进你的待办。'
+        ],
+        src: { label: '审批待办', link: '/approval', linkText: '去审批中心处理' }
+      }
+    }
     return {
       tool: 'queryMyTodos',
       paras: ['你最近有 3 件待办：① 报名表（10-28 截止）② 周报（每周日 22:00 前）③ 值班（10-26 周三 18:00）。', '最紧的是报名表，还剩 4 天。']
+    }
+  }
+  if (isAdmin) {
+    return {
+      paras: [
+        '这个问题我暂时没有对接对应的数据接口。',
+        '目前我能查：待审批事项、材料收取进度、队伍报名情况、值班安排、周报提交情况、比赛规则、成员空课。',
+        '换个问法试试，比如「材料收取进度怎么样？」'
+      ]
     }
   }
   return {
