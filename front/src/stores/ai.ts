@@ -1,11 +1,12 @@
 /**
  * AI 助手会话 store：多会话管理 + SSE 流式接收状态机
- * 会话口径（接口清单待确认①的落地默认）：首版不落库（AI03-07 缓行），
- *   会话与消息存 localStorage（仅本浏览器可见，清缓存即没）——后端就绪后切接口
+ * 会话口径（2026-10-25 起）：每会话首发 AI03 建会话拿 backendId（消息气泡仍存 localStorage，
+ *   换浏览器/清缓存后气泡没了但后端会话与历史仍在库）——裸聊模式没有跨轮上下文，
+ *   模型接不住"他/刚才那个"类追问（组长实测暴露）
  * 消息拼装：delta 文本按 \n\n 切段落；table/src 富片段只有 mock 会给（见 api/ai.ts 注释）
  */
 import { defineStore } from 'pinia'
-import { apiAiChat, apiAiStatus } from '@/api/ai'
+import { apiAiChat, apiAiCreateConversation, apiAiStatus } from '@/api/ai'
 import type { AiConversation, AiMessage, AiSegment, AiStatus } from '@/api/ai'
 
 const CONV_KEY = 'vio_ai_convs'
@@ -147,6 +148,15 @@ export const useAiStore = defineStore('ai', {
     },
     /** 流式接收核心：send 与 regenerate 共用 */
     async stream(conv: AiConversation, content: string): Promise<void> {
+      //首发建会话（AI03）：带上 conversationId 后端每轮送最近 20 条历史，指代追问才有着落；
+      //建会话失败降级裸聊（本次回复照常，只是无跨轮记忆），不挡回答
+      if (!conv.backendId) {
+        try {
+          conv.backendId = (await apiAiCreateConversation()).id
+        } catch {
+          conv.backendId = null
+        }
+      }
       conv.messages.push({ id: '', role: 'assistant', createdAt: stamp(), streaming: true, tools: [], segments: [] })
       // ⚠️ Vue3 响应式坑：push 进响应式数组后再改字段，必须通过"读回来的代理引用"操作——
       //    直接持有 push 前的原始对象改（本函数闭包里）不会触发视图更新，页面会永远停在"正在生成"
@@ -167,7 +177,7 @@ export const useAiStore = defineStore('ai', {
       }
       try {
         await apiAiChat(
-          { conversationId: null, content },
+          { conversationId: conv.backendId ?? null, content },
           {
             onMeta: (e) => {
               if (e.messageId) ai.id = e.messageId

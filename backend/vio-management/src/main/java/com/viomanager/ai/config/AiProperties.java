@@ -41,6 +41,13 @@ public class AiProperties {
     /** 单次回复 token 上限，超限截断记 interrupted（2026-10-24 拍板 2048） */
     private int maxCompletionTokens = 2048;
 
+    /**
+     * 采样温度：查询型助手要确定性不要创造力，默认 0.3 压低采样方差——
+     * qwen2.5:7b 默认温度下同一问题时而调工具时而反问用户（组长实测 30 秒内两发两种结果），
+     * 低温显著稳定工具选择。yml 的 vio.ai.temperature 可调。
+     */
+    private double temperature = 0.3;
+
     /** 装配条件：key 非空才建 GlmClient Bean */
     public boolean isEnabled() {
         return apiKey != null && !apiKey.isBlank();
