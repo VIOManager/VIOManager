@@ -28,7 +28,7 @@ public class QueryMyWeeklyPerformanceTool implements AiTool {
     @Override
     public String description() {
         return "查询当前登录用户本人的周绩效（周报）列表，可按学期 ID 与状态过滤；"
-                + "不传参数返回全部";
+                + "不传参数返回全部；仅限本人，不能用于查其他人";
     }
 
     @Override

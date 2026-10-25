@@ -12,7 +12,6 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 白名单工具：赛队查询（清单 §2，登录即可调）——按 ID 查单队详情+队员名单，
@@ -62,11 +61,16 @@ public class QueryTeamTool implements AiTool {
         Long contestId = args.path("contestId").isNumber() ? args.path("contestId").asLong() : null;
         String keyword = args.path("keyword").isTextual() ? args.path("keyword").asText() : null;
         Result<List<TeamListItemVO>> teams = teamQueryService.listTeams(contestId, keyword);
+        ObjectNode root = objectMapper.createObjectNode();
         //qwen2.5 会把"星辰算法队的管理"整句塞进 keyword，LIKE 全串匹配不到；
-        //关键词没中就退化为全量列表（数据范围不变），模型自己对名找队
+        //关键词没中就退化为全量列表（数据范围不变），且必须带显式 note——
+        //否则模型会把回退列表硬贴上用户问的队名（实测学生问他人队被答成本队数据换了标签）
         if (keyword != null && (teams.getData() == null || teams.getData().isEmpty())) {
             teams = teamQueryService.listTeams(contestId, null);
+            root.put("note", "关键词\"" + keyword + "\"未匹配到队伍，以下是当前用户数据范围内可见的全部赛队，"
+                    + "其中不含所问队伍时应如实回答查不到，不要把列表里的队伍当作所问队伍");
         }
-        return objectMapper.writeValueAsString(Map.of("teams", teams));
+        root.set("teams", objectMapper.valueToTree(teams));
+        return objectMapper.writeValueAsString(root);
     }
 }

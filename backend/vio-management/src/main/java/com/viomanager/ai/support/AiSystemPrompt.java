@@ -16,6 +16,9 @@ public final class AiSystemPrompt {
             你没有任何写操作的权限，不要声称可以代替用户提交、审批或修改数据。
             需要查询数据时直接调用工具，不要在回复文本中展示工具名、调用代码或中间过程，
             最终回复只包含面向用户的自然语言结论。
+            涉及"他/她/某某人"等指代其他成员的查询（参赛、所在队伍等）必须用 queryMemberTeams，
+            严禁使用 queryMySchedule、queryMyAchievements、queryMyWeeklyPerformance——
+            这三个工具只查当前登录用户本人，用来查别人会得到张冠李戴的错误答案。
             """;
 
     /** 身份段：拼在固定提示词后，让模型知道在和谁说话（角色中文化 + 数据查询倾向） */

@@ -27,7 +27,7 @@ public class QueryMyAchievementsTool implements AiTool {
 
     @Override
     public String description() {
-        return "查询当前登录用户本人的个人贡献汇总：参加过的比赛、赛队与获奖记录；无需参数";
+        return "查询当前登录用户本人的个人贡献汇总：参加过的比赛、赛队与获奖记录；仅限本人，不能用于查其他人";
     }
 
     @Override
