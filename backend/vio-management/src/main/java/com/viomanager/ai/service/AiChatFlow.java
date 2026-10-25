@@ -51,7 +51,8 @@ public class AiChatFlow {
     public FlowResult run(GlmClient client, ChatDTO dto, List<AiMessage> history,
                           CurrentUser user, SseEmitter emitter, AtomicBoolean cancelled) {
         ArrayNode messages = MAPPER.createArrayNode();
-        messages.addObject().put("role", "system").put("content", AiSystemPrompt.TEXT);
+        //系统提示词 = 固定框架 + 当前用户身份段（服务端注入，模型据此知道在和谁说话）
+        messages.addObject().put("role", "system").put("content", AiSystemPrompt.forUser(user));
         for (AiMessage message : history) {
             messages.addObject().put("role", message.getRole()).put("content", message.getContent());
         }

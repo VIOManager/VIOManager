@@ -76,6 +76,8 @@ class AiChatStreamTest {
         Assertions.assertEquals(2, messages.size());
         Assertions.assertEquals("system", messages.get(0).get("role").asText());
         Assertions.assertTrue(messages.get(0).get("content").asText().contains("VIOManager"));
+        Assertions.assertTrue(messages.get(0).get("content").asText().contains("AI流式-ai_chat_stream_a"),
+                "系统提示词应注入当前登录人身份（否则模型不知道在和谁说话）");
         Assertions.assertEquals("user", messages.get(1).get("role").asText());
         Assertions.assertEquals("介绍下你自己", messages.get(1).get("content").asText());
         Assertions.assertEquals(2048, new ObjectMapper().readTree(sent).get("max_tokens").asInt());
