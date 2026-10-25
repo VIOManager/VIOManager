@@ -197,6 +197,7 @@ registerMock({
   path: '/api/members/:id/skills',
   reply: (ctx) => {
     for (const m of members) {
+      // ⚠️ 2026-10-24 修复：原条件写反（=== 时 continue），会把技能更新到数组里第一个"别人"头上
       if (m.id !== ctx.params.id) continue
       m.skills = Array.isArray(ctx.body.skills) ? (ctx.body.skills as string[]) : []
       return ok(null)

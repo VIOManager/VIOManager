@@ -75,7 +75,13 @@ export const AI_TOOL_LABELS: Record<string, string> = {
   queryMyPerformance: '查我的绩效',
   queryMyTodos: '查我的待办',
   queryFreeSlots: '查成员空课',
-  queryContestRule: '查比赛规则'
+  queryContestRule: '查比赛规则',
+  // 管理视角工具（mock 演示名，契约工具白名单暂未含——后端 AI 排期时随清单修订拍板）
+  queryScheduleOverview: '查值班总览',
+  queryMaterialProgress: '查材料进度',
+  queryTeamStats: '查队伍统计',
+  queryApprovalTodos: '查审批待办',
+  queryReportStats: '查周报统计'
 }
 
 /** AI01 回调集：流式事件逐个回调，页面侧只管拼装 */
@@ -120,12 +126,8 @@ export async function apiAiChat(
   )
 }
 
-/** 快捷提问（页面问题芯片）：覆盖学生侧最高频的自查类问题 */
-export const AI_QUICK_QUESTIONS: string[] = [
-  '我的待办',
-  '未交材料',
-  '我的排班',
-  '我的队伍',
-  '本周绩效',
-  '比赛报名规则'
-]
+/** 快捷提问（页面问题芯片）：按角色出题——学生自查视角，管理员管理视角（lzh 2026-10-24 拍板） */
+export const AI_QUICK_QUESTIONS: Record<'STUDENT' | 'ADMIN', string[]> = {
+  STUDENT: ['我的待办', '未交材料', '我的排班', '我的队伍', '本周绩效', '比赛报名规则'],
+  ADMIN: ['待审批事项', '材料收取进度', '队伍报名情况', '本周值班安排', '周报提交情况', '比赛报名规则']
+}
