@@ -160,9 +160,26 @@ export function hasPendingApproval(bizType: string, bizId: string, memberId: str
   return false
 }
 
-/** 种子数据见下方：覆盖三视角与各终态（ap1/ap5 待办红点，ap4 结果红点，ap2 跨部门不可见，ap6 历史已通过）
+/** 种子数据见下方：覆盖三视角与各终态（ap1/ap5 待办红点，ap4 结果红点，ap2 跨部门不可见，ap6 历史已通过，
+ *  ap8 指导教师确认单——目标人是教师兼部门管理员账号，验参与人视角不受队长类型过滤，2026-10-25）
  *  TEAM_CREATE 种子已随队长直建免审批拍板（2026-10-24）转为成果提交演示，该类型不再有活单 */
 export const approvals: MockApproval[] = [
+  {
+    id: 'ap8', bizType: 'TEAM_ADD_ADVISOR', bizId: 't1',
+    bizTitle: '李明轩 · 电波突击队申请指导教师：陈志远',
+    status: 'PENDING',
+    applicantMemberId: 'm5', applicantName: '李明轩',
+    targetMemberId: 'm2', targetMemberName: '陈志远',
+    approverOrgId: 'o11',
+    applyReason: '申请教师陈志远指导「电波突击队」',
+    payloadJson: JSON.stringify({ teamId: 't1', memberId: 'm2', memberName: '陈志远' }),
+    handleComment: '', handledBy: '', handledAt: '',
+    createdAt: '2026-10-25 10:00:00',
+    readApplicant: true, readTarget: false, readApprover: false,
+    records: [
+      { action: 'CREATE', operatorName: '李明轩', operatorRole: 'APPLICANT', commentText: '申请教师陈志远指导「电波突击队」', createdAt: '2026-10-25 10:00:00' }
+    ]
+  },
   {
     id: 'ap1', bizType: 'TEAM_ADD_MEMBER', bizId: 't1',
     bizTitle: '李明轩 · 电波突击队申请加人：王雨桐',
