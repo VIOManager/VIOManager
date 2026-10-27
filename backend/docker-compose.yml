@@ -1,6 +1,6 @@
-# 本地开发环境：四件套（MySQL + MinIO + ClamAV + Redis）默认启动；后端三个服务挂 app profile 按需带起。
+# 本地开发环境：五件套（MySQL + MinIO + ClamAV + Redis + PostgreSQL/pgvector）默认启动；后端三个服务挂 app profile 按需带起。
 # 生产 6 容器口径（含前端 nginx、AI 服务）属部署层，不在此文件（骨架方案 K5 结论）。
-# 用法：cd backend && docker compose up -d（日常四件套，应用跑 IDEA）；
+# 用法：cd backend && docker compose up -d（日常五件套，应用跑 IDEA）；
 #      一键全套演示/冒烟：docker compose --profile app up -d --build
 #      （8088 被 IDEA 占着时：要么先停 IDEA，要么 APP_PORT=18088 起容器版并行跑）；
 #      推倒重建用 docker compose down -v（本地库重建零成本，kb 与论坛 vioforum 库由 mysql-init 自动建）。
@@ -62,6 +62,27 @@ services:
       - "6379:6379"   # 宿主联调可直连；容器内服务用 REDIS_HOST=redis
     volumes:
       - vio-redis-data:/data
+
+  # PostgreSQL + pgvector（RAG 方案拆步 1）：AI 助手知识库向量存储，仅主服务读写。
+  # 表由 pg-init 脚本在卷首次初始化时创建（与 Spring AI PgVectorStore 1.0.0 建表 SQL 对齐 + 混合检索 tsv 列）；
+  # 宿主映射 5433 避开本机原生 PG，容器内服务用服务名 postgres:5432。
+  postgres:
+    image: pgvector/pgvector:0.8.0-pg16
+    container_name: vio-postgres
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:-viomanager_rag}
+      POSTGRES_USER: ${PG_USERNAME:-root}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-root}
+    ports:
+      - "${PG_PORT:-5433}:5432"
+    volumes:
+      - vio-postgres-data:/var/lib/postgresql/data
+      - ./docker/pg-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   # 后端应用本体：镜像由 backend/Dockerfile 多阶段构建（构建层 Maven 打包，运行层仅 JRE）。
   # 刻意挂 profiles：默认 up 只起四件套，开发期应用照旧跑 IDEA 可热调；
@@ -152,3 +173,4 @@ volumes:
   vio-mysql-data:
   vio-minio-data:
   vio-redis-data:
+  vio-postgres-data:

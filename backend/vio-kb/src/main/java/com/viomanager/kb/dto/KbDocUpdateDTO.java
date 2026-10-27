@@ -34,4 +34,7 @@ public class KbDocUpdateDTO {
     /** 乐观锁锚点：编辑页打开时读到的 updated_at（yyyy-MM-dd HH:mm:ss），可选 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime updatedAt;
+
+    /** 编辑 markdown 正文（仅 MANUAL 条目有意义，RAG 拆步 2 加回；非空才更新） */
+    private String content;
 }

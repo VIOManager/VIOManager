@@ -51,3 +51,9 @@ vio:
     # 审计异步写本库 audit_log（表在 V1 基线里）；测试里用同步模式断言
     enabled: true
     async: true
+  rag:
+    # RAG 薄通知（拆步 2）：AI 主服务索引端点。宿主直跑 localhost:8088；
+    # 容器内由 apps.yml 覆盖为 compose 服务名 http://app:8088
+    index-url: ${AI_RAG_INDEX_URL:http://localhost:8088/api/ai/rag/sync}
+    # 与主服务 vio.rag.internal-token 同值（X-RAG-Token 头）；生产用 RAG_INTERNAL_TOKEN 覆盖
+    token: ${RAG_INTERNAL_TOKEN:dev-rag-internal}

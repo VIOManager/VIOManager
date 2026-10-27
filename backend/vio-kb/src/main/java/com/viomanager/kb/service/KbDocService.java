@@ -11,6 +11,7 @@ import com.viomanager.kb.vo.KbDocVO;
 import com.viomanager.kb.vo.KbPromptVO;
 import com.viomanager.common.result.PageResult;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 知识库文档服务：读口（KB01-04/KB17）委托 KbDocQuerySupport，写口（KB12-16）在本实现。
@@ -46,4 +47,7 @@ public interface KbDocService {
 
     /** KB16 上架/下架/发布草稿：DRAFT→PUBLISHED、PUBLISHED↔OFFLINE，条件更新防跳档 */
     Result<Void> updateStatus(Long id, String status);
+
+    /** 管理端全量重建 RAG 索引（拆步 2 兜底）：逐篇同步推送，返回 total/succeeded/failed 汇总 */
+    Result<Map<String, Object>> rebuildRagIndex();
 }

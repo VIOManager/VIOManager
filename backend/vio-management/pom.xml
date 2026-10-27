@@ -129,6 +129,21 @@
             <artifactId>hutool-core</artifactId>
         </dependency>
 
+        <!-- Spring AI Ollama（RAG 2026-10-26 方案 Step 0）：本地 embedding（nomic-embed-text）。
+             只用 EmbeddingModel——聊天编排仍是自研 GlmClient（SSE 契约/限流是自研核心不迁移）；
+             版本由父 pom 双 BOM 管理 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-ollama</artifactId>
+        </dependency>
+        <!-- RAG 向量库（拆步 1）：只取 PgVectorStore 实现类，自动装配不启用——
+             RagVectorConfig 手动建 VectorStore（vio.rag.enabled 开关门控，RocketMQ 同款零装配），
+             防 starter 的自动装配抓到 MySQL 主数据源的 JdbcTemplate -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
+        </dependency>
+
         <!-- A07 获奖导出用（xlsx）；只引主包，xmlbeans 等传递依赖随包带入 -->
         <dependency>
             <groupId>org.apache.poi</groupId>
