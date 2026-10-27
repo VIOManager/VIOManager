@@ -15,6 +15,7 @@
 | 9102 | 触发限流（响应头带 `Retry-After: 秒`） |
 | 9103 | 上游 LLM 调用失败或超时 |
 | 9104 | 生成流中途异常（SSE error 事件载荷，见 §5） |
+| 9105 | 知识库向量库未启用（vio.rag.enabled=false 零装配态收到同步/检索请求，见 §12） |
 
 其余复用 1xxx 通用码：1001 参数 / 1002 未登录 / 1003 权限。
 
@@ -25,7 +26,7 @@
 - 红线（PRD）：**只查不写**——后端工具白名单只注册查询类 Function Calling，不提供任何写操作、审批触发、直连数据库
 - 装配口径同 RocketMQ：API key 未配置 = 零装配零 Bean，系统照常跑（可降级是立身之本）
 
-工具白名单初表（PRD §3.15 点名八类，**工具名以后端实现定名为准**；2026-10-24 首版三工具 + 2026-10-25 两轮补全共十五个，覆盖 PRD 八类 + 组长实测发现的七类缺口）：
+工具白名单初表（PRD §3.15 点名八类，**工具名以后端实现定名为准**；2026-10-24 首版三工具 + 2026-10-25 两轮补全十五个 + 2026-10-27 RAG 检索 searchKb 共十六个，覆盖 PRD 八类 + 组长实测发现的七类缺口 + 知识库长尾）：
 
 | 查询域 | 后端定名 | 状态 | 权限口径 |
 |--------|----------|------|----------|
@@ -44,6 +45,7 @@
 | 我的审批 | `queryMyApprovals` | ✅ 已实做 | 登录即可；管理角色默认 TODO 待办视角，学生默认 MINE（TODO 视角 service 层对学生 403） |
 | 学期信息 | `querySemesterInfo` | ✅ 已实做 | 登录即可；当前学期 + 实时计算今天第几周 |
 | 排班总表 | `queryScheduleTable` | ✅ 已实做 | 管理角色；某周全组织值班矩阵，semesterId 空自动解析当前学期 |
+| 知识库检索 | `searchKb` | ✅ 已实做 | 登录即可；RAG 双路召回（向量 + pg_trgm 关键词 ILIKE）+ RRF 融合，片段带文档出处，回答注明出自哪篇文档；RAG 未启用抛 9105 由模型转述（2026-10-27 拆步 3/4 落地，见 §12） |
 
 ```mermaid
 flowchart LR
@@ -141,3 +143,19 @@ event: error     data: {"code":9104,"message":"..."}                   ← 中�
 **仍待确认：**（暂无——提示词库依赖 KB 线排期，非拍板项）
 - [ ] 提示词库依赖 KB 线补回 is_prompt 与 KB04（已提请，等 KB 线排期）
 - [x] 工具白名单八类全部定名落地（见 §2 表）：首版三工具（2026-10-24）+ 管理域五工具（2026-10-25）
+
+## 12. RAG 知识库索引同步与检索（2026-10-26 拆步 2 索引落地；2026-10-27 拆步 3/4 检索落地）
+
+| 编号 | 接口 | 说明 |
+|------|------|------|
+| AIR01 | POST /api/ai/rag/sync | KB→AI 薄通知。body：`docId`（必填）`docTitle` `content`。content 非空=全量重切该文档（先删旧块再入库，返回 `chunks` 块数）；content 空=文档下架/删除，只清索引（返回 `removed: true`）。**双闸**：路径在 vio.auth.skip-paths 免 JWT + 请求头 `X-RAG-Token`（与 `vio.rag.internal-token` 比对，缺失/不匹配 1002，fail-closed）。两服务同值，生产用环境变量 RAG_INTERNAL_TOKEN 覆盖 dev 默认值 |
+
+- 入库链路（AI 侧 RagIndexService）：自研中文分块器（按 md 标题分节 + 小节贪心合并 + 超长滑窗 400 字/重叠 50，未用 TokenTextSplitter——token 计数对中文块长不稳且无标题感知）→ nomic-embed-text 向量化 → pgvector（HNSW）
+- metadata 冗余 `docId`（字符串口径，filter 走文本比较）/`docTitle`/`chunkIndex`/`chunkCount`，检索召回带出处免跨库回查
+- 关闭态（vio.rag.enabled=false）：无任何 PG Bean，收到同步请求回 9105——KB 侧 best-effort 只记日志，不挡发布；检索入口（searchKb 工具）同样 fail-fast 抛 9105，由模型转述"知识库暂不可用"
+- KB 侧配套（见知识库清单）：发布/编辑/上架钩子异步入队、下架/删除清索引、KB18 管理端全量重建兜底
+
+检索链路（2026-10-27 拆步 3/4，RagSearchService + searchKb 工具）：
+- 双路召回：向量路 = Spring AI `similaritySearch`（阈值 0.65，实测 nomic 中文噪声地板约 0.58、原文块约 0.90）；关键词路 = 自写疑问词剔除 + 中文 shingle 抽取 + `content ILIKE ANY` 参数化子串匹配（pg_trgm 扩展 + gin_trgm_ops 索引吃 ILIKE 加速——simple 分词中文整句单 token，tsv @@ tsquery 路形同虚设，故未走 tsv）
+- RRF 融合：`score = Σ 1/(60 + rank)` 两路按 chunk id 对齐去重，无参融合不引入 rerank 推理成本；topK=5
+- 出处随行：docId/docTitle/chunkIndex 从 metadata 带回，工具返回带 note 要求模型注明文档名、检索不到时如实说明——防编造

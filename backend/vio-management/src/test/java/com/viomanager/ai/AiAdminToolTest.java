@@ -7,6 +7,7 @@ import com.viomanager.ai.tool.AiToolRegistry;
 import com.viomanager.ai.tool.AiToolRoles;
 import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
+import com.viomanager.common.exception.BizException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,17 +68,18 @@ class AiAdminToolTest {
     // ---------- 注册表 ----------
 
     @Test
-    void whitelistShouldHoldFifteenTools() {
+    void whitelistShouldHoldSixteenTools() {
         List<String> expected = List.of("queryMySchedule", "queryMyAchievements", "queryMyWeeklyPerformance",
                 "queryMembers", "queryTeam", "queryTeamsMissingMaterials",
                 "queryTeamAchievements", "queryFreeSlots", "queryMemberTeams",
                 "queryContests", "queryProjects", "queryOrgStructure",
-                "queryMyApprovals", "querySemesterInfo", "queryScheduleTable");
+                "queryMyApprovals", "querySemesterInfo", "queryScheduleTable",
+                "searchKb");
         for (String name : expected) {
             Assertions.assertTrue(registry.byName(name).isPresent(), "白名单应含工具：" + name);
         }
         Assertions.assertEquals(expected.size(), toolsByName.size(),
-                "白名单应恰为 15 个工具，实际：" + toolsByName.keySet());
+                "白名单应恰为 16 个工具，实际：" + toolsByName.keySet());
     }
 
     // ---------- 角色门：学生被拒，拿到可转述的错误 JSON ----------
@@ -92,6 +94,16 @@ class AiAdminToolTest {
     }
 
     // ---------- 学生可用的本人域/公开域工具 ----------
+
+    @Test
+    void searchKbShouldFailFastWhenRagDisabled() throws Exception {
+        //默认测试上下文 vio.rag.enabled=false（零装配）：searchKb fail-fast 抛 9105，
+        //由 AiChatFlow 兜底转 {"error":...} 给模型转述——工具注册不依赖 RAG 开关，但检索入口拒绝静默空答
+        JsonNode args = MAPPER.createObjectNode().put("question", "怎么加队伍");
+        BizException e = Assertions.assertThrows(BizException.class,
+                () -> toolsByName.get("searchKb").execute(args, student));
+        Assertions.assertEquals(9105, e.getCode(), "RAG 未启用应抛 9105（AI_RAG_NOT_ENABLED）");
+    }
 
     @Test
     void studentShouldUsePublicAndSelfTools() throws Exception {
