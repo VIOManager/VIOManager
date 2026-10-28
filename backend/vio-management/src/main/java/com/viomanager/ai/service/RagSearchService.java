@@ -68,11 +68,15 @@ public class RagSearchService {
         if (q.isEmpty()) {
             return List.of();
         }
+        // 双路各超采 3 倍池子再融合（语料闸门实逮）：RRF 靠"真答案在两路都出现"得分汇聚，
+        // 池子只有 topK 时，关键词路同分并列的噪声块（单路命中约 0.016）足以把只在向量路
+        // 出现的真答案挤出 top5；超采后真答案两路弱命中相加（约 0.03）稳压单路噪声。
+        int pool = topK * 3;
         List<Document> vecHits = requireStore().similaritySearch(SearchRequest.builder()
-                .query(q).topK(topK).similarityThreshold(VECTOR_THRESHOLD).build());
+                .query(q).topK(pool).similarityThreshold(VECTOR_THRESHOLD).build());
         List<String> shingles = extractShingles(q);
         List<RagPgClient.KwRow> kwHits = shingles.isEmpty() ? List.of()
-                : requireClient().keywordSearch(shingles, topK);
+                : requireClient().keywordSearch(shingles, pool);
 
         Map<String, Merged> merged = new LinkedHashMap<>();
         for (int i = 0; i < vecHits.size(); i++) {

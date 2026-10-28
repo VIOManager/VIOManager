@@ -48,10 +48,12 @@ public class RagPgClient {
 
     /**
      * 关键词路一行：docId/docTitle/chunkIndex 从 metadata JSON 抽出（出处随行带回，供 RRF 融合对齐）。
-     * patterns 全部为已加 % 包裹的子串——参数化绑定，用户输入不拼 SQL。
+     * patterns 为裸 shingle，本方法内部转义通配符后两端包 % 再绑定——子串匹配口径是本类的责任
+     * （拆步 5 语料闸门实逮：此前类注释约定"调用方包 %"，RagSearchService 传了裸串，
+     * ILIKE 不带 % 是全串相等匹配，关键词路自拆步 3 起整体哑火、全靠向量路独撑）。
      */
     public List<KwRow> keywordSearch(List<String> patterns, int limit) {
-        String[] arr = patterns.toArray(new String[0]);
+        String[] arr = patterns.stream().map(RagPgClient::wrapSubstring).toArray(String[]::new);
         return jdbcTemplate.query(SEARCH_SQL, ps -> {
             ps.setArray(1, createArray(ps, arr));
             ps.setArray(2, createArray(ps, arr));
@@ -60,6 +62,12 @@ public class RagPgClient {
                 rs.getString("id"), rs.getString("content"),
                 rs.getString("doc_id"), rs.getString("doc_title"),
                 rs.getInt("chunk_index"), rs.getInt("hits")));
+    }
+
+    /** 裸 shingle → 子串 ILIKE 模式：转义 \% \_ 防通配注入，两端包 % */
+    private static String wrapSubstring(String shingle) {
+        String escaped = shingle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        return "%" + escaped + "%";
     }
 
     /** 关容器时释放池（@Bean destroyMethod 指名调用） */
