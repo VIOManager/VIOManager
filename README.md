@@ -9,8 +9,8 @@
 - **AI 智能助手**：自研 SSE 流式编排 Agent（非框架黑盒）接入本地大模型（Ollama），多轮 Function Calling 直查真实业务数据——16 个查询工具覆盖 8 个业务域 + 知识库 RAG 检索，三层权限防线（工具级角色校验 / 业务级数据范围 / 自然话术拒答），零云端成本
 - **审批中心**：RocketMQ 5 延迟消息驱动单据过期 + 本地消息表保证事件不丢；Redis 组织树 / 未读红点缓存，JMeter 实测 15 万行历史数据下红点接口 **QPS 提升 361 倍、P99 由 1333ms 降至 5ms**
 - **数据范围**：`@DataScope` 注解 + MyBatis-Plus 拦截器 + JSqlParser 动态改写 SQL，三角色数据范围对业务代码零侵入
-- **知识库 RAG**：Spring AI Alibaba + PostgreSQL / pgvector 向量检索（HNSW 索引 + 关键词混合检索）
-- **工程质量**：**380 项自动化测试全绿**
+- **知识库 RAG**：Spring AI Alibaba + PostgreSQL / pgvector 向量检索——HNSW 索引 + 向量 / 关键词双路召回 RRF 融合，15 篇《平台使用指南》语料，18 个自然问句检索质量评估闸门随全量回归常驻
+- **工程质量**：**381 项自动化测试全绿**
 
 ## 三端架构
 
