@@ -26,9 +26,6 @@ const approval = useApprovalStore()
  *  普通常量在 setup 时取默认值（SUPER_ADMIN）就再也不变——学生 F5 会看到管理员页签（存量 bug 2026-10-24 修） */
 const isAdmin = computed(() => user.role !== 'STUDENT')
 
-/** 超管判定：MINE/TARGET 两个参与人视角对其隐藏（页面头注释里的口径） */
-const isSuperAdmin = computed(() => user.role === 'SUPER_ADMIN')
-
 // ── 页签与筛选 ──
 /** 页签 key：TODO/MINE/TARGET 直连契约视角；DONE_OK/DONE_NO 是管理员已办记录页签（TODO 视角 + 固定状态） */
 type TabKey = ApprovalView | 'DONE_OK' | 'DONE_NO'
@@ -54,18 +51,20 @@ const tabs = computed(() => {
     out.push({ key: 'DONE_OK', label: '已通过', badge: 0 })
     out.push({ key: 'DONE_NO', label: '已驳回', badge: 0 })
   }
-  // 参与人视角对超管隐藏：部门管理员与学生的成果提审/授权申请/邀请通知照常汇总在这两栏
-  if (!isSuperAdmin.value) {
-    out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
-    out.push({ key: 'TARGET', label: '我是目标人', badge: approval.todoCount })
-  }
+  // 参与人视角（2026-10-25 修：超管也不再隐藏——其绑定的教师档案可被指为指导教师目标人，须能进 TARGET 确认）
+  out.push({ key: 'MINE', label: '我发起的', badge: approval.resultCount })
+  out.push({ key: 'TARGET', label: '我是目标人', badge: approval.todoCount })
   return out
 })
 
-/** 类型下拉可选项：按角色权能出（api 层 APPROVAL_ROLE_TYPES，2026-10-24 lzh 拍板）；
+/** 类型下拉可选项：管理员三栏按角色权能出（api 层 APPROVAL_ROLE_TYPES，2026-10-24 lzh 拍板）；
+ *  参与人视角（MINE/TARGET）出参与类全集——管理账号当目标人时也要能按这些类型筛（2026-10-25 修）；
  *  管理员三栏另有 CAPTAIN_TYPES 列表过滤兜底（双保险） */
 const typeOptions = computed(() => {
-  const set = APPROVAL_ROLE_TYPES[user.role] ?? Object.keys(APPROVAL_TYPE_LABEL)
+  const participation = view.value === 'MINE' || view.value === 'TARGET'
+  const set = participation
+    ? APPROVAL_ROLE_TYPES.STUDENT
+    : APPROVAL_ROLE_TYPES[user.role] ?? Object.keys(APPROVAL_TYPE_LABEL)
   const out: Array<{ value: string; label: string }> = []
   for (const v of set) {
     out.push({ value: v, label: APPROVAL_TYPE_LABEL[v] ?? v })
@@ -81,9 +80,11 @@ function queryOf(): { view: ApprovalView; status?: string } {
   return { view: view.value, status: statusFilter.value || undefined }
 }
 
-/** 管理员视角滤掉队长自治类型（后端照常返回，这里按角色剔除） */
+/** 管理员三栏滤掉队长自治类型。⚠️ 只作用于 TODO 视角（待办/已办三栏共用）——MINE/TARGET 是参与人视角，
+ *  管理账号被指为目标人（教师兼部门管理员收指导教师确认单）必须照常可见（2026-10-25 修） */
 function visibleForRole(items: ApprovalItem[]): ApprovalItem[] {
   if (!isAdmin.value) return items
+  if (view.value !== 'TODO' && view.value !== 'DONE_OK' && view.value !== 'DONE_NO') return items
   const out: ApprovalItem[] = []
   for (const a of items) {
     if (APPROVAL_CAPTAIN_TYPES.indexOf(a.bizType) < 0) out.push(a)
