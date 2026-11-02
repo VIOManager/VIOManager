@@ -46,6 +46,7 @@ docker compose -f backend/docker-compose.apps.yml --profile app up -d
 
 - 访问 `http://localhost:8088`，演示账号 `admin / Admin@123456`
 - AI 助手需本地 [Ollama](https://ollama.com)，默认 `http://localhost:11434`（可用 `OLLAMA_BASE_URL` 覆盖），推荐 `qwen2.5:7b`
+- 完整部署步骤、环境变量表、端口清单与常见问题：**[docs/部署与使用指南.md](docs/部署与使用指南.md)**
 
 ## 目录结构
 
