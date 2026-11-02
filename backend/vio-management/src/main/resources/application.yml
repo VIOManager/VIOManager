@@ -28,7 +28,9 @@ spring:
     password: ${MYSQL_PASSWORD:dev-root-123}
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # db/migration=正式迁移（含 V5 部署引导基线）；db/demo=演示数据（本地开发默认灌，
+    # 学校部署用环境变量 SPRING_FLYWAY_LOCATIONS=classpath:db/migration 排除，见 docs/部署与使用指南.md）
+    locations: classpath:db/migration,classpath:db/demo
     # ⚠️ 冲突：V1 是 52 表全量基线，禁改；改表只新增 V2+ 脚本并同步 docs/db/initsql.sql（骨架方案 §0.1 三步走）
   data:
     redis:
