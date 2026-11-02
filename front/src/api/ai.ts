@@ -68,7 +68,8 @@ export interface AiConversation {
 }
 
 /**
- * 工具名翻译（契约工具白名单 → 展示名，清单 §2 定名 2026-10-25 终态 15 个）
+ * 工具名翻译（契约工具白名单 → 展示名，清单 §2 定名：2026-10-25 终态 15 个 +
+ * 2026-10-27 searchKb + 2026-11-02 queryMyMaterials 共 17 个）
  * ⚠️ 就近放行原因：config/labels.ts 已 325 行超单文件红线，AI 契约枚举随契约文件走
  */
 export const AI_TOOL_LABELS: Record<string, string> = {
@@ -87,8 +88,9 @@ export const AI_TOOL_LABELS: Record<string, string> = {
   queryMyApprovals: '查我的审批',
   querySemesterInfo: '查学期信息',
   queryScheduleTable: '查排班总表',
-  // mock 演示专用名（仅 VITE_USE_MOCK 模式的假工具；真契约已落地同名概念，mock 下线时一并删）
+  searchKb: '查知识库',
   queryMyMaterials: '查我的材料',
+  // mock 演示专用名（仅 VITE_USE_MOCK 模式的假工具；真契约已落地同名概念，mock 下线时一并删）
   queryMyTeam: '查我的队伍',
   queryMyPerformance: '查我的绩效',
   queryMyTodos: '查我的待办',
