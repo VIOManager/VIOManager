@@ -1,6 +1,6 @@
-# 本地开发环境：四件套（MySQL + MinIO + ClamAV + Redis）默认启动；后端三个服务挂 app profile 按需带起。
+# 本地开发环境：五件套（MySQL + MinIO + ClamAV + Redis + PostgreSQL/pgvector）默认启动；后端三个服务挂 app profile 按需带起。
 # 生产 6 容器口径（含前端 nginx、AI 服务）属部署层，不在此文件（骨架方案 K5 结论）。
-# 用法：cd backend && docker compose up -d（日常四件套，应用跑 IDEA）；
+# 用法：cd backend && docker compose up -d（日常五件套，应用跑 IDEA）；
 #      一键全套演示/冒烟：docker compose --profile app up -d --build
 #      （8088 被 IDEA 占着时：要么先停 IDEA，要么 APP_PORT=18088 起容器版并行跑）；
 #      推倒重建用 docker compose down -v（本地库重建零成本，kb 与论坛 vioforum 库由 mysql-init 自动建）。
@@ -62,6 +62,27 @@ services:
       - "6379:6379"   # 宿主联调可直连；容器内服务用 REDIS_HOST=redis
     volumes:
       - vio-redis-data:/data
+
+  # PostgreSQL + pgvector（RAG 方案拆步 1）：AI 助手知识库向量存储，仅主服务读写。
+  # 表由 pg-init 脚本在卷首次初始化时创建（与 Spring AI PgVectorStore 1.0.0 建表 SQL 对齐 + 混合检索 tsv 列）；
+  # 宿主映射 5433 避开本机原生 PG，容器内服务用服务名 postgres:5432。
+  postgres:
+    image: pgvector/pgvector:0.8.0-pg16
+    container_name: vio-postgres
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:-viomanager_rag}
+      POSTGRES_USER: ${PG_USERNAME:-root}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-root}
+    ports:
+      - "${PG_PORT:-5433}:5432"
+    volumes:
+      - vio-postgres-data:/var/lib/postgresql/data
+      - ./docker/pg-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   # RocketMQ NameServer：审批中心升级引入（延迟消息替换过期轮询 + 状态变更通知旁路）。
   # 镜像用本机已有的 apache/rocketmq:5.5.0 零拉取；选 5.x 因时间轮支持任意延迟——
@@ -139,6 +160,15 @@ services:
       GLM_BASE_URL: ${GLM_BASE_URL:-}
       GLM_MODEL: ${GLM_MODEL:-}
       GLM_API_KEY: ${GLM_API_KEY:-}
+      # RAG 向量库（拆步 1）：容器内走 compose 服务名直连 PG 原端口；部署态默认开（栈内 postgres 必在），
+      # 宿主 IDEA 直跑走 yml 默认 false（零装配，没起 PG 不挡启动）
+      VIO_RAG_ENABLED: ${VIO_RAG_ENABLED:-true}
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      # RAG 内部同步密钥（拆步 2）：与 kb 服务同值，生产用环境变量覆盖 dev 默认值
+      RAG_INTERNAL_TOKEN: ${RAG_INTERNAL_TOKEN:-dev-rag-internal}
+      # Spring AI Ollama embedding 与 GLM 同源宿主 Ollama（extra_hosts 已指 host-gateway）
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       TZ: Asia/Shanghai
 
     ports:
@@ -151,6 +181,8 @@ services:
       # 起 minio 容器的全容器模式下端点自己指服务名，也不需要启动顺序保证
       clamav:
         condition: service_started
+      postgres:
+        condition: service_healthy   # RAG 向量库建表在 pg-init（库初始化期），应用启动零 DDL，此依赖仅为首轮请求不撞空库
 
   # 知识库微服务（8091）：与 app 同一镜像、构建一次，command 换跑 kb.jar。
   # 独立库 viomanager_kb（新卷由 mysql-init 自动建，老卷手工补建一次）；token 由主服务签发。
@@ -167,6 +199,9 @@ services:
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev-root-123}
       REDIS_HOST: redis   # 推荐位缓存；连不上自动降级直查库（短超时熔断，见 kb application.yml）
       JWT_SECRET: ${JWT_SECRET:-viomanager-local-dev-secret-key-32bytes-minimum}
+      # RAG 薄通知（拆步 2）：容器内走 compose 服务名指 AI 主服务；令牌与 app 同值
+      AI_RAG_INDEX_URL: http://app:8088/api/ai/rag/sync
+      RAG_INTERNAL_TOKEN: ${RAG_INTERNAL_TOKEN:-dev-rag-internal}
       TZ: Asia/Shanghai
     ports:
       - "8091:8091"
@@ -202,4 +237,5 @@ volumes:
   vio-mysql-data:
   vio-minio-data:
   vio-redis-data:
+  vio-postgres-data:
   vio-rmqbroker-store:

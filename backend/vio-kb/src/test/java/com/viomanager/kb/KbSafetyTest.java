@@ -295,9 +295,10 @@ class KbSafetyTest {
     @Test
     void studentCanBrowsePublishedList() throws Exception {
         support.insertDoc(KbTestSupport.PREFIX + "-列表", "PUBLISHED", ORG_B);
+        // V3 语料种子后库里常驻 15 篇发布文档——恒等长度断言改"我插的在列表里"（活库口径）
         mockMvc.perform(get("/api/kb/docs").header("Authorization", bearer(studentToken)))
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.length()").value(1));
+                .andExpect(jsonPath("$.data[?(@.title == '" + KbTestSupport.PREFIX + "-列表')]").exists());
     }
 
     // ---------- 请求构造辅助 ----------

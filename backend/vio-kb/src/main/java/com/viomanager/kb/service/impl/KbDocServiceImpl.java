@@ -1,5 +1,6 @@
 package com.viomanager.kb.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.viomanager.common.auth.CurrentUser;
 import com.viomanager.common.auth.UserHolder;
@@ -19,12 +20,15 @@ import com.viomanager.kb.service.KbDocService;
 import com.viomanager.kb.support.KbDocAccessSupport;
 import com.viomanager.kb.support.KbDocQuerySupport;
 import com.viomanager.kb.support.KbRecommendCache;
+import com.viomanager.kb.support.RagNotifyClient;
 import com.viomanager.kb.vo.KbAdminDocVO;
 import com.viomanager.kb.vo.KbDocDetailVO;
 import com.viomanager.kb.vo.KbDocVO;
 import com.viomanager.kb.vo.KbPromptVO;
 import jakarta.annotation.Resource;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -47,6 +51,9 @@ public class KbDocServiceImpl implements KbDocService {
 
     @Resource
     private KbRecommendCache recommendCache;
+
+    @Resource
+    private RagNotifyClient ragNotifyClient;
 
     // ==================== 读口（委托） ====================
 
@@ -80,15 +87,20 @@ public class KbDocServiceImpl implements KbDocService {
     /** 分类拍板砍掉后的占位默认值（列 NOT NULL；正式需求加回分类时再开入参） */
     private static final String CATEGORY_DEFAULT = "未分类";
 
-    /** KB12 发布/存草稿。二选一校验（2026-10-14 拍板）：LINK 必填 linkUrl；FILE 必填 fileId+fileName */
+    /** KB12 发布/存草稿。形态校验：LINK 必填 linkUrl；FILE 必填 fileId+fileName；
+     *  MANUAL 必填 content（2026-10-26 RAG 拆步 2 加回正文列，语料走此形态） */
     @Override
     public Result<KbDocVO> create(KbDocCreateDTO dto) {
-        //1.形态校验：新建只收 LINK / FILE
+        //1.形态校验：LINK / FILE / MANUAL
         String sourceType = dto.getSourceType();
         boolean isLink = KbSourceType.LINK.name().equals(sourceType);
         boolean isFile = KbSourceType.FILE.name().equals(sourceType);
-        if (!isLink && !isFile) {
-            throw new BizException(CommonErrorCode.PARAM_INVALID, "sourceType 只能是 LINK 或 FILE");
+        boolean isManual = KbSourceType.MANUAL.name().equals(sourceType);
+        if (!isLink && !isFile && !isManual) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "sourceType 只能是 LINK、FILE 或 MANUAL");
+        }
+        if (isManual && !StringUtils.hasText(dto.getContent())) {
+            throw new BizException(CommonErrorCode.PARAM_INVALID, "MANUAL 条目必填 content（markdown 正文）");
         }
         if (isLink && !StringUtils.hasText(dto.getLinkUrl())) {
             throw new BizException(CommonErrorCode.PARAM_INVALID, "LINK 条目必填 linkUrl");
@@ -114,6 +126,8 @@ public class KbDocServiceImpl implements KbDocService {
         doc.setCategory(CATEGORY_DEFAULT);
         doc.setIsPrompt(0);
         doc.setSummary(dto.getSummary());
+        // MANUAL 正文（RAG 切片语料）；LINK/FILE 的 content 维持闲置口径不收
+        doc.setContent(isManual ? dto.getContent() : null);
         doc.setSourceType(sourceType);
         doc.setSourceUrl(isLink ? dto.getLinkUrl() : null);
         doc.setAttachFileId(isFile ? dto.getFileId() : null);
@@ -133,6 +147,10 @@ public class KbDocServiceImpl implements KbDocService {
         kbDocMapper.insert(doc);
         //3.推荐位失效（新发布/新草稿都可能改变推荐集）
         recommendCache.invalidate();
+        //4.RAG 薄通知：直接发布的文档进向量索引（草稿等发布时再进）
+        if (KbDocStatus.PUBLISHED.name().equals(status)) {
+            ragNotifyClient.notifyDocAsync(doc);
+        }
         return Result.ok(querySupport.toVO(doc));
     }
 
@@ -157,6 +175,7 @@ public class KbDocServiceImpl implements KbDocService {
         }
         uw.set(dto.getTitle() != null, "title", dto.getTitle())
                 .set(dto.getSummary() != null, "summary", dto.getSummary())
+                .set(dto.getContent() != null, "content", dto.getContent())
                 .set(dto.getLinkUrl() != null, "source_url", dto.getLinkUrl())
                 .set(dto.getFileId() != null, "attach_file_id", dto.getFileId())
                 .set(dto.getFileName() != null, "file_name", dto.getFileName())
@@ -169,15 +188,21 @@ public class KbDocServiceImpl implements KbDocService {
             throw new BizException(CommonErrorCode.NOT_FOUND, "文档不存在");
         }
         recommendCache.invalidate();
+        //发布态文档编辑即重切（标题/摘要/正文都可能影响检索）
+        KbDoc current = accessSupport.requireExists(id);
+        if (KbDocStatus.PUBLISHED.name().equals(current.getStatus())) {
+            ragNotifyClient.notifyDocAsync(current);
+        }
         return Result.ok();
     }
 
-    /** KB14 逻辑删除：评论收藏不级联清（随文档整体不可见，清单 §5） */
+    /** KB14 逻辑删除：评论收藏不级联清（随文档整体不可见，清单 §5）；RAG 索引同步清 */
     @Override
     public Result<Void> delete(Long id) {
         accessSupport.requireExists(id);
         kbDocMapper.deleteById(id);
         recommendCache.invalidate();
+        ragNotifyClient.notifyRemoveAsync(id);
         return Result.ok();
     }
 
@@ -215,6 +240,31 @@ public class KbDocServiceImpl implements KbDocService {
             throw new BizException(CommonErrorCode.STATE_NOT_ALLOWED, "文档状态已变化，请刷新后重试");
         }
         recommendCache.invalidate();
+        //RAG 薄通知：上架=重切索引（拿最新全文），下架=清索引
+        if (KbDocStatus.PUBLISHED.name().equals(target)) {
+            ragNotifyClient.notifyDocAsync(accessSupport.requireExists(id));
+        } else {
+            ragNotifyClient.notifyRemoveAsync(id);
+        }
         return Result.ok();
+    }
+
+    /** 管理端全量重建 RAG 索引（拆步 2 兜底）：AI 掉线期间漏通知的文档一键补齐。
+     *  逐篇同步推送（每篇一次全文重切 embedding，秒级/篇），几十篇内一次性返回汇总。
+     *  刻意 SELECT content——实体注释禁的是浏览列表热路径，本管理操作必须拿正文。 */
+    @Override
+    public Result<Map<String, Object>> rebuildRagIndex() {
+        List<KbDoc> published = kbDocMapper.selectList(new QueryWrapper<KbDoc>()
+                .eq("status", KbDocStatus.PUBLISHED.name()));
+        int succeeded = 0;
+        List<Long> failed = new ArrayList<>();
+        for (KbDoc doc : published) {
+            if (ragNotifyClient.sendDocSync(doc)) {
+                succeeded++;
+            } else {
+                failed.add(doc.getId());
+            }
+        }
+        return Result.ok(Map.of("total", published.size(), "succeeded", succeeded, "failed", failed));
     }
 }

@@ -38,6 +38,20 @@ spring:
       port: ${REDIS_PORT:6379}
       timeout: ${REDIS_TIMEOUT:1s}
       connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
+  ai:
+    # RAG 向量检索（2026-10-26 方案 Step 0）：本地 Ollama embedding，与 vio.ai 的 GLM 聊天互不相干
+    # （两个命名空间：spring.ai 是 Spring AI 标准，vio.ai 是自研聊天编排的配置）。
+    # base-url 与 GLM_BASE_URL 同款套路：宿主机跑测试默认 localhost，进容器设 OLLAMA_BASE_URL
+    # 指向宿主（host.docker.internal:11434）
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding:
+        options:
+          model: nomic-embed-text
+    # pgvector 自动装配整体关闭（RagVectorConfig 手动装配）：不关的话 vio.rag.enabled=false 时
+    # 它会装配出连 MySQL 主库 JdbcTemplate 的假 VectorStore，RAG 零装配语义被破坏
+    vectorstore:
+      type: none
 
 springdoc:
   # OpenAPI JSON 端点（Apifox 导入用）：生产置 VIO_API_DOCS=false 整体关闭；
@@ -70,8 +84,9 @@ vio:
     secret: ${JWT_SECRET:viomanager-local-dev-secret-key-32bytes-minimum}
     expire-hours: 2   # 阶段2 论坛只验签不查库，改密踢人靠短时效兜底（架构调整方案 §4）
   auth:
-    # 免认证路径，逗号分隔；以后新增公开接口在此登记
-    skip-paths: /api/health,/api/auth/login,/v3/api-docs
+    # 免认证路径，逗号分隔；以后新增公开接口在此登记。/api/ai/rag/sync 是例外：
+    # KB 服务薄通知的服务间内部端点——免 JWT 但有 X-RAG-Token 密钥闸（见 RagIndexController）
+    skip-paths: /api/health,/api/auth/login,/v3/api-docs,/api/ai/rag/sync
   cors:
     # 跨域白名单：阶段 1 前后端直连（Vite dev 5174），阶段 2 Nginx 同源后置空
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5174,http://127.0.0.1:5174}
@@ -120,3 +135,16 @@ vio:
     rate-limit-per-minute: 6
     max-concurrent: 5
     max-completion-tokens: 2048
+  rag:
+    # RAG 向量库（方案拆步 1）：零装配开关，RocketMQ 同款——false 不建任何 PG Bean，
+    # 没起 postgres 容器不挡应用启动与全量测试；容器部署由 apps.yml 传 true
+    enabled: ${VIO_RAG_ENABLED:false}
+    # KB 薄通知的共享密钥（拆步 2）：两服务同值；生产必须用环境变量 RAG_INTERNAL_TOKEN 覆盖
+    internal-token: ${RAG_INTERNAL_TOKEN:dev-rag-internal}
+    pg:
+      # 宿主默认走 compose 映射端口 5433（避开本机原生 PG）；容器内环境变量覆盖为 postgres:5432
+      host: ${PG_HOST:localhost}
+      port: ${PG_PORT:5433}
+      database: ${PG_DATABASE:viomanager_rag}
+      username: ${PG_USERNAME:root}
+      password: ${PG_PASSWORD:root}

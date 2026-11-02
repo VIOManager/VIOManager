@@ -68,7 +68,10 @@ class ApprovalUnreadReconcileTest {
         //3.对账：申请人的键被重算成真值（PENDING 单：发起人 result=0，目标人 todo=1），
         //  目标人无键不造键
         int refreshed = reconcileTask.reconcile();
-        assertEquals(1, refreshed);
+        //共享活库+活 Redis：真实审批流的成员（近 7 天有变动）可被其他测试上下文合法写过键，
+        //全局计数断 ==1 属环境敏感断言（2026-10-26 实录：上轮遗留的真实成员键让计数=2 误红）——
+        //契约收窄为自证：申请人键必须刷成真值、目标人键必须不凭空造
+        assertTrue(refreshed >= 1);
         String applicantKey = ApprovalUnreadCache.KEY_PREFIX + APPLICANT;
         String targetKey = ApprovalUnreadCache.KEY_PREFIX + TARGET;
         assertEquals("0", hashGet(applicantKey, "todo"));

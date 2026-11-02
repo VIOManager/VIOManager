@@ -22,7 +22,10 @@ public enum AiErrorCode implements ErrorCode {
     AI_UPSTREAM_ERROR(9103, "AI 服务调用失败，请稍后重试"),
 
     /** 生成流中途异常（SSE error 事件载荷） */
-    AI_STREAM_ERROR(9104, "回复生成中断，请重新生成");
+    AI_STREAM_ERROR(9104, "回复生成中断，请重新生成"),
+
+    /** 知识库向量库未启用（vio.rag.enabled=false 零装配态收到同步/检索请求，RAG 拆步 2） */
+    AI_RAG_NOT_ENABLED(9105, "知识库向量库未启用");
 
     private final int code;
     private final String message;

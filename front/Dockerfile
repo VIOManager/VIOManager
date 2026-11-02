@@ -10,9 +10,6 @@ RUN npm ci
 COPY . .
 # 接口走同源相对路径（不设会回落写死的 localhost:8088 直连，容器里既是跨域又指错机器）
 ENV VITE_API_BASE_URL=""
-# 侧边栏"VIO 论坛"入口地址（容器版论坛站默认本机 8091，可用构建参数覆盖）
-ARG FORUM_URL=http://localhost:8092
-ENV VITE_FORUM_URL=$FORUM_URL
 RUN npm run build
 
 FROM nginx:alpine

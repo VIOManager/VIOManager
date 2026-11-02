@@ -9,9 +9,6 @@ services:
   web:
     build:
       context: .
-      args:
-        # 侧边栏"VIO 论坛"入口指向容器版论坛站（默认本机 8092；8091 被 vio-kb 微服务占用）
-        FORUM_URL: ${FORUM_URL:-http://localhost:8092}
     container_name: vio-front-web
     ports:
       - "${FRONT_PORT:-8090}:80"

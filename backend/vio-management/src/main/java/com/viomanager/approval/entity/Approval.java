@@ -19,7 +19,9 @@ import lombok.experimental.Accessors;
 @TableName("approval")
 public class Approval extends BaseEntity {
 
-    /** 业务类型：TEAM_CREATE / TEAM_ADD_MEMBER / TEAM_REMOVE_MEMBER / TEAM_ADD_ADVISOR / TEAM_DISSOLVE / ACHIEVEMENT_SUBMIT / PROJECT_VIEW / MILESTONE_APPROVE / SEMESTER_SWITCH */
+    /** 业务类型。在用：TEAM_ADD_MEMBER / TEAM_ADD_ADVISOR / ACHIEVEMENT_SUBMIT / PROJECT_VIEW / MILESTONE_APPROVE；
+     *  仅存历史单：TEAM_CREATE、TEAM_REMOVE_MEMBER（2026-10-24 直建直移退役）、TEAM_DISSOLVE（直删未启用）、
+     *  SEMESTER_SWITCH（从未启用——学期切换走 S05-S08 任务流，密码二次确认不经审批中心） */
     private String bizType;
 
     /** 关联业务 ID：更新型审批（加人/移除）填既有对象 ID；创建型（建队）提交时为空，批准后由回调返回值回填 */

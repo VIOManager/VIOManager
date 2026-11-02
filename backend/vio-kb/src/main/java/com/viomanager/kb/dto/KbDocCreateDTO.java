@@ -37,6 +37,12 @@ public class KbDocCreateDTO {
     /** 目标状态：PUBLISHED（缺省，直接发布）/ DRAFT（存草稿） */
     private String status;
 
+    /**
+     * MANUAL 形态的 markdown 正文（RAG 拆步 2 加回 content 列——2026-10-14 拍板
+     * "待正式需求加回"的正式需求即 RAG 语料；仅 MANUAL 必填，LINK/FILE 不收正文）
+     */
+    private String content;
+
     /** 归属组织（缺省取当前登录人 orgId，管理端归属标记） */
     private Long orgId;
 }

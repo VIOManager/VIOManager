@@ -18,6 +18,7 @@ import com.viomanager.kb.vo.KbPromptVO;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -117,5 +118,14 @@ public class KbDocController {
     @GetMapping("/admin/docs")
     public Result<PageResult<KbAdminDocVO>> adminList(KbAdminQueryDTO dto) {
         return kbDocService.adminList(dto);
+    }
+
+    /** KB18 全量重建 RAG 索引（管理员；拆步 2 兜底）：AI 掉线期间漏通知的文档一键补齐，
+     *  逐篇同步重切（秒级/篇），返回 total/succeeded/failed 汇总 */
+    @RequireRole({"SUPER_ADMIN", "DEPT_ADMIN"})
+    @AuditLog(bizType = "KB", label = "重建RAG索引", summary = "'全量重建 RAG 向量索引'")
+    @PostMapping("/admin/rag-rebuild")
+    public Result<Map<String, Object>> ragRebuild() {
+        return kbDocService.rebuildRagIndex();
     }
 }

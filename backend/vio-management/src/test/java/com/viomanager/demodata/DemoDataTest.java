@@ -114,17 +114,25 @@ class DemoDataTest {
                 "SELECT status FROM semester WHERE id = 301", String.class));
         org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
                 "SELECT is_current FROM semester WHERE id = 301", Integer.class));
-        // 比赛：报名中；两支赛队材料状态一前一后
+        // 比赛：报名中
         org.junit.jupiter.api.Assertions.assertEquals("REGISTERING", jdbcTemplate.queryForObject(
                 "SELECT status FROM contest WHERE id = 402", String.class));
-        org.junit.jupiter.api.Assertions.assertEquals("SUBMITTED", jdbcTemplate.queryForObject(
-                "SELECT material_status FROM team WHERE id = 501", String.class));
-        org.junit.jupiter.api.Assertions.assertEquals("NOT_STARTED", jdbcTemplate.queryForObject(
-                "SELECT material_status FROM team WHERE id = 502", String.class));
-        // 队员 3 人：501 队长已确认，502 队长未确认
+        // 材料状态是 C 线活数据：材料提交/比赛材料要求变动都会触发整场重算
+        // （MaterialCompletionRecalculator：有提交但必传缺项 = PENDING），种子基线
+        // 501=SUBMITTED、502=NOT_STARTED 会随活库操作合法漂移（2026-10-26 实录：
+        // 501 被重算为 PENDING）——同 DictItemAdminTest 活库口径，断合法域不断精确值
+        org.junit.jupiter.api.Assertions.assertTrue(java.util.List.of("NOT_STARTED", "PENDING", "SUBMITTED")
+                .contains(jdbcTemplate.queryForObject(
+                        "SELECT material_status FROM team WHERE id = 501", String.class)));
+        org.junit.jupiter.api.Assertions.assertTrue(java.util.List.of("NOT_STARTED", "PENDING", "SUBMITTED")
+                .contains(jdbcTemplate.queryForObject(
+                        "SELECT material_status FROM team WHERE id = 502", String.class)));
+        // 队员下限 3 人（种子：501 王小明+赵晓亮、502 孙小雨队长未确认）——TE04 加人/P05 同意/TE06 确认
+        // 是种子队常用演示路径，真实走查会往 501/502 加队员（2026-10-27 实录：105 孙小雨被加进 501 致 4 行），
+        // 同 material_status 活库口径断下限不断精确值
         Long memberRows = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM team_member WHERE team_id IN (501, 502) AND deleted = 0", Long.class);
-        org.junit.jupiter.api.Assertions.assertEquals(3, memberRows == null ? 0 : memberRows);
+        org.junit.jupiter.api.Assertions.assertTrue((memberRows == null ? 0 : memberRows) >= 3);
         // 成员 105 已补账号（2026-10-24：原"无账号边界"演示让 802/803/807 成待办孤儿，弃用）
         Long withAccount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM member WHERE id = 105 AND has_account = 1", Long.class);
