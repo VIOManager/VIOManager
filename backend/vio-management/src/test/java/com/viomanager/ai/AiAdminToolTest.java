@@ -68,9 +68,9 @@ class AiAdminToolTest {
     // ---------- 注册表 ----------
 
     @Test
-    void whitelistShouldHoldSixteenTools() {
+    void whitelistShouldHoldSeventeenTools() {
         List<String> expected = List.of("queryMySchedule", "queryMyAchievements", "queryMyWeeklyPerformance",
-                "queryMembers", "queryTeam", "queryTeamsMissingMaterials",
+                "queryMembers", "queryTeam", "queryTeamsMissingMaterials", "queryMyMaterials",
                 "queryTeamAchievements", "queryFreeSlots", "queryMemberTeams",
                 "queryContests", "queryProjects", "queryOrgStructure",
                 "queryMyApprovals", "querySemesterInfo", "queryScheduleTable",
@@ -79,7 +79,7 @@ class AiAdminToolTest {
             Assertions.assertTrue(registry.byName(name).isPresent(), "白名单应含工具：" + name);
         }
         Assertions.assertEquals(expected.size(), toolsByName.size(),
-                "白名单应恰为 16 个工具，实际：" + toolsByName.keySet());
+                "白名单应恰为 17 个工具，实际：" + toolsByName.keySet());
     }
 
     // ---------- 角色门：学生被拒，拿到可转述的错误 JSON ----------
@@ -129,6 +129,31 @@ class AiAdminToolTest {
             String approvals = toolsByName.get("queryMyApprovals").execute(emptyArgs(), stuWang);
             Assertions.assertEquals(0, MAPPER.readTree(approvals).path("code").asInt(),
                     "学生应可查自己发起的审批（MINE 视角）：" + approvals);
+        } finally {
+            UserHolder.saveUser(superAdmin);
+        }
+    }
+
+    @Test
+    void studentShouldQueryOwnMaterials() throws Exception {
+        //学生端材料进度死区补路（2026-11-02）：此前"我还有什么材料没交"无工具可调——
+        //queryTeamsMissingMaterials/queryMemberTeams 均仅管理角色，模型无路可走念工具名。
+        //复用 MS06 按当前登录人查在册队伍；断言形状不断精确值（C 线活数据合法漂移，同活库口径）
+        CurrentUser stuWang = user("STUDENT");
+        stuWang.setUserId(204L);
+        UserHolder.saveUser(stuWang);
+        try {
+            String materials = toolsByName.get("queryMyMaterials").execute(emptyArgs(), stuWang);
+            JsonNode node = MAPPER.readTree(materials);
+            Assertions.assertEquals(0, node.path("code").asInt(), "我的材料应 code=0：" + materials);
+            JsonNode teams = node.path("data");
+            Assertions.assertTrue(teams.isArray() && !teams.isEmpty(),
+                    "演示学生应有在册队伍的材料进度（种子 501 队）：" + materials);
+            for (JsonNode team : teams) {
+                Assertions.assertTrue(team.has("teamName") && team.has("completeRate")
+                        && team.has("requiredMissing") && team.has("items"),
+                        "每支队伍应含队名/齐全率/必传缺项数/逐项状态：" + team);
+            }
         } finally {
             UserHolder.saveUser(superAdmin);
         }

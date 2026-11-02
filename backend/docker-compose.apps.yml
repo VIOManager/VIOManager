@@ -137,6 +137,10 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-viomanager}
       MYSQL_USERNAME: root
       MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev-root-123}
+      # 演示数据闸门：本地开发默认两个目录都灌（正式迁移+演示数据）；
+      # 学校服务器在 .env 设 SPRING_FLYWAY_LOCATIONS=classpath:db/migration 排除演示数据
+      # （V5 部署引导基线在 migration 内必跑：admin 账号/字典底座/系统参数，见 docs/部署与使用指南.md）
+      SPRING_FLYWAY_LOCATIONS: ${SPRING_FLYWAY_LOCATIONS:-classpath:db/migration,classpath:db/demo}
       # 容器内连 Redis 用服务名（与 kb 服务一致）；漏配时默认 localhost 连不上，缓存会静默熔断降级直查库
       REDIS_HOST: redis
       VIO_CACHE_ORG: "false"

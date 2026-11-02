@@ -1,10 +1,12 @@
 -- =====================================================================
 -- R__demo_data.sql —— 演示数据（Flyway repeatable：校验和变化即重跑）
+-- 2026-11-02 起隔离在 db/demo 目录：本地开发默认灌（application.yml 双 locations），
+--   学校服务器部署设 SPRING_FLYWAY_LOCATIONS=classpath:db/migration 即完全排除
+--   （部署仍保底 V5 引导基线：admin 账号/字典底座/系统参数，见 V5__bootstrap_baseline.sql）。
 --
 -- ⚠️ 幂等是生死线：本文件每次改动都会整段重跑，全部用固定 ID +
 --    INSERT ... ON DUPLICATE KEY UPDATE ... = VALUES(col)（MySQL 8.0/8.4 全兼容：
 --    VALUES() 在 8.0.20+ 标记废弃但仍受支持），第二次跑走更新分支，绝不撞主键。
--- ⚠️ 生产环境禁用：上线部署前删除本文件或清空内容（见上线检查清单）。
 --
 -- 演示账号（BCrypt 散列与明文对照，改密码须重新生成散列）：
 --   admin     / Admin@123456  超级管理员（default_password=1，演示首登强制改密提示）
